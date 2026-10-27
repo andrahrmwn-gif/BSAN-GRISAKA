@@ -1,0 +1,6 @@
+{
+  "name": "BSAN - SMP Negeri 1 Kandangan (Grisaka)",
+  "description": "Sistem Informasi Manajemen Budaya Sekolah Aman dan Nyaman (BSAN) SMP Negeri 1 Kandangan: Dashboard Eksekutif, Database Siswa, Tata Tertib & Buku Pelanggaran Otomatis, WhatsApp Gateway, dan Pelaporan Komprehensif.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
