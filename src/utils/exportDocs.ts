@@ -1,5 +1,7 @@
 import { Student, ViolationRecord } from '../types';
 import { SCHOOL_CONFIG } from '../data/schoolConfig';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 /**
  * Export student data or violations to clean CSV that opens directly in Excel
@@ -658,4 +660,55 @@ export function exportSingleSuratToExcel(
   const filename = `${type}_${student.nama.replace(/\s+/g, '_')}_${violation.id}`;
   exportToCSV(data, filename);
 }
+
+/**
+ * High-definition client-side direct PDF file generator for slip and cards
+ */
+export async function exportElementToPDF(
+  element: HTMLElement,
+  filename: string,
+  options?: { landscape?: boolean; scale?: number }
+): Promise<void> {
+  try {
+    const canvas = await html2canvas(element, {
+      scale: options?.scale || 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff'
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.98);
+    const orientation = options?.landscape ? 'landscape' : 'portrait';
+    const pdf = new jsPDF({
+      orientation,
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pdfWidth;
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pdfHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+    }
+
+    const cleanFilename = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
+    pdf.save(cleanFilename);
+  } catch (err) {
+    console.error('PDF direct generation error, falling back to print dialog', err);
+    window.print();
+  }
+}
+
 

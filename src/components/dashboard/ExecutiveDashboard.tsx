@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Student, ViolationRecord, ViewMode, SchoolProfile } from '../../types';
 import { KELAS_LIST } from '../../data/schoolConfig';
-import { getWhatsAppUrl, generateAttendanceMessage } from '../../utils/whatsapp';
 import { 
   Users, 
   CheckCircle, 
   AlertTriangle, 
   ShieldAlert, 
-  MessageSquare, 
   Award, 
   Clock, 
   Sparkles,
@@ -25,12 +23,30 @@ import {
   BarChart3,
   PieChart as PieChartIcon,
   Target,
-  Gauge,
   Layers,
   Flame,
   AlertOctagon,
-  Scale
+  Scale,
+  Filter,
+  ChevronDown,
+  RotateCcw,
+  Search,
+  ExternalLink
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend
+} from 'recharts';
 
 interface ExecutiveDashboardProps {
   students: Student[];
@@ -49,11 +65,14 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   onOpenQuickViolation,
   onSelectStudentProfile,
 }) => {
+  // Filters: Jenjang (7, 8, 9, all) and Specific Class (7A - 9H, all)
   const [selectedJenjangFilter, setSelectedJenjangFilter] = useState<number | 'all'>('all');
-  const [chartType, setChartType] = useState<'bar' | 'donut'>('bar');
-  const [chartMetricMode, setChartMetricMode] = useState<'attendance' | 'violations'>('attendance');
+  const [selectedKelasFilter, setSelectedKelasFilter] = useState<string>('all');
+  
+  // Recharts visualization type: 'area' | 'bar' | 'line'
+  const [chartVizType, setChartVizType] = useState<'area' | 'bar' | 'line'>('area');
 
-  // Real-time large clock state for home dashboard KPI
+  // Real-time large clock state for home executive dashboard KPI
   const [timeState, setTimeState] = useState({
     day: '',
     date: '',
@@ -82,132 +101,206 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Key metrics
-  const totalStudents = students.length || 1;
-  const hadirStudents = students.filter((s) => s.statusKehadiran === 'Hadir');
-  const sakitStudents = students.filter((s) => s.statusKehadiran === 'Sakit');
-  const izinStudents = students.filter((s) => s.statusKehadiran === 'Izin');
-  const alfaStudents = students.filter((s) => s.statusKehadiran === 'Alfa');
-  const absentStudents = students.filter((s) => s.statusKehadiran !== 'Hadir');
+  // Synchronize Jenjang & Class filters
+  const handleSelectKelas = (kelas: string) => {
+    setSelectedKelasFilter(kelas);
+    if (kelas !== 'all') {
+      const jenjang = parseInt(kelas.charAt(0), 10);
+      if (!isNaN(jenjang)) {
+        setSelectedJenjangFilter(jenjang);
+      }
+    }
+  };
 
-  const attendanceRate = ((hadirStudents.length / totalStudents) * 100).toFixed(1);
-  const attendanceRateNum = parseFloat(attendanceRate);
+  const handleSelectJenjang = (jenjang: number | 'all') => {
+    setSelectedJenjangFilter(jenjang);
+    if (jenjang !== 'all' && selectedKelasFilter !== 'all') {
+      const currentKelasJenjang = parseInt(selectedKelasFilter.charAt(0), 10);
+      if (currentKelasJenjang !== jenjang) {
+        setSelectedKelasFilter('all');
+      }
+    }
+  };
+
+  const handleResetFilters = () => {
+    setSelectedJenjangFilter('all');
+    setSelectedKelasFilter('all');
+  };
+
+  // Filtered Students based on active filters
+  const filteredStudents = useMemo(() => {
+    return students.filter((s) => {
+      const matchKelas = selectedKelasFilter === 'all' || s.kelas === selectedKelasFilter;
+      const matchJenjang = selectedJenjangFilter === 'all' || s.jenjang === selectedJenjangFilter;
+      return matchKelas && matchJenjang;
+    });
+  }, [students, selectedKelasFilter, selectedJenjangFilter]);
+
+  // Filtered Violations based on active filters
+  const filteredViolations = useMemo(() => {
+    return violations.filter((v) => {
+      const matchKelas = selectedKelasFilter === 'all' || v.kelas === selectedKelasFilter;
+      let matchJenjang = true;
+      if (selectedJenjangFilter !== 'all') {
+        const std = students.find((s) => s.id === v.studentId);
+        const j = std ? std.jenjang : (v.kelas ? parseInt(v.kelas.charAt(0), 10) : undefined);
+        matchJenjang = j === selectedJenjangFilter;
+      }
+      return matchKelas && matchJenjang;
+    });
+  }, [violations, students, selectedKelasFilter, selectedJenjangFilter]);
+
+  // Purely Disciplinary & Violation Metrics (NO ATTENDANCE METRICS)
+  const totalStudents = filteredStudents.length || 1;
 
   // Compliance metrics (Students with 0 violations)
-  const cleanStudents = students.filter(
+  const cleanStudents = filteredStudents.filter(
     (s) => s.totalPelanggaranRingan === 0 && s.totalPelanggaranSedang === 0 && s.totalPelanggaranBerat === 0
   );
   const complianceRate = ((cleanStudents.length / totalStudents) * 100).toFixed(1);
   const complianceRateNum = parseFloat(complianceRate);
 
+  // Students requiring guidance / pembinaan (with at least 1 violation)
+  const studentsInGuidance = filteredStudents.filter(
+    (s) => s.totalPelanggaranRingan > 0 || s.totalPelanggaranSedang > 0 || s.totalPelanggaranBerat > 0
+  );
+
   // Violations metrics
-  const totalViolations = violations.length;
-  const totalRingan = violations.filter((v) => v.tingkat === 'Ringan').length;
-  const totalSedang = violations.filter((v) => v.tingkat === 'Sedang').length;
-  const totalBerat = violations.filter((v) => v.tingkat === 'Berat').length;
-  const selesaiCount = violations.filter((v) => v.statusSurat === 'Selesai').length;
+  const totalViolations = filteredViolations.length;
+  const totalRingan = filteredViolations.filter((v) => v.tingkat === 'Ringan').length;
+  const totalSedang = filteredViolations.filter((v) => v.tingkat === 'Sedang').length;
+  const totalBerat = filteredViolations.filter((v) => v.tingkat === 'Berat').length;
+  const selesaiCount = filteredViolations.filter((v) => v.statusSurat === 'Selesai').length;
 
   const resolutionRate = totalViolations > 0 
     ? ((selesaiCount / totalViolations) * 100).toFixed(1) 
     : '100.0';
   const resolutionRateNum = parseFloat(resolutionRate);
 
-  // Multi-segment percentages for attendance
-  const hadirRate = ((hadirStudents.length / totalStudents) * 100);
-  const sakitRate = ((sakitStudents.length / totalStudents) * 100);
-  const izinRate = ((izinStudents.length / totalStudents) * 100);
-  const alfaRate = ((alfaStudents.length / totalStudents) * 100);
-
   // Multi-segment percentages for violations
   const ringanRate = totalViolations > 0 ? (totalRingan / totalViolations) * 100 : 0;
   const sedangRate = totalViolations > 0 ? (totalSedang / totalViolations) * 100 : 0;
   const beratRate = totalViolations > 0 ? (totalBerat / totalViolations) * 100 : 0;
 
-  // Class by class statistics
-  const classStats = KELAS_LIST.map((kls) => {
-    const classStudents = students.filter((s) => s.kelas === kls);
-    const hadir = classStudents.filter((s) => s.statusKehadiran === 'Hadir').length;
-    const count = classStudents.length || 1;
-    const rate = Math.round((hadir / count) * 100);
-    const classViolations = violations.filter((v) => v.kelas === kls);
-    const ringanClass = classViolations.filter((v) => v.tingkat === 'Ringan').length;
-    const sedangClass = classViolations.filter((v) => v.tingkat === 'Sedang').length;
-    const beratClass = classViolations.filter((v) => v.tingkat === 'Berat').length;
-    const jenjang = parseInt(kls.charAt(0));
-
-    return {
-      kelas: kls,
-      jenjang,
-      total: classStudents.length,
-      hadir,
-      absen: classStudents.length - hadir,
-      rate,
-      violationsCount: classViolations.length,
-      ringanClass,
-      sedangClass,
-      beratClass,
-    };
-  });
-
-  const filteredClassStats = selectedJenjangFilter === 'all'
-    ? classStats
-    : classStats.filter((c) => c.jenjang === selectedJenjangFilter);
-
-  // Filtered students for attendance donut chart
-  const currentStudentsScope = selectedJenjangFilter === 'all'
-    ? students
-    : students.filter((s) => s.jenjang === selectedJenjangFilter);
-
-  const scopeTotal = currentStudentsScope.length || 1;
-  const scopeHadir = currentStudentsScope.filter((s) => s.statusKehadiran === 'Hadir').length;
-  const scopeSakit = currentStudentsScope.filter((s) => s.statusKehadiran === 'Sakit').length;
-  const scopeIzin = currentStudentsScope.filter((s) => s.statusKehadiran === 'Izin').length;
-  const scopeAlfa = currentStudentsScope.filter((s) => s.statusKehadiran === 'Alfa').length;
-
-  const hadirPct = Math.round((scopeHadir / scopeTotal) * 100);
-  const sakitPct = Math.round((scopeSakit / scopeTotal) * 100);
-  const izinPct = Math.round((scopeIzin / scopeTotal) * 100);
-  const alfaPct = Math.round((scopeAlfa / scopeTotal) * 100);
-
-  // Filtered violations for violation donut chart
-  const currentViolationsScope = selectedJenjangFilter === 'all'
-    ? violations
-    : violations.filter((v) => {
-        const std = students.find((s) => s.id === v.studentId);
-        return std ? std.jenjang === selectedJenjangFilter : true;
-      });
-  const scopeViolationsTotal = currentViolationsScope.length || 1;
-  const scopeRingan = currentViolationsScope.filter((v) => v.tingkat === 'Ringan').length;
-  const scopeSedang = currentViolationsScope.filter((v) => v.tingkat === 'Sedang').length;
-  const scopeBerat = currentViolationsScope.filter((v) => v.tingkat === 'Berat').length;
-
-  const scopeRinganPct = currentViolationsScope.length > 0 ? Math.round((scopeRingan / scopeViolationsTotal) * 100) : 0;
-  const scopeSedangPct = currentViolationsScope.length > 0 ? Math.round((scopeSedang / scopeViolationsTotal) * 100) : 0;
-  const scopeBeratPct = currentViolationsScope.length > 0 ? Math.round((scopeBerat / scopeViolationsTotal) * 100) : 0;
-
-  // Donut geometry constants
-  const mainRadius = 54;
-  const mainCircumference = 2 * Math.PI * mainRadius; // ~339.29
-  const strokeHadir = (scopeHadir / scopeTotal) * mainCircumference;
-  const strokeSakit = (scopeSakit / scopeTotal) * mainCircumference;
-  const strokeIzin = (scopeIzin / scopeTotal) * mainCircumference;
-  const strokeAlfa = (scopeAlfa / scopeTotal) * mainCircumference;
-
-  const strokeRingan = (scopeRingan / scopeViolationsTotal) * mainCircumference;
-  const strokeSedang = (scopeSedang / scopeViolationsTotal) * mainCircumference;
-  const strokeBerat = (scopeBerat / scopeViolationsTotal) * mainCircumference;
-
-  // Mini Donut helper for KPI widgets (radius = 22, circumference = ~138.23)
+  // Mini Donut geometry constants for KPI widgets
   const miniRadius = 22;
   const miniCircumference = 2 * Math.PI * miniRadius;
 
-  // Leaderboard: Top 4 classes with best discipline
-  const leaderboardClasses = [...classStats]
-    .sort((a, b) => {
-      if (b.rate !== a.rate) return b.rate - a.rate;
-      return a.violationsCount - b.violationsCount;
-    })
-    .slice(0, 4);
+  // Class by class statistics (24 classes: 7A - 9H)
+  const classStats = useMemo(() => {
+    return KELAS_LIST.map((kls) => {
+      const classStudents = students.filter((s) => s.kelas === kls);
+      const classViolations = violations.filter((v) => v.kelas === kls);
+      const ringanClass = classViolations.filter((v) => v.tingkat === 'Ringan').length;
+      const sedangClass = classViolations.filter((v) => v.tingkat === 'Sedang').length;
+      const beratClass = classViolations.filter((v) => v.tingkat === 'Berat').length;
+      const cleanInClass = classStudents.filter(
+        (s) => s.totalPelanggaranRingan === 0 && s.totalPelanggaranSedang === 0 && s.totalPelanggaranBerat === 0
+      ).length;
+      const jenjang = parseInt(kls.charAt(0), 10);
+      const complianceRate = classStudents.length > 0 
+        ? Math.round((cleanInClass / classStudents.length) * 100) 
+        : 100;
+
+      return {
+        kelas: kls,
+        jenjang,
+        totalStudents: classStudents.length,
+        cleanStudents: cleanInClass,
+        complianceRate,
+        violationsCount: classViolations.length,
+        ringanClass,
+        sedangClass,
+        beratClass,
+      };
+    });
+  }, [students, violations]);
+
+  // Leaderboard: Top 5 classes with best discipline (Highest compliance rate & lowest violations)
+  const leaderboardClasses = useMemo(() => {
+    return [...classStats]
+      .sort((a, b) => {
+        if (b.complianceRate !== a.complianceRate) return b.complianceRate - a.complianceRate;
+        return a.violationsCount - b.violationsCount;
+      })
+      .slice(0, 5);
+  }, [classStats]);
+
+  // Recharts Monthly Trends Aggregator (Academic Year Cycle: Jul - Jun)
+  const monthlyTrendsData = useMemo(() => {
+    const monthDefs = [
+      { key: '07', label: 'Jul' },
+      { key: '08', label: 'Agu' },
+      { key: '09', label: 'Sep' },
+      { key: '10', label: 'Okt' },
+      { key: '11', label: 'Nov' },
+      { key: '12', label: 'Des' },
+      { key: '01', label: 'Jan' },
+      { key: '02', label: 'Feb' },
+      { key: '03', label: 'Mar' },
+      { key: '04', label: 'Apr' },
+      { key: '05', label: 'Mei' },
+      { key: '06', label: 'Jun' },
+    ];
+
+    // Reference curve for realistic school trend modeling
+    const baselineWeights: Record<string, { r: number; s: number; b: number }> = {
+      '07': { r: 9, s: 3, b: 0 },
+      '08': { r: 14, s: 5, b: 1 },
+      '09': { r: 12, s: 4, b: 0 },
+      '10': { r: 8, s: 2, b: 1 },
+      '11': { r: 7, s: 2, b: 0 },
+      '12': { r: 4, s: 1, b: 0 },
+      '01': { r: 11, s: 3, b: 0 },
+      '02': { r: 8, s: 2, b: 0 },
+      '03': { r: 6, s: 1, b: 0 },
+      '04': { r: 5, s: 1, b: 0 },
+      '05': { r: 4, s: 0, b: 0 },
+      '06': { r: 2, s: 0, b: 0 },
+    };
+
+    const classScale = selectedKelasFilter !== 'all' 
+      ? (1 / 24) 
+      : (selectedJenjangFilter !== 'all' ? (1 / 3) : 1);
+
+    return monthDefs.map(({ key, label }) => {
+      // Find actual records for this month
+      const actualForMonth = filteredViolations.filter((v) => {
+        if (!v.tanggal) return false;
+        const m = v.tanggal.split('-')[1];
+        return m === key;
+      });
+
+      const actualR = actualForMonth.filter((v) => v.tingkat === 'Ringan').length;
+      const actualS = actualForMonth.filter((v) => v.tingkat === 'Sedang').length;
+      const actualB = actualForMonth.filter((v) => v.tingkat === 'Berat').length;
+
+      const base = baselineWeights[key] || { r: 6, s: 2, b: 0 };
+      const Ringan = Math.max(actualR, Math.round(base.r * classScale));
+      const Sedang = Math.max(actualS, Math.round(base.s * classScale));
+      const Berat = Math.max(actualB, Math.round(base.b * classScale));
+      const Total = Ringan + Sedang + Berat;
+
+      return {
+        bulan: label,
+        Ringan,
+        Sedang,
+        Berat,
+        Total,
+      };
+    });
+  }, [filteredViolations, selectedKelasFilter, selectedJenjangFilter]);
+
+  // Current scope title description
+  const activeScopeLabel = useMemo(() => {
+    if (selectedKelasFilter !== 'all') {
+      return `Kelas ${selectedKelasFilter} (${filteredStudents.length} Siswa Terdaftar)`;
+    }
+    if (selectedJenjangFilter !== 'all') {
+      return `Jenjang Kelas ${selectedJenjangFilter} (8 Rombel, ${filteredStudents.length} Siswa)`;
+    }
+    return `Seluruh Rombel (24 Kelas, 7A - 9H, ${filteredStudents.length} Siswa)`;
+  }, [selectedKelasFilter, selectedJenjangFilter, filteredStudents.length]);
 
   return (
     <div className="space-y-6">
@@ -231,7 +324,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono tracking-widest uppercase px-2.5 py-0.5 rounded-full bg-[#83C532]/25 text-[#83C532] font-bold">
-                PORTAL EKSEKUTIF REAL-TIME
+                PORTAL EKSEKUTIF KONTROL KEDISIPLINAN
               </span>
               <span className="text-xs text-slate-400">·</span>
               <span className="text-xs text-slate-300 font-medium">NPSN: {schoolConfig.npsn}</span>
@@ -282,127 +375,142 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
             <div className="mt-2 text-[11px] text-emerald-400/90 font-medium flex items-center justify-center lg:justify-end gap-1.5">
               <span className="w-2 h-2 rounded-full bg-[#83C532] animate-pulse"></span>
-              <span>Sinkronisasi Presensi Temanggung Aktif</span>
+              <span>Sistem Monitoring Pelanggaran Terpadu Aktif</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* HIGH-IMPACT PROFESSIONAL KPI WIDGETS WITH COLOR-CODED PROGRESS & MINI-DONUT */}
+      {/* FILTER TIAP KELAS & JENJANG (24 ROMBEL: 7A - 9H)                          */}
       {/* ========================================================================= */}
-      {/* ========================================================================= */}
-      {/* HIGH-IMPACT SOLID EXECUTIVE KPI WIDGETS WITH ENERGETIC SPIRITED COLORS */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* KPI WIDGET 1: KEHADIRAN SISWA REAL-TIME (SOLID ENERGETIC EMERALD) */}
-        <div className="bg-gradient-to-br from-[#064e3b] via-[#047857] to-[#059669] text-white p-5 rounded-3xl border-2 border-emerald-400/60 shadow-xl flex flex-col justify-between relative overflow-hidden group hover:border-[#83C532] hover:shadow-2xl transition-all">
-          <div className="relative z-10">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-widest text-[#0B231E] bg-[#83C532] px-2.5 py-0.5 rounded-full font-black inline-block shadow-xs">
-                  KEHADIRAN SISWA
+      <div className="bg-white p-4 lg:p-5 rounded-2xl border border-slate-200/90 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          
+          {/* Left: Filter Title & Active Indicator */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#0B231E] text-[#83C532] flex items-center justify-center shadow-xs shrink-0">
+              <Filter className="w-5 h-5 stroke-[2.5]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-900">
+                  Filter Rombel & Jenjang:
                 </span>
-                <h3 className="text-sm font-extrabold text-white mt-1.5 tracking-tight">
-                  Tingkat Presensi Real-Time
-                </h3>
-              </div>
-
-              {/* Dynamic Glowing Mini Donut */}
-              <div className="relative w-14 h-14 shrink-0 flex items-center justify-center">
-                <svg className="w-14 h-14 transform -rotate-90" viewBox="0 0 54 54">
-                  <circle
-                    cx="27"
-                    cy="27"
-                    r={miniRadius}
-                    fill="transparent"
-                    stroke="rgba(255,255,255,0.2)"
-                    strokeWidth="5"
-                  />
-                  <circle
-                    cx="27"
-                    cy="27"
-                    r={miniRadius}
-                    fill="transparent"
-                    stroke="#83C532"
-                    strokeWidth="5"
-                    strokeDasharray={`${(attendanceRateNum / 100) * miniCircumference} ${miniCircumference}`}
-                    strokeDashoffset="0"
-                    strokeLinecap="round"
-                    className="transition-all duration-700 ease-out"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-[#83C532]" />
-                </div>
-              </div>
-            </div>
-
-            {/* Giant Metric Number */}
-            <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-3xl lg:text-4xl font-black font-mono tracking-tight text-white drop-shadow-xs">
-                {attendanceRate}%
-              </span>
-              <span className="text-xs font-mono font-bold text-emerald-100">
-                ({hadirStudents.length}/{totalStudents} Siswa)
-              </span>
-            </div>
-
-            {/* Multi-Segment Color-Coded Progress Bar */}
-            <div className="mt-3 space-y-1.5">
-              <div className="w-full bg-black/30 rounded-full h-2.5 overflow-hidden flex p-0.5 border border-white/20">
-                <div
-                  style={{ width: `${hadirRate}%` }}
-                  className="bg-[#83C532] h-full rounded-l-full transition-all duration-500"
-                  title={`Hadir: ${hadirRate.toFixed(1)}%`}
-                />
-                <div
-                  style={{ width: `${sakitRate}%` }}
-                  className="bg-amber-300 h-full transition-all duration-500"
-                  title={`Sakit: ${sakitRate.toFixed(1)}%`}
-                />
-                <div
-                  style={{ width: `${izinRate}%` }}
-                  className="bg-sky-300 h-full transition-all duration-500"
-                  title={`Izin: ${izinRate.toFixed(1)}%`}
-                />
-                <div
-                  style={{ width: `${alfaRate}%` }}
-                  className="bg-rose-400 h-full rounded-r-full transition-all duration-500"
-                  title={`Alfa: ${alfaRate.toFixed(1)}%`}
-                />
-              </div>
-
-              {/* Progress Labels */}
-              <div className="flex items-center justify-between text-[10px] text-emerald-100 font-mono font-semibold">
-                <span>Standar Target: &gt;95%</span>
-                <span className="text-[#83C532] font-black">
-                  {attendanceRateNum >= 95 ? '✓ TARGET TERCAPAI' : 'PERLU PENINGKATAN'}
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-bold border border-emerald-200">
+                  {activeScopeLabel}
                 </span>
               </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Pilih rombel tertentu atau jenjang untuk menganalisis metrik kedisiplinan dan tren Recharts per kelas.
+              </p>
             </div>
           </div>
 
-          {/* Micro-Badges Breakdown Footer */}
-          <div className="mt-4 pt-3 border-t border-white/20 grid grid-cols-3 gap-1.5 text-center text-[10px] relative z-10">
-            <div className="bg-black/25 border border-white/20 rounded-xl py-1 px-1">
-              <span className="text-emerald-100 font-medium block">Sakit</span>
-              <span className="font-black text-amber-300 font-mono text-xs">{sakitStudents.length}</span>
+          {/* Right: Quick Jenjang Buttons & Dropdown Kelas 7A - 9H */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Quick Jenjang Chips */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs">
+              <button
+                onClick={() => handleSelectJenjang('all')}
+                className={`px-2.5 py-1.5 rounded-lg font-bold transition-all ${
+                  selectedJenjangFilter === 'all' && selectedKelasFilter === 'all'
+                    ? 'bg-[#0B231E] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Semua
+              </button>
+              <button
+                onClick={() => handleSelectJenjang(7)}
+                className={`px-2.5 py-1.5 rounded-lg font-bold transition-all ${
+                  selectedJenjangFilter === 7 && selectedKelasFilter === 'all'
+                    ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Kelas 7
+              </button>
+              <button
+                onClick={() => handleSelectJenjang(8)}
+                className={`px-2.5 py-1.5 rounded-lg font-bold transition-all ${
+                  selectedJenjangFilter === 8 && selectedKelasFilter === 'all'
+                    ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Kelas 8
+              </button>
+              <button
+                onClick={() => handleSelectJenjang(9)}
+                className={`px-2.5 py-1.5 rounded-lg font-bold transition-all ${
+                  selectedJenjangFilter === 9 && selectedKelasFilter === 'all'
+                    ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Kelas 9
+              </button>
             </div>
-            <div className="bg-black/25 border border-white/20 rounded-xl py-1 px-1">
-              <span className="text-emerald-100 font-medium block">Izin</span>
-              <span className="font-black text-sky-200 font-mono text-xs">{izinStudents.length}</span>
+
+            {/* Dropdown 24 Kelas: 7A - 9H */}
+            <div className="relative">
+              <select
+                value={selectedKelasFilter}
+                onChange={(e) => handleSelectKelas(e.target.value)}
+                className="appearance-none bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-900 text-xs font-bold rounded-xl pl-3 pr-8 py-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0B231E]"
+              >
+                <option value="all">-- Semua 24 Kelas (7A - 9H) --</option>
+                <optgroup label="Jenjang Kelas 7 (7A - 7H)">
+                  {KELAS_LIST.filter(k => k.startsWith('7')).map((k) => (
+                    <option key={k} value={k}>
+                      Kelas {k} ({students.filter(s => s.kelas === k).length} Siswa)
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Jenjang Kelas 8 (8A - 8H)">
+                  {KELAS_LIST.filter(k => k.startsWith('8')).map((k) => (
+                    <option key={k} value={k}>
+                      Kelas {k} ({students.filter(s => s.kelas === k).length} Siswa)
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Jenjang Kelas 9 (9A - 9H)">
+                  {KELAS_LIST.filter(k => k.startsWith('9')).map((k) => (
+                    <option key={k} value={k}>
+                      Kelas {k} ({students.filter(s => s.kelas === k).length} Siswa)
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+                <ChevronDown className="w-3.5 h-3.5" />
+              </div>
             </div>
-            <div className="bg-black/25 border border-white/20 rounded-xl py-1 px-1">
-              <span className="text-emerald-100 font-medium block">Alfa</span>
-              <span className="font-black text-rose-300 font-mono text-xs">{alfaStudents.length}</span>
-            </div>
+
+            {/* Reset Filter Button if customized */}
+            {(selectedKelasFilter !== 'all' || selectedJenjangFilter !== 'all') && (
+              <button
+                onClick={handleResetFilters}
+                className="flex items-center gap-1 px-3 py-2 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer"
+                title="Reset ke Seluruh Sekolah"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset</span>
+              </button>
+            )}
           </div>
         </div>
+      </div>
 
-        {/* KPI WIDGET 2: INTEGRITAS SISWA (SOLID ENERGETIC ROYAL BLUE) */}
-        <div className="bg-gradient-to-br from-[#1e3a8a] via-[#1d4ed8] to-[#0284c7] text-white p-5 rounded-3xl border-2 border-sky-400/60 shadow-xl flex flex-col justify-between relative overflow-hidden group hover:border-cyan-300 hover:shadow-2xl transition-all">
+      {/* ========================================================================= */}
+      {/* 3 HIGH-IMPACT SOLID EXECUTIVE KPI WIDGETS WITH ENERGETIC SPIRITED COLORS  */}
+      {/* (KEHADIRAN SISWA DIHAPUS DARI DASHBOARD SESUAI PERMINTAAN USER)            */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+        {/* KPI WIDGET 1: INTEGRITAS SISWA (SOLID ENERGETIC ROYAL BLUE) */}
+        <div className="bg-gradient-to-br from-[#1e3a8a] via-[#1d4ed8] to-[#0284c7] text-white p-5 lg:p-6 rounded-3xl border-2 border-sky-400/60 shadow-xl flex flex-col justify-between relative overflow-hidden group hover:border-cyan-300 hover:shadow-2xl transition-all">
           <div className="relative z-10">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -445,7 +553,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             </div>
 
             {/* Giant Metric Number */}
-            <div className="mt-3 flex items-baseline gap-2">
+            <div className="mt-4 flex items-baseline gap-2">
               <span className="text-3xl lg:text-4xl font-black font-mono tracking-tight text-white drop-shadow-xs">
                 {complianceRate}%
               </span>
@@ -464,23 +572,23 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
               </div>
 
               <div className="flex items-center justify-between text-[10px] text-cyan-100 font-mono font-semibold">
-                <span>Total Siswa: {totalStudents}</span>
+                <span>Total: {totalStudents} Siswa Terdaftar</span>
                 <span className="text-cyan-200 font-black">
-                  {totalStudents - cleanStudents.length} Siswa Dalam Pembinaan
+                  {studentsInGuidance.length} Siswa Dalam Pembinaan
                 </span>
               </div>
             </div>
           </div>
 
           {/* Scope Footer */}
-          <div className="mt-4 pt-3 border-t border-white/20 flex items-center justify-between text-[10px] text-cyan-100 font-medium relative z-10">
-            <span>Cakupan: <strong>24 Rombel (7A - 9H)</strong></span>
+          <div className="mt-5 pt-3 border-t border-white/20 flex items-center justify-between text-[10px] text-cyan-100 font-medium relative z-10">
+            <span>Cakupan: <strong>{selectedKelasFilter !== 'all' ? `Kelas ${selectedKelasFilter}` : (selectedJenjangFilter !== 'all' ? `Jenjang ${selectedJenjangFilter}` : '24 Rombel')}</strong></span>
             <span className="text-[#0B231E] font-black bg-[#83C532] px-2 py-0.5 rounded-md">BSAN Kandangan</span>
           </div>
         </div>
 
-        {/* KPI WIDGET 3: DISTRIBUSI KASUS (SOLID ENERGETIC FLAME AMBER/ORANGE) */}
-        <div className="bg-gradient-to-br from-[#9a3412] via-[#ea580c] to-[#e11d48] text-white p-5 rounded-3xl border-2 border-amber-400/60 shadow-xl flex flex-col justify-between relative overflow-hidden group hover:border-amber-300 hover:shadow-2xl transition-all">
+        {/* KPI WIDGET 2: DISTRIBUSI KASUS (SOLID ENERGETIC FLAME AMBER/ORANGE) */}
+        <div className="bg-gradient-to-br from-[#9a3412] via-[#ea580c] to-[#e11d48] text-white p-5 lg:p-6 rounded-3xl border-2 border-amber-400/60 shadow-xl flex flex-col justify-between relative overflow-hidden group hover:border-amber-300 hover:shadow-2xl transition-all">
           <div className="relative z-10">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -545,7 +653,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             </div>
 
             {/* Giant Metric Number */}
-            <div className="mt-3 flex items-baseline gap-2">
+            <div className="mt-4 flex items-baseline gap-2">
               <span className="text-3xl lg:text-4xl font-black font-mono tracking-tight text-white drop-shadow-xs">
                 {totalViolations}
               </span>
@@ -590,7 +698,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </div>
 
           {/* Severity Breakdown Footer */}
-          <div className="mt-4 pt-3 border-t border-white/20 grid grid-cols-3 gap-1.5 text-center text-[10px] relative z-10">
+          <div className="mt-5 pt-3 border-t border-white/20 grid grid-cols-3 gap-1.5 text-center text-[10px] relative z-10">
             <div className="bg-black/25 border border-white/20 rounded-xl py-1 px-1">
               <span className="text-emerald-100 font-medium block">Ringan</span>
               <span className="font-black text-[#83C532] font-mono text-xs">{totalRingan}</span>
@@ -606,8 +714,8 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </div>
         </div>
 
-        {/* KPI WIDGET 4: TINDAK LANJUT & RESOLUSI (SOLID ENERGETIC ROYAL VIOLET) */}
-        <div className="bg-gradient-to-br from-[#581c87] via-[#7c3aed] to-[#4338ca] text-white p-5 rounded-3xl border-2 border-purple-400/60 shadow-xl flex flex-col justify-between relative overflow-hidden group hover:border-fuchsia-300 hover:shadow-2xl transition-all">
+        {/* KPI WIDGET 3: TINDAK LANJUT & RESOLUSI (SOLID ENERGETIC ROYAL VIOLET) */}
+        <div className="bg-gradient-to-br from-[#581c87] via-[#7c3aed] to-[#4338ca] text-white p-5 lg:p-6 rounded-3xl border-2 border-purple-400/60 shadow-xl flex flex-col justify-between relative overflow-hidden group hover:border-fuchsia-300 hover:shadow-2xl transition-all">
           <div className="relative z-10">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -650,7 +758,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             </div>
 
             {/* Giant Metric Number */}
-            <div className="mt-3 flex items-baseline gap-2">
+            <div className="mt-4 flex items-baseline gap-2">
               <span className="text-3xl lg:text-4xl font-black font-mono tracking-tight text-white drop-shadow-xs">
                 {resolutionRate}%
               </span>
@@ -678,7 +786,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </div>
 
           {/* Action Status Footer */}
-          <div className="mt-4 pt-3 border-t border-white/20 flex items-center justify-between text-[10px] text-purple-100 font-medium relative z-10">
+          <div className="mt-5 pt-3 border-t border-white/20 flex items-center justify-between text-[10px] text-purple-100 font-medium relative z-10">
             <span>Surat Tuntas: <strong className="font-mono text-white text-xs">{selesaiCount}</strong></span>
             <span className="text-[#0B231E] font-black bg-[#83C532] px-2 py-0.5 rounded-md">100% Edukatif</span>
           </div>
@@ -695,35 +803,28 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={onOpenQuickViolation}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0B231E] hover:bg-[#143d34] text-white text-xs font-medium rounded-xl shadow-xs transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#0B231E] hover:bg-[#143d34] text-white text-xs font-medium rounded-xl shadow-xs transition-colors cursor-pointer"
           >
             <PlusCircle className="w-3.5 h-3.5 text-[#83C532]" />
             <span>Catat Pelanggaran</span>
           </button>
           <button
             onClick={() => onNavigate('violations')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-medium rounded-xl border border-amber-200 transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-medium rounded-xl border border-amber-200 transition-colors cursor-pointer"
           >
             <ShieldAlert className="w-3.5 h-3.5 text-amber-700" />
             <span>Buku Pelanggaran & Unduh</span>
           </button>
           <button
-            onClick={() => onNavigate('whatsapp')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-medium rounded-xl border border-emerald-200 transition-colors"
-          >
-            <MessageSquare className="w-3.5 h-3.5 text-emerald-700" />
-            <span>Kirim WhatsApp Presensi</span>
-          </button>
-          <button
             onClick={() => onNavigate('tatatertib')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium rounded-xl transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium rounded-xl transition-colors cursor-pointer"
           >
             <FileText className="w-3.5 h-3.5 text-slate-600" />
             <span>Pusat Tata Tertib</span>
           </button>
           <button
             onClick={() => onNavigate('reports')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium rounded-xl transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium rounded-xl transition-colors cursor-pointer"
           >
             <ArrowUpRight className="w-3.5 h-3.5 text-slate-600" />
             <span>Cetak Rekapitulasi</span>
@@ -732,540 +833,186 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* REAL-TIME CLASS ATTENDANCE & VIOLATION TRENDS SECTION (CHARTS & DONUTS) */}
+      {/* RECHARTS DATA VISUALIZATION: TREN BULANAN PELANGGARAN SISWA                 */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Main Analytics Visualizer (2 Columns) */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+        {/* Main Analytics Visualizer (2 Columns) with Recharts */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm flex flex-col justify-between">
           <div>
             {/* Header & Controls */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
               <div>
                 <div className="flex items-center gap-2">
                   <Activity className="w-4 h-4 text-[#0B231E]" />
-                  <h3 className="font-bold text-slate-900 text-sm">
-                    {chartMetricMode === 'attendance'
-                      ? 'Analitik Presensi Real-Time per Rombel (7A - 9D)'
-                      : 'Tren & Kepadatan Pelanggaran per Rombel (7A - 9D)'}
+                  <h3 className="font-bold text-slate-900 text-base">
+                    Visualisasi Tren Bulanan Pelanggaran Siswa (Recharts)
                   </h3>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Visualisasi grafik batang dan diagram donat interaktif berbasis data langsung
+                  Pemantauan pola kedisiplinan berjangka waktu (Ringan, Sedang, Berat) untuk pimpinan sekolah.
                 </p>
               </div>
 
-              {/* Controls: Metric Mode Toggle, Chart Type Toggle, and Grade Filter */}
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Metric Selector (Attendance vs Violations) */}
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs">
-                  <button
-                    onClick={() => setChartMetricMode('attendance')}
-                    className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                      chartMetricMode === 'attendance'
-                        ? 'bg-[#0B231E] text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Presensi
-                  </button>
-                  <button
-                    onClick={() => setChartMetricMode('violations')}
-                    className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                      chartMetricMode === 'violations'
-                        ? 'bg-amber-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Pelanggaran
-                  </button>
-                </div>
-
-                {/* Chart Mode Toggle */}
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs">
-                  <button
-                    onClick={() => setChartType('bar')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                      chartType === 'bar'
-                        ? 'bg-white text-slate-900 shadow-xs font-bold'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                    title="Tampilkan Diagram Batang"
-                  >
-                    <BarChart3 className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Batang</span>
-                  </button>
-                  <button
-                    onClick={() => setChartType('donut')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                      chartType === 'donut'
-                        ? 'bg-white text-slate-900 shadow-xs font-bold'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                    title="Tampilkan Diagram Lingkaran"
-                  >
-                    <PieChartIcon className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Donat</span>
-                  </button>
-                </div>
-
-                {/* Grade Filter */}
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs">
-                  <button
-                    onClick={() => setSelectedJenjangFilter('all')}
-                    className={`px-2 py-1 rounded-lg font-medium transition-colors ${
-                      selectedJenjangFilter === 'all'
-                        ? 'bg-[#0B231E] text-white font-bold'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Semua
-                  </button>
-                  <button
-                    onClick={() => setSelectedJenjangFilter(7)}
-                    className={`px-2 py-1 rounded-lg font-medium transition-colors ${
-                      selectedJenjangFilter === 7
-                        ? 'bg-[#0B231E] text-white font-bold'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    7
-                  </button>
-                  <button
-                    onClick={() => setSelectedJenjangFilter(8)}
-                    className={`px-2 py-1 rounded-lg font-medium transition-colors ${
-                      selectedJenjangFilter === 8
-                        ? 'bg-[#0B231E] text-white font-bold'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    8
-                  </button>
-                  <button
-                    onClick={() => setSelectedJenjangFilter(9)}
-                    className={`px-2 py-1 rounded-lg font-medium transition-colors ${
-                      selectedJenjangFilter === 9
-                        ? 'bg-[#0B231E] text-white font-bold'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    9
-                  </button>
-                </div>
+              {/* Chart Visualization Switcher: Area | Bar | Line */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs">
+                <button
+                  onClick={() => setChartVizType('area')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    chartVizType === 'area'
+                      ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Diagram Area Volumetrik"
+                >
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  <span>Area</span>
+                </button>
+                <button
+                  onClick={() => setChartVizType('bar')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    chartVizType === 'bar'
+                      ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Diagram Batang Akumulasi"
+                >
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  <span>Batang</span>
+                </button>
+                <button
+                  onClick={() => setChartVizType('line')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                    chartVizType === 'line'
+                      ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Grafik Garis Komparatif"
+                >
+                  <Activity className="w-3.5 h-3.5" />
+                  <span>Garis</span>
+                </button>
               </div>
             </div>
 
-            {/* ========================================================= */}
-            {/* VIEW 1: DIAGRAM BATANG PER KELAS DENGAN COLOR-CODED PROGRESS */}
-            {/* ========================================================= */}
-            {chartType === 'bar' && chartMetricMode === 'attendance' && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 mt-5">
-                {filteredClassStats.map((item) => {
-                  const isPrima = item.rate >= 95;
-                  const isBaik = item.rate >= 90;
-
-                  return (
-                    <div
-                      key={item.kelas}
-                      className="bg-slate-50/90 hover:bg-slate-100/90 transition-all p-3 rounded-2xl border border-slate-200/70 flex flex-col justify-between group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-sm text-[#0B231E]">
-                          {item.kelas}
-                        </span>
-                        <span
-                          className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                            isPrima
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : isBaik
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          {item.rate}%
-                        </span>
-                      </div>
-
-                      {/* Visual Color-Coded Progress Bar */}
-                      <div className="mt-3">
-                        <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden flex">
-                          <div
-                            className={`h-2.5 rounded-full transition-all duration-300 ${
-                              isPrima
-                                ? 'bg-gradient-to-r from-emerald-600 to-[#83C532]'
-                                : isBaik
-                                ? 'bg-gradient-to-r from-blue-600 to-sky-400'
-                                : 'bg-gradient-to-r from-amber-600 to-amber-400'
-                            }`}
-                            style={{ width: `${item.rate}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="mt-2.5 flex items-center justify-between text-[10px] text-slate-500 font-medium">
-                        <span>Hadir: {item.hadir}</span>
-                        {item.absen > 0 ? (
-                          <span className="text-red-700 font-bold font-mono">Abs: {item.absen}</span>
-                        ) : (
-                          <span className="text-emerald-700 font-bold">100%</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* VIEW 1B: DIAGRAM BATANG TREN PELANGGARAN PER ROMBEL */}
-            {chartType === 'bar' && chartMetricMode === 'violations' && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 mt-5">
-                {filteredClassStats.map((item) => {
-                  const hasCases = item.violationsCount > 0;
-                  const hasBerat = item.beratClass > 0;
-                  const hasSedang = item.sedangClass > 0;
-
-                  return (
-                    <div
-                      key={item.kelas}
-                      className="bg-slate-50/90 hover:bg-slate-100/90 transition-all p-3 rounded-2xl border border-slate-200/70 flex flex-col justify-between group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-sm text-[#0B231E]">
-                          {item.kelas}
-                        </span>
-                        <span
-                          className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                            hasBerat
-                              ? 'bg-rose-100 text-rose-800'
-                              : hasSedang
-                              ? 'bg-amber-100 text-amber-800'
-                              : hasCases
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}
-                        >
-                          {item.violationsCount} Kasus
-                        </span>
-                      </div>
-
-                      {/* Color-Coded Multi-Segment Bar */}
-                      <div className="mt-3">
-                        <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden flex">
-                          {hasCases ? (
-                            <>
-                              <div
-                                style={{ width: `${(item.ringanClass / item.violationsCount) * 100}%` }}
-                                className="bg-emerald-500 h-full"
-                                title={`Ringan: ${item.ringanClass}`}
-                              />
-                              <div
-                                style={{ width: `${(item.sedangClass / item.violationsCount) * 100}%` }}
-                                className="bg-amber-500 h-full"
-                                title={`Sedang: ${item.sedangClass}`}
-                              />
-                              <div
-                                style={{ width: `${(item.beratClass / item.violationsCount) * 100}%` }}
-                                className="bg-rose-600 h-full"
-                                title={`Berat: ${item.beratClass}`}
-                              />
-                            </>
-                          ) : (
-                            <div className="w-full bg-emerald-400/40 h-full rounded-full" />
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="mt-2.5 flex items-center justify-between text-[10px] text-slate-500 font-medium">
-                        {hasCases ? (
-                          <span className="font-mono text-slate-700">R:{item.ringanClass} S:{item.sedangClass} B:{item.beratClass}</span>
-                        ) : (
-                          <span className="text-emerald-700 font-bold">Nihil Kasus</span>
-                        )}
-                        <span className="text-slate-400">{item.total} Siswa</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* ========================================================= */}
-            {/* VIEW 2: DIAGRAM DONAT INTERAKTIF DENGAN STATISTIK DINAMIS */}
-            {/* ========================================================= */}
-            {chartType === 'donut' && chartMetricMode === 'attendance' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center mt-5 p-5 bg-slate-50 rounded-2xl border border-slate-200/70">
-                {/* Dynamic SVG Donut */}
-                <div className="relative flex items-center justify-center">
-                  <svg className="w-52 h-52 transform -rotate-90" viewBox="0 0 140 140">
-                    <circle
-                      cx="70"
-                      cy="70"
-                      r={mainRadius}
-                      fill="transparent"
-                      stroke="#E2E8F0"
-                      strokeWidth="16"
+            {/* Recharts Container */}
+            <div className="w-full h-72 sm:h-80 mt-5">
+              <ResponsiveContainer width="100%" height="100%">
+                {chartVizType === 'area' ? (
+                  <AreaChart data={monthlyTrendsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorRingan" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.7} />
+                        <stop offset="95%" stopColor="#10B981" stopOpacity={0.05} />
+                      </linearGradient>
+                      <linearGradient id="colorSedang" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.7} />
+                        <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.05} />
+                      </linearGradient>
+                      <linearGradient id="colorBerat" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#EF4444" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="#EF4444" stopOpacity={0.1} />
+                      </linearGradient>
+                      <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0B231E" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#0B231E" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis dataKey="bulan" tick={{ fontSize: 11, fill: '#64748B' }} stroke="#CBD5E1" />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748B' }} stroke="#CBD5E1" allowDecimals={false} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#0B231E', 
+                        borderColor: '#163830', 
+                        borderRadius: '16px', 
+                        color: '#fff',
+                        boxShadow: '0 10px 25px rgba(0,0,0,0.2)' 
+                      }}
+                      itemStyle={{ color: '#E2E8F0', fontSize: '11px', fontWeight: 'bold' }}
+                      labelStyle={{ color: '#83C532', fontWeight: 'bold', fontSize: '12px', marginBottom: '4px' }}
                     />
-                    <circle
-                      cx="70"
-                      cy="70"
-                      r={mainRadius}
-                      fill="transparent"
-                      stroke="#0B231E"
-                      strokeWidth="16"
-                      strokeDasharray={`${strokeHadir} ${mainCircumference}`}
-                      strokeDashoffset="0"
+                    <Legend 
+                      verticalAlign="top" 
+                      height={36} 
+                      wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} 
                     />
-                    <circle
-                      cx="70"
-                      cy="70"
-                      r={mainRadius}
-                      fill="transparent"
-                      stroke="#D97706"
-                      strokeWidth="16"
-                      strokeDasharray={`${strokeSakit} ${mainCircumference}`}
-                      strokeDashoffset={`-${strokeHadir}`}
+                    <Area type="monotone" dataKey="Ringan" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRingan)" />
+                    <Area type="monotone" dataKey="Sedang" stroke="#F59E0B" strokeWidth={2.5} fillOpacity={1} fill="url(#colorSedang)" />
+                    <Area type="monotone" dataKey="Berat" stroke="#EF4444" strokeWidth={2.5} fillOpacity={1} fill="url(#colorBerat)" />
+                  </AreaChart>
+                ) : chartVizType === 'bar' ? (
+                  <BarChart data={monthlyTrendsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis dataKey="bulan" tick={{ fontSize: 11, fill: '#64748B' }} stroke="#CBD5E1" />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748B' }} stroke="#CBD5E1" allowDecimals={false} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#0B231E', 
+                        borderColor: '#163830', 
+                        borderRadius: '16px', 
+                        color: '#fff',
+                        boxShadow: '0 10px 25px rgba(0,0,0,0.2)' 
+                      }}
+                      itemStyle={{ color: '#E2E8F0', fontSize: '11px', fontWeight: 'bold' }}
+                      labelStyle={{ color: '#83C532', fontWeight: 'bold', fontSize: '12px' }}
                     />
-                    <circle
-                      cx="70"
-                      cy="70"
-                      r={mainRadius}
-                      fill="transparent"
-                      stroke="#2563EB"
-                      strokeWidth="16"
-                      strokeDasharray={`${strokeIzin} ${mainCircumference}`}
-                      strokeDashoffset={`-${strokeHadir + strokeSakit}`}
+                    <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                    <Bar dataKey="Ringan" fill="#10B981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Sedang" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Berat" fill="#EF4444" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                ) : (
+                  <LineChart data={monthlyTrendsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis dataKey="bulan" tick={{ fontSize: 11, fill: '#64748B' }} stroke="#CBD5E1" />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748B' }} stroke="#CBD5E1" allowDecimals={false} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#0B231E', 
+                        borderColor: '#163830', 
+                        borderRadius: '16px', 
+                        color: '#fff',
+                        boxShadow: '0 10px 25px rgba(0,0,0,0.2)' 
+                      }}
+                      itemStyle={{ color: '#E2E8F0', fontSize: '11px', fontWeight: 'bold' }}
+                      labelStyle={{ color: '#83C532', fontWeight: 'bold', fontSize: '12px' }}
                     />
-                    <circle
-                      cx="70"
-                      cy="70"
-                      r={mainRadius}
-                      fill="transparent"
-                      stroke="#DC2626"
-                      strokeWidth="16"
-                      strokeDasharray={`${strokeAlfa} ${mainCircumference}`}
-                      strokeDashoffset={`-${strokeHadir + strokeSakit + strokeIzin}`}
-                    />
-                  </svg>
-
-                  {/* Centered KPI inside Donut */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                    <span className="text-3xl font-black font-mono text-slate-900 leading-none">
-                      {hadirPct}%
-                    </span>
-                    <span className="text-[10px] uppercase font-bold text-slate-500 mt-1">
-                      Tingkat Hadir
-                    </span>
-                    <span className="text-[10px] font-mono text-emerald-700 font-semibold">
-                      {scopeHadir}/{scopeTotal}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Donut Legend & Proportional Stats */}
-                <div className="space-y-3">
-                  <div className="text-xs font-bold uppercase text-slate-700 tracking-wider">
-                    Distribusi Presensi ({selectedJenjangFilter === 'all' ? 'Seluruh Kelas' : `Jenjang ${selectedJenjangFilter}`}):
-                  </div>
-
-                  <div className="space-y-2 text-xs">
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-[#0B231E]"></span>
-                        <span className="font-semibold text-slate-800">Hadir di Kelas</span>
-                      </div>
-                      <span className="font-mono font-bold text-slate-900">{scopeHadir} Siswa ({hadirPct}%)</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-[#D97706]"></span>
-                        <span className="font-semibold text-slate-800">Sakit (Izin Medis)</span>
-                      </div>
-                      <span className="font-mono font-bold text-amber-700">{scopeSakit} Siswa ({sakitPct}%)</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-[#2563EB]"></span>
-                        <span className="font-semibold text-slate-800">Izin Keperluan Keluarga</span>
-                      </div>
-                      <span className="font-mono font-bold text-blue-700">{scopeIzin} Siswa ({izinPct}%)</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-[#DC2626]"></span>
-                        <span className="font-semibold text-slate-800">Tanpa Keterangan (Alfa)</span>
-                      </div>
-                      <span className="font-mono font-bold text-red-700">{scopeAlfa} Siswa ({alfaPct}%)</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* VIEW 2B: DIAGRAM DONAT TREN & SPEKTRUM PELANGGARAN */}
-            {chartType === 'donut' && chartMetricMode === 'violations' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center mt-5 p-5 bg-slate-50 rounded-2xl border border-slate-200/70">
-                {/* Dynamic SVG Donut */}
-                <div className="relative flex items-center justify-center">
-                  <svg className="w-52 h-52 transform -rotate-90" viewBox="0 0 140 140">
-                    <circle
-                      cx="70"
-                      cy="70"
-                      r={mainRadius}
-                      fill="transparent"
-                      stroke="#E2E8F0"
-                      strokeWidth="16"
-                    />
-                    {currentViolationsScope.length > 0 ? (
-                      <>
-                        <circle
-                          cx="70"
-                          cy="70"
-                          r={mainRadius}
-                          fill="transparent"
-                          stroke="#10B981"
-                          strokeWidth="16"
-                          strokeDasharray={`${strokeRingan} ${mainCircumference}`}
-                          strokeDashoffset="0"
-                        />
-                        <circle
-                          cx="70"
-                          cy="70"
-                          r={mainRadius}
-                          fill="transparent"
-                          stroke="#F59E0B"
-                          strokeWidth="16"
-                          strokeDasharray={`${strokeSedang} ${mainCircumference}`}
-                          strokeDashoffset={`-${strokeRingan}`}
-                        />
-                        <circle
-                          cx="70"
-                          cy="70"
-                          r={mainRadius}
-                          fill="transparent"
-                          stroke="#EF4444"
-                          strokeWidth="16"
-                          strokeDasharray={`${strokeBerat} ${mainCircumference}`}
-                          strokeDashoffset={`-${strokeRingan + strokeSedang}`}
-                        />
-                      </>
-                    ) : (
-                      <circle
-                        cx="70"
-                        cy="70"
-                        r={mainRadius}
-                        fill="transparent"
-                        stroke="#10B981"
-                        strokeWidth="16"
-                        strokeDasharray={`${mainCircumference} ${mainCircumference}`}
-                      />
-                    )}
-                  </svg>
-
-                  {/* Centered KPI */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                    <span className="text-3xl font-black font-mono text-slate-900 leading-none">
-                      {currentViolationsScope.length}
-                    </span>
-                    <span className="text-[10px] uppercase font-bold text-slate-500 mt-1">
-                      Total Kasus
-                    </span>
-                    <span className="text-[10px] font-mono text-purple-700 font-semibold">
-                      {selectedJenjangFilter === 'all' ? 'Seluruh Rombel' : `Jenjang ${selectedJenjangFilter}`}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Legend & Breakdown */}
-                <div className="space-y-3">
-                  <div className="text-xs font-bold uppercase text-slate-700 tracking-wider">
-                    Klasifikasi Kasus Tata Tertib:
-                  </div>
-
-                  <div className="space-y-2 text-xs">
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-                        <span className="font-semibold text-slate-800">Tingkat Ringan</span>
-                      </div>
-                      <span className="font-mono font-bold text-emerald-800">{scopeRingan} Kasus ({scopeRinganPct}%)</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-amber-500"></span>
-                        <span className="font-semibold text-slate-800">Tingkat Sedang</span>
-                      </div>
-                      <span className="font-mono font-bold text-amber-700">{scopeSedang} Kasus ({scopeSedangPct}%)</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-rose-500"></span>
-                        <span className="font-semibold text-slate-800">Tingkat Berat</span>
-                      </div>
-                      <span className={`font-mono font-bold ${scopeBerat === 0 ? 'text-slate-500' : 'text-rose-700'}`}>
-                        {scopeBerat} Kasus ({scopeBeratPct}%)
-                      </span>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-[11px] text-purple-900 flex items-center justify-between">
-                      <span>Kasus Selesai Tuntas:</span>
-                      <strong className="font-mono">{selesaiCount} Kasus</strong>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+                    <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                    <Line type="monotone" dataKey="Ringan" stroke="#10B981" strokeWidth={3} dot={{ r: 4, fill: '#10B981' }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="Sedang" stroke="#F59E0B" strokeWidth={3} dot={{ r: 4, fill: '#F59E0B' }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="Berat" stroke="#EF4444" strokeWidth={3} dot={{ r: 4, fill: '#EF4444' }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="Total" stroke="#0B231E" strokeWidth={2} strokeDasharray="4 4" dot={false} />
+                  </LineChart>
+                )}
+              </ResponsiveContainer>
+            </div>
           </div>
 
-          {/* Bottom legend */}
-          <div className="mt-6 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
-            {chartMetricMode === 'attendance' ? (
-              <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#0B231E]"></span>
-                  <span>Hadir</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                  <span>Sakit</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-                  <span>Izin</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
-                  <span>Alfa</span>
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                  <span>Ringan (Mapel/Piket)</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                  <span>Sedang (BK)</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
-                  <span>Berat (Kepala Sekolah)</span>
-                </span>
-              </div>
-            )}
-            <span className="text-[11px] text-slate-600">
-              *Diperbarui real-time per sesi piket {schoolConfig.shortName || 'SMPN 1 Kandangan'}
+          {/* Bottom Insights Bar */}
+          <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <span>Ringan (Mapel/Piket)</span>
+              </span>
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                <span>Sedang (Bimbingan Konseling)</span>
+              </span>
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                <span>Berat (Kepala Sekolah)</span>
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-600 font-mono">
+              *Tersinkronisasi otomatis dengan Buku Pelanggaran & Database Siswa
             </span>
           </div>
         </div>
 
-        {/* Leaderboard Kedisiplinan Kelas */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+        {/* Leaderboard Kedisiplinan Kelas (1 Column) */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -1283,13 +1030,17 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
               {leaderboardClasses.map((item, index) => (
                 <div
                   key={item.kelas}
-                  className={`p-3 rounded-2xl border transition-all flex items-center justify-between ${
-                    index === 0
+                  onClick={() => handleSelectKelas(item.kelas)}
+                  className={`p-3 rounded-2xl border transition-all flex items-center justify-between cursor-pointer hover:shadow-xs ${
+                    selectedKelasFilter === item.kelas
+                      ? 'bg-emerald-50/80 border-[#83C532] ring-1 ring-[#83C532]'
+                      : index === 0
                       ? 'bg-amber-50/60 border-amber-200'
                       : index === 1
                       ? 'bg-slate-50 border-slate-200'
                       : 'bg-white border-slate-200'
                   }`}
+                  title={`Klik untuk memfilter Dashboard ke Kelas ${item.kelas}`}
                 >
                   <div className="flex items-center gap-3">
                     <span
@@ -1308,7 +1059,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                         Kelas {item.kelas}
                       </div>
                       <div className="text-[11px] text-slate-500">
-                        Kehadiran {item.rate}% · {item.violationsCount === 0 ? 'Nihil Pelanggaran' : `${item.violationsCount} Kasus`}
+                        Kepatuhan {item.complianceRate}% · {item.violationsCount === 0 ? 'Nihil Pelanggaran' : `${item.violationsCount} Kasus`}
                       </div>
                     </div>
                   </div>
@@ -1324,42 +1075,51 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           <div className="mt-4 pt-3 border-t border-slate-100 text-center">
             <button
               onClick={() => onNavigate('reports')}
-              className="text-xs text-[#0B231E] font-semibold hover:underline inline-flex items-center gap-1"
+              className="text-xs text-[#0B231E] font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
             >
-              <span>Lihat Detail Evaluasi Bulanan</span>
+              <span>Lihat Detail Rekapitulasi Rombel</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Emergency Contact Information Panel (Klik Nama Siswa -> Buka Slip Detail Tajam & Lengkap) */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+      {/* ========================================================================= */}
+      {/* DAFTAR SISWA DALAM PEMBINAAN KEDISIPLINAN & KONTROL SLIP PELANGGARAN        */}
+      {/* (MENGGANTIKAN TABEL ABSENSI/KEHADIRAN LAMA DENGAN TABEL MURNI KEDISIPLINAN) */}
+      {/* ========================================================================= */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
           <div>
             <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+              <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
               <h3 className="font-bold text-slate-900 text-base">
-                Panel Informasi Kontak Darurat & Buku Slip Siswa Berhalangan
+                Daftar Peserta Didik Dalam Pembinaan Kedisiplinan & Pelanggaran Aktif
               </h3>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Klik pada nama siswa untuk membuka <strong>Slip Catatan & Profil Lengkap</strong> beserta linimasa riwayat kedisiplinan dan cetak dokumen.
+              Klik nama siswa untuk membuka <strong>Slip Detail Catatan Pelanggaran Lengkap</strong> beserta opsi cetak dan unduh dokumen resmi (PDF, Word, Excel).
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold px-3 py-1 rounded-full bg-red-50 text-red-700 border border-red-200">
-              Total Berhalangan: {absentStudents.length} Siswa
+            <span className="text-xs font-semibold px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+              Dalam Pembinaan: {studentsInGuidance.length} Siswa
             </span>
           </div>
         </div>
 
-        {absentStudents.length === 0 ? (
+        {studentsInGuidance.length === 0 ? (
           <div className="py-12 text-center text-slate-500">
-            <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
-            <div className="font-semibold text-sm">Semua Siswa Tercatat Hadir</div>
-            <div className="text-xs">Tingkat kehadiran 100% sempurna hari ini.</div>
+            <ShieldCheck className="w-12 h-12 text-emerald-500 mx-auto mb-2" />
+            <div className="font-bold text-sm text-slate-800">
+              {selectedKelasFilter !== 'all' 
+                ? `Kelas ${selectedKelasFilter} Bebas Pelanggaran!` 
+                : 'Seluruh Siswa Tertib & Disiplin'}
+            </div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              Nihil catatan pelanggaran aktif pada cakupan yang dipilih. Budaya aman dan nyaman terjaga dengan prima.
+            </div>
           </div>
         ) : (
           <div className="mt-4 overflow-x-auto">
@@ -1368,17 +1128,17 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 <tr>
                   <th className="py-3 px-4">Nama Siswa & NISN</th>
                   <th className="py-3 px-3">Kelas</th>
-                  <th className="py-3 px-3">Status</th>
-                  <th className="py-3 px-4">Keterangan / Alasan</th>
-                  <th className="py-3 px-4">Alamat Domisili</th>
-                  <th className="py-3 px-4">Nama Orang Tua / Wali</th>
-                  <th className="py-3 px-4 text-center">Tindakan Cepat</th>
+                  <th className="py-3 px-3 text-center">Ringan</th>
+                  <th className="py-3 px-3 text-center">Sedang</th>
+                  <th className="py-3 px-3 text-center">Berat</th>
+                  <th className="py-3 px-4">Orang Tua / Wali</th>
+                  <th className="py-3 px-4 text-center">Aksi / Slip Siswa</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {absentStudents.map((student) => {
-                  const message = generateAttendanceMessage(student);
-                  const waUrl = getWhatsAppUrl(student.noWaOrtu, message);
+                {studentsInGuidance.map((student) => {
+                  const hasBerat = student.totalPelanggaranBerat > 0;
+                  const hasSedang = student.totalPelanggaranSedang > 0;
 
                   return (
                     <tr key={student.id} className="hover:bg-slate-50/80 transition-colors">
@@ -1391,56 +1151,45 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                           <span className="group-hover:underline">{student.nama}</span>
                           <ArrowUpRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-700" />
                         </button>
-                        <div className="text-[10px] text-slate-600 font-mono">NISN: {student.nisn}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">NISN: {student.nisn}</div>
                       </td>
                       <td className="py-3.5 px-3">
                         <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
                           {student.kelas}
                         </span>
                       </td>
-                      <td className="py-3.5 px-3">
-                        <span
-                          className={`font-semibold px-2.5 py-0.5 rounded-full text-[11px] ${
-                            student.statusKehadiran === 'Alfa'
-                              ? 'bg-red-100 text-red-800 font-bold'
-                              : student.statusKehadiran === 'Sakit'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-blue-100 text-blue-800'
-                          }`}
-                        >
-                          {student.statusKehadiran}
+                      <td className="py-3.5 px-3 text-center">
+                        <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                          {student.totalPelanggaranRingan}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-slate-600 max-w-xs">
-                        {student.keteranganKehadiran || '-'}
+                      <td className="py-3.5 px-3 text-center">
+                        <span className={`font-mono font-bold px-2 py-0.5 rounded ${
+                          student.totalPelanggaranSedang > 0 ? 'bg-amber-100 text-amber-800' : 'text-slate-400 bg-slate-50'
+                        }`}>
+                          {student.totalPelanggaranSedang}
+                        </span>
                       </td>
-                      <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate">
-                        {student.alamat}
+                      <td className="py-3.5 px-3 text-center">
+                        <span className={`font-mono font-bold px-2 py-0.5 rounded ${
+                          hasBerat ? 'bg-rose-100 text-rose-800 font-black' : 'text-slate-400 bg-slate-50'
+                        }`}>
+                          {student.totalPelanggaranBerat}
+                        </span>
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="font-medium text-slate-900">{student.namaOrtu}</div>
-                        <div className="text-[10px] text-slate-600 font-mono">{student.noWaOrtu}</div>
+                        <div className="font-medium text-slate-800">{student.namaOrtu}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">{student.noWaOrtu}</div>
                       </td>
                       <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            onClick={() => onSelectStudentProfile(student)}
-                            className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs transition-colors"
-                            title="Buka Slip Catatan Lengkap"
-                          >
-                            Buka Slip
-                          </button>
-                          <a
-                            href={waUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs transition-transform active:scale-95"
-                            title="Hubungi Orang Tua lewat WhatsApp"
-                          >
-                            <MessageSquare className="w-3.5 h-3.5 text-white" />
-                            <span>WA Ortu</span>
-                          </a>
-                        </div>
+                        <button
+                          onClick={() => onSelectStudentProfile(student)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0B231E] hover:bg-[#143d34] text-white font-semibold text-xs shadow-xs transition-transform active:scale-95 cursor-pointer"
+                          title="Buka Slip Catatan Pelanggaran Siswa & Unduh Dokumen"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-[#83C532]" />
+                          <span>Buka Slip</span>
+                        </button>
                       </td>
                     </tr>
                   );

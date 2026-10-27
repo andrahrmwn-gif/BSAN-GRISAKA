@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ViolationRecord, Student, SchoolProfile } from '../../types';
 import { SCHOOL_CONFIG as DEFAULT_SCHOOL_CONFIG } from '../../data/schoolConfig';
 import { Printer, X, FileText, Download, FileSpreadsheet, FileDown, CheckCircle2 } from 'lucide-react';
-import { exportSingleSuratToWord, exportSingleSuratToExcel } from '../../utils/exportDocs';
+import { exportSingleSuratToWord, exportSingleSuratToExcel, exportElementToPDF } from '../../utils/exportDocs';
 
 interface SuratPernyataanModalProps {
   isOpen: boolean;
@@ -21,6 +21,7 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
 }) => {
   const [docType, setDocType] = useState<'surat_pernyataan' | 'panggilan_ortu' | 'slip_pelanggaran'>('surat_pernyataan');
   const [downloadSuccessMsg, setDownloadSuccessMsg] = useState<string | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   if (!isOpen || !violation || !student) return null;
 
@@ -31,9 +32,22 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
     setTimeout(() => setDownloadSuccessMsg(null), 3000);
   };
 
-  const handlePrintPdf = () => {
+  const handleDownloadPdf = async () => {
+    const el = document.getElementById('surat-printable-area');
+    if (el) {
+      setIsExportingPdf(true);
+      showSuccessFeedback('Sedang memproses unduhan dokumen PDF...');
+      const cleanName = `${docType}_${student.nama.replace(/\s+/g, '_')}_${violation.id}`;
+      await exportElementToPDF(el, cleanName);
+      setIsExportingPdf(false);
+      showSuccessFeedback('Berhasil mengunduh dokumen PDF resmi!');
+    } else {
+      window.print();
+    }
+  };
+
+  const handlePrintDoc = () => {
     window.print();
-    showSuccessFeedback('Membuka dialog cetak / Simpan sebagai PDF');
   };
 
   const handleDownloadWord = () => {
@@ -115,12 +129,22 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
             </button>
 
             <button
-              onClick={handlePrintPdf}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95"
-              title="Cetak atau Simpan sebagai PDF A4 resmi"
+              onClick={handleDownloadPdf}
+              disabled={isExportingPdf}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95"
+              title="Unduh langsung file PDF resmi A4 siap kirim"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Unduh PDF</span>
+              <span>{isExportingPdf ? 'Mengunduh PDF...' : 'Unduh PDF'}</span>
+            </button>
+
+            <button
+              onClick={handlePrintDoc}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95"
+              title="Buka dialog cetak fisik printer"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-300" />
+              <span>Cetak</span>
             </button>
 
             <button
@@ -164,7 +188,7 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
 
         {/* Document Printable Viewport */}
         <div className="flex-1 overflow-y-auto p-8 bg-slate-100 flex justify-center">
-          <div className="print-area bg-white text-slate-900 w-full max-w-[210mm] min-h-[297mm] p-10 shadow-lg rounded-xl border border-slate-200 font-serif leading-relaxed text-sm">
+          <div id="surat-printable-area" className="print-area bg-white text-slate-900 w-full max-w-[210mm] min-h-[297mm] p-10 shadow-lg rounded-xl border border-slate-200 font-serif leading-relaxed text-sm">
             {/* Kop Surat Resmi - TEMANGGUNG */}
             <div className="border-b-[3px] border-double border-black pb-3 mb-6 text-center flex items-center justify-between gap-4">
               {currentConfig.logoUrl && (

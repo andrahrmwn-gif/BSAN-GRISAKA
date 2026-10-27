@@ -18,7 +18,7 @@ import {
   FileDown,
   FileSpreadsheet
 } from 'lucide-react';
-import { exportToCSV } from '../../utils/exportDocs';
+import { exportToCSV, exportElementToPDF } from '../../utils/exportDocs';
 
 interface StudentSlipDetailModalProps {
   isOpen: boolean;
@@ -92,12 +92,30 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
 
   const discipline = getDisciplineStatus();
 
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
   const handlePrintSlip = () => {
     if (activeTab !== 'document') {
       setActiveTab('document');
       setTimeout(() => {
         window.print();
       }, 200);
+    } else {
+      window.print();
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (activeTab !== 'document') {
+      setActiveTab('document');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    const el = document.getElementById('student-slip-printable-area');
+    if (el) {
+      setIsExportingPdf(true);
+      const filename = `Rapor_Disiplin_${student.nama.replace(/\s+/g, '_')}_${student.kelas}`;
+      await exportElementToPDF(el, filename);
+      setIsExportingPdf(false);
     } else {
       window.print();
     }
@@ -258,12 +276,13 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
             </button>
 
             <button
-              onClick={handlePrintSlip}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95"
-              title="Cetak Laporan / Simpan PDF"
+              onClick={handleDownloadPdf}
+              disabled={isExportingPdf}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95"
+              title="Unduh langsung dokumen PDF resmi"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>PDF</span>
+              <span>{isExportingPdf ? 'Mengunduh...' : 'PDF'}</span>
             </button>
 
             <button
@@ -536,7 +555,7 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
           ) : (
             /* TAB 2: PRATINJAU LEMBAR RAPOR RESMI (PRINT-READY PREVIEW) */
             <div className="flex justify-center">
-              <div className="print-area bg-white text-slate-900 w-full max-w-[210mm] min-h-[297mm] p-10 lg:p-12 shadow-xl rounded-2xl border border-slate-300 font-serif leading-relaxed text-xs">
+              <div id="student-slip-printable-area" className="print-area bg-white text-slate-900 w-full max-w-[210mm] min-h-[297mm] p-10 lg:p-12 shadow-xl rounded-2xl border border-slate-300 font-serif leading-relaxed text-xs">
                 {/* Official School Letterhead (Kop Surat) - TEMANGGUNG */}
                 <div className="border-b-[3px] border-double border-black pb-4 mb-6 text-center flex items-center justify-between gap-4">
                   {schoolConfig.logoUrl && (
