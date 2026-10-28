@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ViolationRecord, Student, SchoolProfile } from '../../types';
 import { SCHOOL_CONFIG as DEFAULT_SCHOOL_CONFIG } from '../../data/schoolConfig';
-import { Printer, X, FileText, Download, FileSpreadsheet, FileDown, CheckCircle2 } from 'lucide-react';
+import { Printer, X, FileText, Download, FileSpreadsheet, FileDown, CheckCircle2, ExternalLink } from 'lucide-react';
 import { exportSingleSuratToWord, exportSingleSuratToExcel, exportElementToPDF } from '../../utils/exportDocs';
 
 interface SuratPernyataanModalProps {
@@ -22,6 +22,7 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
   const [docType, setDocType] = useState<'surat_pernyataan' | 'panggilan_ortu' | 'slip_pelanggaran'>('surat_pernyataan');
   const [downloadSuccessMsg, setDownloadSuccessMsg] = useState<string | null>(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
 
   if (!isOpen || !violation || !student) return null;
 
@@ -29,18 +30,21 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
 
   const showSuccessFeedback = (msg: string) => {
     setDownloadSuccessMsg(msg);
-    setTimeout(() => setDownloadSuccessMsg(null), 3000);
+    setTimeout(() => setDownloadSuccessMsg(null), 4000);
   };
 
   const handleDownloadPdf = async () => {
     const el = document.getElementById('surat-printable-area');
     if (el) {
       setIsExportingPdf(true);
-      showSuccessFeedback('Sedang memproses unduhan dokumen PDF...');
+      showSuccessFeedback('Sedang memproses dan mengunduh dokumen PDF...');
       const cleanName = `${docType}_${student.nama.replace(/\s+/g, '_')}_${violation.id}`;
-      await exportElementToPDF(el, cleanName);
+      const res = await exportElementToPDF(el, cleanName);
       setIsExportingPdf(false);
-      showSuccessFeedback('Berhasil mengunduh dokumen PDF resmi!');
+      if (res.blobUrl) {
+        setPdfDownloadUrl(res.blobUrl);
+      }
+      showSuccessFeedback('File PDF resmi berhasil diunduh otomatis!');
     } else {
       window.print();
     }
@@ -174,16 +178,30 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
             </span>
           </div>
 
-          {downloadSuccessMsg ? (
-            <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-100 px-3 py-1 rounded-lg font-semibold animate-fade-in text-[11px]">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{downloadSuccessMsg}</span>
-            </div>
-          ) : (
-            <div className="text-[11px] text-slate-500 hidden sm:block">
-              Tersedia dalam format Word (.doc), PDF, dan Excel (.csv) siap dikirim ke orang tua.
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {downloadSuccessMsg ? (
+              <div className="flex items-center gap-1.5 text-emerald-800 bg-emerald-100 px-3 py-1 rounded-lg font-semibold animate-fade-in text-[11px]">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{downloadSuccessMsg}</span>
+              </div>
+            ) : (
+              <div className="text-[11px] text-slate-500 hidden sm:block">
+                Tersedia dalam format Word (.doc), PDF, dan Excel (.csv) siap dikirim ke orang tua.
+              </div>
+            )}
+            {pdfDownloadUrl && (
+              <a
+                href={pdfDownloadUrl}
+                download={`${docType}_${student.nama.replace(/\s+/g, '_')}_${violation.id}.pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#0B231E] hover:bg-[#153e33] text-[#83C532] font-bold rounded-lg text-[11px] transition-transform active:scale-95"
+              >
+                <span>Buka / Unduh PDF</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+          </div>
         </div>
 
         {/* Document Printable Viewport */}

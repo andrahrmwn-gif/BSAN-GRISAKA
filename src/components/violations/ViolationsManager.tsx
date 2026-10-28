@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ViolationRecord, Student, SchoolProfile } from '../../types';
 import { SCHOOL_CONFIG } from '../../data/schoolConfig';
 import { getWhatsAppUrl, generateViolationMessage } from '../../utils/whatsapp';
-import { exportViolationsToWord, exportViolationsToPrintPDF, exportToCSV } from '../../utils/exportDocs';
+import { exportViolationsToWord, exportViolationsToPrintPDF, exportToCSV, exportElementToPDF } from '../../utils/exportDocs';
 import { 
   ShieldAlert, 
   Search, 
@@ -59,8 +59,26 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
     exportViolationsToWord(filteredViolations, schoolConfig);
   };
 
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
+
   const handleDownloadPDF = () => {
     setIsPdfModalOpen(true);
+  };
+
+  const handleDirectDownloadPDF = async () => {
+    const el = document.getElementById('printable-violations-ledger');
+    if (el) {
+      setIsExportingPdf(true);
+      const filename = `Buku_Register_Pelanggaran_${schoolConfig.shortName || 'SMPN1_Kandangan'}`;
+      const res = await exportElementToPDF(el, filename);
+      setIsExportingPdf(false);
+      if (res.blobUrl) {
+        setPdfDownloadUrl(res.blobUrl);
+      }
+    } else {
+      window.print();
+    }
   };
 
   const handleDownloadExcel = () => {
@@ -387,11 +405,21 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-[#83C532] hover:bg-[#94db3a] text-[#0B231E] font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+                  onClick={handleDirectDownloadPDF}
+                  disabled={isExportingPdf}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-[#83C532] hover:bg-[#94db3a] disabled:opacity-50 text-[#0B231E] font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+                  title="Unduh langsung file PDF"
                 >
-                  <Printer className="w-4 h-4" />
-                  <span>Cetak / Simpan PDF (Ctrl + P)</span>
+                  <Printer className="w-4 h-4 text-[#0B231E]" />
+                  <span>{isExportingPdf ? 'Mengunduh...' : 'Unduh Langsung PDF'}</span>
+                </button>
+
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-medium text-xs rounded-xl transition-colors cursor-pointer"
+                  title="Buka dialog printer browser"
+                >
+                  <span>Cetak (Ctrl + P)</span>
                 </button>
 
                 <button
@@ -413,7 +441,7 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
 
             {/* Document Printable Viewport */}
             <div className="flex-1 overflow-y-auto p-6 lg:p-8 bg-slate-100/80">
-              <div className="print-area bg-white p-8 max-w-4xl mx-auto shadow-sm border border-slate-200 text-black font-serif">
+              <div id="printable-violations-ledger" className="print-area bg-white p-8 max-w-4xl mx-auto shadow-sm border border-slate-200 text-black font-serif">
                 {/* Official Kop Surat Temanggung */}
                 <div className="text-center pb-3 border-b-4 border-double border-black mb-6">
                   <div className="text-sm font-bold uppercase tracking-wider">

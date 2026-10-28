@@ -18,8 +18,10 @@ import {
   FileSpreadsheet,
   School,
   GraduationCap,
-  Layers
+  Layers,
+  Lock
 } from 'lucide-react';
+import { isGuestMode } from '../../services/authService';
 
 interface StudentCentralHubProps {
   students: Student[];
@@ -117,6 +119,10 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
   };
 
   const openEditModal = (student: Student) => {
+    if (isGuestMode()) {
+      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak mengubah biodata siswa.');
+      return;
+    }
     setEditingStudent(student);
     setFormData({
       nisn: student.nisn,
@@ -135,6 +141,11 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
 
   // CSV Import handler
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isGuestMode()) {
+      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak mengimpor data siswa.');
+      e.target.value = '';
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -259,10 +270,14 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
 
           <button
             onClick={() => {
+              if (isGuestMode()) {
+                alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak menambah siswa baru.');
+                return;
+              }
               setFormData(initialForm);
               setIsAddModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[#0B231E] hover:bg-[#143d34] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#0B231E] hover:bg-[#143d34] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4 text-[#83C532]" />
             <span>Tambah Siswa Manual</span>
@@ -554,8 +569,14 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
                           <Plus className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => setDeletingStudent(student)}
-                          className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors"
+                          onClick={() => {
+                            if (isGuestMode()) {
+                              alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak menghapus data siswa.');
+                              return;
+                            }
+                            setDeletingStudent(student);
+                          }}
+                          className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
                           title="Hapus Siswa"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

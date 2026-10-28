@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ViewMode, Student, ViolationRecord, WhatsAppMessageLog, SchoolProfile } from './types';
+import { UserAccount } from './types/auth';
 import { 
   getStoredStudents, 
   saveStudents, 
@@ -11,6 +12,8 @@ import {
   saveSchoolConfig,
   resetToDefaultData 
 } from './services/storage';
+import { getCurrentUser, isGuestMode } from './services/authService';
+import { logAudit } from './services/auditLogger';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { ExecutiveDashboard } from './components/dashboard/ExecutiveDashboard';
@@ -23,6 +26,7 @@ import { SchoolSettingsView } from './components/settings/SchoolSettingsView';
 import { RecordViolationModal } from './components/modals/RecordViolationModal';
 import { SuratPernyataanModal } from './components/modals/SuratPernyataanModal';
 import { StudentSlipDetailModal } from './components/modals/StudentSlipDetailModal';
+import { AccountSwitchModal } from './components/modals/AccountSwitchModal';
 import { RotateCcw } from 'lucide-react';
 
 export default function App() {
@@ -31,6 +35,10 @@ export default function App() {
   const [violations, setViolations] = useState<ViolationRecord[]>(() => getStoredViolations());
   const [waLogs, setWaLogs] = useState<WhatsAppMessageLog[]>(() => getStoredWaLogs());
   const [schoolConfig, setSchoolConfig] = useState<SchoolProfile>(() => getStoredSchoolConfig());
+
+  // User Authentication & Guest Mode state
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
+  const [isAccountSwitchOpen, setIsAccountSwitchOpen] = useState(false);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,25 +72,114 @@ export default function App() {
 
   // Handlers for students
   const handleAddStudent = (newStudent: Student) => {
+    if (isGuestMode()) {
+      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak menambah siswa.');
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Siswa',
+        description: `Percobaan tambah siswa (${newStudent.nama}) ditolak karena dalam Mode Tamu`,
+        status: 'BLOCKED',
+      });
+      setIsAccountSwitchOpen(true);
+      return;
+    }
+
     setStudents((prev) => [newStudent, ...prev]);
+
+    logAudit({
+      actionType: 'CREATE',
+      module: 'Siswa',
+      description: `Menambahkan siswa baru: ${newStudent.nama} (Kelas ${newStudent.kelas}, NISN: ${newStudent.nisn})`,
+      status: 'SUCCESS',
+    });
   };
 
   const handleUpdateStudent = (updatedStudent: Student) => {
+    if (isGuestMode()) {
+      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak mengedit biodata siswa.');
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Siswa',
+        description: `Percobaan edit biodata siswa (${updatedStudent.nama}) ditolak karena dalam Mode Tamu`,
+        status: 'BLOCKED',
+      });
+      setIsAccountSwitchOpen(true);
+      return;
+    }
+
     setStudents((prev) =>
       prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s))
     );
+
+    logAudit({
+      actionType: 'UPDATE',
+      module: 'Siswa',
+      description: `Memperbarui biodata siswa: ${updatedStudent.nama} (Kelas ${updatedStudent.kelas})`,
+      status: 'SUCCESS',
+    });
   };
 
   const handleDeleteStudent = (studentId: string) => {
+    if (isGuestMode()) {
+      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya akun petugas resmi yang berhak menghapus data.');
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Siswa',
+        description: `Percobaan hapus siswa ID #${studentId} ditolak karena dalam Mode Tamu`,
+        status: 'BLOCKED',
+      });
+      setIsAccountSwitchOpen(true);
+      return;
+    }
+
+    const target = students.find((s) => s.id === studentId);
     setStudents((prev) => prev.filter((s) => s.id !== studentId));
+
+    logAudit({
+      actionType: 'DELETE',
+      module: 'Siswa',
+      description: `Menghapus data siswa: ${target?.nama || studentId} (Kelas ${target?.kelas || '-'})`,
+      status: 'SUCCESS',
+    });
   };
 
   const handleBulkImportStudents = (newStudents: Student[]) => {
+    if (isGuestMode()) {
+      alert('Akses Ditolak: Anda sedang dalam Mode Tamu. Hanya akun petugas resmi yang berhak mengimpor data siswa.');
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Siswa',
+        description: 'Percobaan impor massal data siswa ditolak karena dalam Mode Tamu',
+        status: 'BLOCKED',
+      });
+      setIsAccountSwitchOpen(true);
+      return;
+    }
+
     setStudents((prev) => [...newStudents, ...prev]);
+
+    logAudit({
+      actionType: 'CREATE',
+      module: 'Siswa',
+      description: `Impor massal data siswa berhasil: ${newStudents.length} siswa baru ditambahkan`,
+      status: 'SUCCESS',
+    });
   };
 
   // Handlers for violations
   const handleSaveViolation = (newViolation: ViolationRecord) => {
+    if (isGuestMode()) {
+      alert('Akses Ditolak: Mode Tamu hanya berhak membaca data. Silakan login dengan akun petugas resmi untuk mencatat pelanggaran.');
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Pelanggaran',
+        description: `Percobaan pencatatan pelanggaran (${newViolation.studentName}) ditolak karena dalam Mode Tamu`,
+        status: 'BLOCKED',
+      });
+      setIsAccountSwitchOpen(true);
+      return;
+    }
+
     setViolations((prev) => [newViolation, ...prev]);
 
     setStudents((prev) =>
@@ -104,6 +201,14 @@ export default function App() {
       })
     );
 
+    logAudit({
+      actionType: 'CREATE',
+      module: 'Pelanggaran',
+      description: `Pencatatan pelanggaran ${newViolation.tingkat}: ${newViolation.studentName} (Kelas ${newViolation.kelas}) - ${newViolation.kodePasal} ${newViolation.pasalTitle}`,
+      details: `Uraian: ${newViolation.uraian} · Pencatat: ${newViolation.guruPencatat} · Tahap: ${newViolation.tahapPembinaan}`,
+      status: 'SUCCESS',
+    });
+
     const targetStudent = students.find((s) => s.id === newViolation.studentId);
     if (targetStudent) {
       setActiveSuratViolation(newViolation);
@@ -115,9 +220,29 @@ export default function App() {
     violationId: string,
     newStatus: 'Draft' | 'Diterbitkan' | 'Selesai'
   ) => {
+    if (isGuestMode()) {
+      alert('Akses Ditolak: Mode Tamu tidak berhak mengubah status pelanggaran.');
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Pelanggaran',
+        description: `Percobaan ubah status pelanggaran #${violationId} ditolak (Mode Tamu)`,
+        status: 'BLOCKED',
+      });
+      setIsAccountSwitchOpen(true);
+      return;
+    }
+
     setViolations((prev) =>
       prev.map((v) => (v.id === violationId ? { ...v, statusSurat: newStatus } : v))
     );
+
+    const targetV = violations.find((v) => v.id === violationId);
+    logAudit({
+      actionType: 'UPDATE',
+      module: 'Pelanggaran',
+      description: `Pembaruan status dokumen pelanggaran ${targetV?.studentName || violationId}: status diubah menjadi "${newStatus}"`,
+      status: 'SUCCESS',
+    });
   };
 
   // Open Surat Modal
@@ -131,11 +256,34 @@ export default function App() {
 
   // Add WhatsApp Log
   const handleAddWaLog = (newLog: WhatsAppMessageLog) => {
+    if (isGuestMode()) {
+      alert('Akses Ditolak: Mode Tamu tidak berhak mencatat riwayat WhatsApp.');
+      return;
+    }
+
     setWaLogs((prev) => [newLog, ...prev]);
+
+    logAudit({
+      actionType: 'CREATE',
+      module: 'WhatsApp',
+      description: `Pengiriman pesan WhatsApp (${newLog.category}) ke ${newLog.recipientName} (${newLog.recipientPhone})`,
+      status: 'SUCCESS',
+    });
   };
 
   // Quick Violation modal trigger
   const handleTriggerQuickViolation = (studentId?: string) => {
+    if (isGuestMode()) {
+      alert('Akses Ditolak: Anda saat ini berada dalam Mode Tamu (Guest - View Only). Mode Tamu hanya berhak membuka dan melihat menu. Silakan login ke salah satu dari 20 akun petugas untuk mencatat pelanggaran.');
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Pelanggaran',
+        description: 'Mencoba membuka form catat pelanggaran ditolak karena pengguna berada dalam Mode Tamu',
+        status: 'BLOCKED',
+      });
+      setIsAccountSwitchOpen(true);
+      return;
+    }
     setPreselectedStudentId(studentId || '');
     setIsRecordModalOpen(true);
   };
@@ -145,14 +293,35 @@ export default function App() {
     setSchoolConfig(newConfig);
   };
 
-  // Reset to default data
+  // Reset to default data - CLEAN & BERSIH
   const handleResetData = () => {
-    if (window.confirm('Kembalikan seluruh data dan pengaturan ke sampel resmi SMPN 1 Kandangan?')) {
+    if (isGuestMode()) {
+      alert('Akses Ditolak: Anda sedang dalam Mode Tamu. Hanya akun petugas resmi yang berwenang mereset database.');
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Sistem',
+        description: 'Percobaan reset data contoh ditolak karena pengguna berada dalam Mode Tamu',
+        status: 'BLOCKED',
+      });
+      setIsAccountSwitchOpen(true);
+      return;
+    }
+
+    if (window.confirm('Reset data contoh sekarang? Seluruh data anak akan dibersihkan secara tuntas (0 pelanggaran, status Hadir) dan buku pelanggaran dikosongkan.')) {
       const reset = resetToDefaultData();
       setStudents(reset.students);
       setViolations(reset.violations);
       setWaLogs(reset.logs);
       setSchoolConfig(reset.config);
+
+      logAudit({
+        actionType: 'RESET',
+        module: 'Sistem',
+        description: 'Mereset data contoh: Seluruh data anak dibersihkan secara tuntas (0 kasus pelanggaran, status Hadir) dan riwayat pelanggaran dikosongkan.',
+        status: 'SUCCESS',
+      });
+
+      alert('Berhasil! Seluruh data anak telah clean dan bersih (0 kasus pelanggaran, status Hadir).');
     }
   };
 
@@ -169,10 +338,12 @@ export default function App() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-        {/* Top Header (Time removed as requested) */}
+        {/* Top Header with Account Switcher & Mode Tamu Indicator */}
         <Header
           currentView={currentView}
+          currentUser={currentUser}
           onOpenQuickViolation={() => handleTriggerQuickViolation()}
+          onOpenAccountSwitch={() => setIsAccountSwitchOpen(true)}
           onSearchGlobal={(q) => setSearchQuery(q)}
           searchQuery={searchQuery}
           schoolConfig={schoolConfig}
@@ -248,9 +419,19 @@ export default function App() {
               violations={violations}
               onUpdateSchoolConfig={handleUpdateSchoolConfig}
               onPullDataFromSheets={(newStudents, newViolations, partialConfig) => {
+                if (isGuestMode()) {
+                  alert('Akses Ditolak: Mode Tamu tidak berhak memuat atau menimpa data.');
+                  return;
+                }
                 if (newStudents && newStudents.length > 0) setStudents(newStudents);
                 if (newViolations && newViolations.length > 0) setViolations(newViolations);
-                if (partialConfig) setSchoolConfig(prev => ({ ...prev, ...partialConfig }));
+                if (partialConfig) setSchoolConfig((prev) => ({ ...prev, ...partialConfig }));
+                logAudit({
+                  actionType: 'SYNC',
+                  module: 'Pengaturan',
+                  description: `Memuat & menimpa data dari Google Sheets (${newStudents?.length || 0} siswa)`,
+                  status: 'SUCCESS',
+                });
               }}
             />
           )}
@@ -269,11 +450,11 @@ export default function App() {
             <span>·</span>
             <button
               onClick={handleResetData}
-              className="text-slate-400 hover:text-slate-700 flex items-center gap-1 transition-colors"
-              title="Kembalikan data contoh awal"
+              className="text-slate-400 hover:text-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
+              title="Kembalikan data contoh awal ke kondisi clean dan bersih"
             >
               <RotateCcw className="w-3 h-3" />
-              <span>Reset Data Contoh</span>
+              <span>Reset Data Contoh (Clean & Bersih)</span>
             </button>
           </div>
         </footer>
@@ -319,6 +500,15 @@ export default function App() {
         onOpenSurat={(v) => {
           setDetailedSlipStudent(null);
           handleOpenSuratModal(v);
+        }}
+      />
+
+      {/* Account Switch & 20 Accounts Login Modal */}
+      <AccountSwitchModal
+        isOpen={isAccountSwitchOpen}
+        onClose={() => setIsAccountSwitchOpen(false)}
+        onAccountChanged={(user) => {
+          setCurrentUser(user);
         }}
       />
     </div>

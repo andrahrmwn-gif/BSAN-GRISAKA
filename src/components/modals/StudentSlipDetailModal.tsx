@@ -16,7 +16,8 @@ import {
   AlertOctagon,
   Info,
   FileDown,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ExternalLink
 } from 'lucide-react';
 import { exportToCSV, exportElementToPDF } from '../../utils/exportDocs';
 
@@ -93,6 +94,7 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
   const discipline = getDisciplineStatus();
 
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
 
   const handlePrintSlip = () => {
     if (activeTab !== 'document') {
@@ -108,14 +110,17 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
   const handleDownloadPdf = async () => {
     if (activeTab !== 'document') {
       setActiveTab('document');
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
     const el = document.getElementById('student-slip-printable-area');
     if (el) {
       setIsExportingPdf(true);
       const filename = `Rapor_Disiplin_${student.nama.replace(/\s+/g, '_')}_${student.kelas}`;
-      await exportElementToPDF(el, filename);
+      const res = await exportElementToPDF(el, filename);
       setIsExportingPdf(false);
+      if (res.blobUrl) {
+        setPdfDownloadUrl(res.blobUrl);
+      }
     } else {
       window.print();
     }
@@ -302,6 +307,28 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Automatic PDF Download Notification Banner */}
+        {pdfDownloadUrl && (
+          <div className="bg-[#0B231E] border-b border-[#1b4e41] text-white px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#83C532] animate-ping"></span>
+              <span className="font-semibold text-emerald-300">
+                File PDF resmi telah diproses dan diunduh secara otomatis.
+              </span>
+            </div>
+            <a
+              href={pdfDownloadUrl}
+              download={`Rapor_Disiplin_${student.nama.replace(/\s+/g, '_')}_${student.kelas}.pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#83C532] text-[#0B231E] hover:bg-[#96e03a] font-bold rounded-lg transition-transform active:scale-95 text-[11px]"
+            >
+              <span>Buka / Unduh Ulang PDF</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+        )}
 
         {/* Modal Scrollable Viewport */}
         <div className="flex-1 overflow-y-auto p-6 lg:p-8 space-y-6 bg-slate-50/60">

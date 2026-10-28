@@ -33,6 +33,11 @@ import {
   getStoredLastSync
 } from '../../services/googleWorkspace';
 import { User } from 'firebase/auth';
+import { AccountManager } from './AccountManager';
+import { AuditLogTable } from './AuditLogTable';
+import { isGuestMode, getCurrentUser } from '../../services/authService';
+import { logAudit } from '../../services/auditLogger';
+import { Users, Shield, History, Lock } from 'lucide-react';
 
 interface SchoolSettingsViewProps {
   schoolConfig: SchoolProfile;
@@ -133,14 +138,36 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
     setFormData((prev) => ({ ...prev, logoUrl: '' }));
   };
 
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'profile_db' | 'accounts' | 'audit_log'>('profile_db');
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isGuestMode()) {
+      alert('Akses Ditolak: Anda saat ini berada dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak mengubah pengaturan.');
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Pengaturan',
+        description: 'Percobaan simpan konfigurasi profil sekolah ditolak karena berada dalam Mode Tamu',
+        status: 'BLOCKED'
+      });
+      return;
+    }
+
     const updated: SchoolProfile = {
       ...formData,
       wakasekName: formData.timKesiswaanName,
       wakasekNip: formData.timKesiswaanNip,
     };
     onUpdateSchoolConfig(updated);
+    
+    logAudit({
+      actionType: 'UPDATE',
+      module: 'Pengaturan',
+      description: 'Memperbarui identitas sekolah dan susunan pejabat penandatangan BSAN',
+      status: 'SUCCESS'
+    });
+
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 4000);
   };
@@ -273,8 +300,50 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
         )}
       </div>
 
-      {/* SECTION: INTEGRASI GOOGLE DRIVE & GOOGLE SHEETS SEBAGAI DATABASE */}
-      <div className="bg-gradient-to-br from-white via-emerald-50/30 to-teal-50/40 p-6 rounded-3xl border-2 border-emerald-200 shadow-sm space-y-5">
+      {/* Settings Navigation Tabs */}
+      <div className="flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-xs">
+        <button
+          onClick={() => setActiveSettingsTab('profile_db')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeSettingsTab === 'profile_db'
+              ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          <span>Profil Sekolah & Database Cloud</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSettingsTab('accounts')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeSettingsTab === 'accounts'
+              ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Manajemen 20 Akun Petugas</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSettingsTab('audit_log')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeSettingsTab === 'audit_log'
+              ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <History className="w-4 h-4" />
+          <span>System Audit Log & Keamanan</span>
+        </button>
+      </div>
+
+      {/* TAB 1: PROFIL SEKOLAH & GOOGLE SHEETS / DRIVE SYNC */}
+      {activeSettingsTab === 'profile_db' && (
+        <div className="space-y-6">
+          {/* SECTION: INTEGRASI GOOGLE DRIVE & GOOGLE SHEETS SEBAGAI DATABASE */}
+          <div className="bg-gradient-to-br from-white via-emerald-50/30 to-teal-50/40 p-6 rounded-3xl border-2 border-emerald-200 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-emerald-100">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-emerald-700 text-white flex items-center justify-center shadow-xs">
@@ -851,6 +920,18 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
           </button>
         </div>
       </form>
+        </div>
+      )}
+
+      {/* TAB 2: MANAJEMEN 20 AKUN PETUGAS */}
+      {activeSettingsTab === 'accounts' && (
+        <AccountManager />
+      )}
+
+      {/* TAB 3: SYSTEM AUDIT LOG & KEAMANAN */}
+      {activeSettingsTab === 'audit_log' && (
+        <AuditLogTable />
+      )}
 
       {/* Confirmation Modal for Pulling data from Google Sheets */}
       {isPullConfirmOpen && (

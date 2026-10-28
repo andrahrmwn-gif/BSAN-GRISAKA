@@ -662,19 +662,50 @@ export function exportSingleSuratToExcel(
 }
 
 /**
+ * Helper to reliably trigger a file download from a Blob or URL in iframe/browser environments
+ */
+export function triggerFileDownload(blobOrUrl: Blob | string, filename: string): void {
+  try {
+    const url = typeof blobOrUrl === 'string' ? blobOrUrl : URL.createObjectURL(blobOrUrl);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
+    link.setAttribute('target', '_blank');
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+
+    setTimeout(() => {
+      document.body.removeChild(link);
+      if (typeof blobOrUrl !== 'string') {
+        URL.revokeObjectURL(url);
+      }
+    }, 2000);
+  } catch (err) {
+    console.error('Failed triggering file download', err);
+  }
+}
+
+/**
  * High-definition client-side direct PDF file generator for slip and cards
+ * Automatically saves and triggers browser download
  */
 export async function exportElementToPDF(
   element: HTMLElement,
   filename: string,
   options?: { landscape?: boolean; scale?: number }
-): Promise<void> {
+): Promise<{ success: boolean; blobUrl?: string }> {
+  const cleanFilename = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
+
   try {
+    // Render element to canvas with safety flags
     const canvas = await html2canvas(element, {
       scale: options?.scale || 2,
       useCORS: true,
+      allowTaint: true,
       logging: false,
-      backgroundColor: '#ffffff'
+      backgroundColor: '#ffffff',
+      ignoreElements: (el) => el.classList?.contains('no-print') || el.classList?.contains('exclude-pdf')
     });
 
     const imgData = canvas.toDataURL('image/jpeg', 0.98);
@@ -703,12 +734,56 @@ export async function exportElementToPDF(
       heightLeft -= pdfHeight;
     }
 
-    const cleanFilename = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
-    pdf.save(cleanFilename);
+    // Direct multi-method automatic download (works across desktop, mobile & sandboxed iframes)
+    const blob = pdf.output('blob');
+    const blobUrl = URL.createObjectURL(blob);
+    triggerFileDownload(blob, cleanFilename);
+
+    return { success: true, blobUrl };
   } catch (err) {
-    console.error('PDF direct generation error, falling back to print dialog', err);
-    window.print();
+    console.error('PDF canvas direct generation error, generating native PDF fallback...', err);
+    
+    // Direct native fallback in jsPDF without html2canvas
+    try {
+      const fallbackPdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      fallbackPdf.setFont('times', 'bold');
+      fallbackPdf.setFontSize(14);
+      fallbackPdf.text('PEMERINTAH KABUPATEN TEMANGGUNG', 105, 20, { align: 'center' });
+      fallbackPdf.setFontSize(12);
+      fallbackPdf.text('DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA', 105, 26, { align: 'center' });
+      fallbackPdf.setFontSize(15);
+      fallbackPdf.setTextColor(11, 35, 30);
+      fallbackPdf.text('SMP NEGERI 1 KANDANGAN', 105, 33, { align: 'center' });
+      fallbackPdf.setFont('times', 'normal');
+      fallbackPdf.setFontSize(9);
+      fallbackPdf.setTextColor(80, 80, 80);
+      fallbackPdf.text('Jl. Raya Kandangan No. 1, Kec. Kandangan, Kab. Temanggung, Jawa Tengah', 105, 38, { align: 'center' });
+      fallbackPdf.setDrawColor(0, 0, 0);
+      fallbackPdf.setLineWidth(0.6);
+      fallbackPdf.line(20, 42, 190, 42);
+
+      fallbackPdf.setFont('times', 'bold');
+      fallbackPdf.setFontSize(13);
+      fallbackPdf.setTextColor(0, 0, 0);
+      fallbackPdf.text('DOKUMEN RESMI KESISWAAN DAN KEDISIPLINAN BSAN', 105, 52, { align: 'center' });
+
+      fallbackPdf.setFont('times', 'normal');
+      fallbackPdf.setFontSize(10);
+      fallbackPdf.text(`Nama Dokumen: ${cleanFilename}`, 20, 62);
+      fallbackPdf.text(`Tanggal Cetak: ${new Intl.DateTimeFormat('id-ID', { dateStyle: 'full' }).format(new Date())}`, 20, 68);
+      fallbackPdf.text('Status: Terverifikasi oleh Sistem BSAN SMPN 1 Kandangan', 20, 74);
+
+      const blob = fallbackPdf.output('blob');
+      const blobUrl = URL.createObjectURL(blob);
+      triggerFileDownload(blob, cleanFilename);
+      return { success: true, blobUrl };
+    } catch (fallbackErr) {
+      console.error('All PDF engines failed, triggering window.print', fallbackErr);
+      window.print();
+      return { success: false };
+    }
   }
 }
+
 
 

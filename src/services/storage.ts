@@ -110,14 +110,29 @@ export const resetToDefaultData = (): {
   logs: WhatsAppMessageLog[];
   config: SchoolProfile;
 } => {
-  localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
-  localStorage.setItem(STORAGE_KEYS.VIOLATIONS, JSON.stringify(INITIAL_VIOLATIONS));
-  localStorage.setItem(STORAGE_KEYS.WA_LOGS, JSON.stringify(INITIAL_WA_LOGS));
+  // Ensure all student records are completely clean and pristine (zero violations, status Hadir)
+  const cleanStudents: Student[] = INITIAL_STUDENTS.map((s) => ({
+    ...s,
+    statusKehadiran: 'Hadir',
+    keteranganKehadiran: undefined,
+    totalPelanggaranRingan: 0,
+    totalPelanggaranSedang: 0,
+    totalPelanggaranBerat: 0,
+    totalPoinPelanggaran: 0,
+  }));
+
+  const cleanViolations: ViolationRecord[] = [];
+  const cleanLogs: WhatsAppMessageLog[] = [];
+
+  localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(cleanStudents));
+  localStorage.setItem(STORAGE_KEYS.VIOLATIONS, JSON.stringify(cleanViolations));
+  localStorage.setItem(STORAGE_KEYS.WA_LOGS, JSON.stringify(cleanLogs));
   localStorage.setItem(STORAGE_KEYS.SCHOOL_CONFIG, JSON.stringify(SCHOOL_CONFIG));
+
   return {
-    students: INITIAL_STUDENTS,
-    violations: INITIAL_VIOLATIONS,
-    logs: INITIAL_WA_LOGS,
+    students: cleanStudents,
+    violations: cleanViolations,
+    logs: cleanLogs,
     config: SCHOOL_CONFIG,
   };
 };
