@@ -35,6 +35,7 @@ export type AuditActionType =
 export type AuditModule = 
   | 'Pelanggaran' 
   | 'Siswa' 
+  | 'Presensi'
   | 'Pengaturan' 
   | 'Tata Tertib' 
   | 'WhatsApp' 

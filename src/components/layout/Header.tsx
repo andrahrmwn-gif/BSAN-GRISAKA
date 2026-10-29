@@ -9,7 +9,8 @@ import {
   Eye,
   User,
   ChevronDown,
-  Lock
+  Lock,
+  Menu
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -20,6 +21,7 @@ interface HeaderProps {
   onSearchGlobal: (query: string) => void;
   searchQuery: string;
   schoolConfig: SchoolProfile;
+  onToggleMobileSidebar?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -28,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenQuickViolation,
   onOpenAccountSwitch,
   schoolConfig,
+  onToggleMobileSidebar,
 }) => {
   const isGuest = !currentUser;
 
@@ -37,6 +40,8 @@ export const Header: React.FC<HeaderProps> = ({
         return 'Dashboard Eksekutif & Real-Time';
       case 'students':
         return 'Database Siswa (Central Data Hub)';
+      case 'attendance':
+        return 'Presensi Siswa 24 Rombel & Rekap Kehadiran';
       case 'violations':
         return 'Buku Pelanggaran & Tata Tertib Otomatis';
       case 'tatatertib':
@@ -55,16 +60,28 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="bg-white border-b border-slate-200/80 px-6 py-3.5 sticky top-0 z-20 shadow-xs">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        {/* Left: Breadcrumbs & View Name */}
-        <div>
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-            <span>{schoolConfig.shortName || 'SMPN 1 Kandangan'}</span>
-            <span>/</span>
-            <span className="text-[#0B231E] font-semibold">{getBreadcrumbTitle()}</span>
+        {/* Left: Hamburger & Breadcrumbs & View Name */}
+        <div className="flex items-center gap-3">
+          {onToggleMobileSidebar && (
+            <button
+              onClick={onToggleMobileSidebar}
+              className="lg:hidden p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 transition-colors cursor-pointer shrink-0"
+              title="Buka Menu Navigasi"
+            >
+              <Menu className="w-5 h-5 text-slate-700" />
+            </button>
+          )}
+
+          <div>
+            <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+              <span>{schoolConfig.shortName || 'SMPN 1 Kandangan'}</span>
+              <span>/</span>
+              <span className="text-[#0B231E] font-semibold">{getBreadcrumbTitle()}</span>
+            </div>
+            <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+              {getBreadcrumbTitle()}
+            </h1>
           </div>
-          <h1 className="text-lg font-bold text-slate-900 tracking-tight">
-            {getBreadcrumbTitle()}
-          </h1>
         </div>
 
         {/* Center / Right widgets */}
@@ -102,7 +119,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="text-[9px] bg-amber-200 px-1 py-0.2 rounded font-bold">Read-Only</span>
                 </div>
                 <div className="text-[10px] text-amber-700 font-bold">
-                  Login 20 Akun &rarr;
+                  Login 55 Akun &rarr;
                 </div>
               </div>
             </button>

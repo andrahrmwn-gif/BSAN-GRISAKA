@@ -49,6 +49,7 @@ interface SchoolSettingsViewProps {
     newViolations: ViolationRecord[], 
     partialConfig?: Partial<SchoolProfile>
   ) => void;
+  onResetData?: () => void;
 }
 
 export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
@@ -57,6 +58,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
   violations = [],
   onUpdateSchoolConfig,
   onPullDataFromSheets,
+  onResetData,
 }) => {
   const [formData, setFormData] = useState<SchoolProfile>({
     ...schoolConfig,
@@ -323,7 +325,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>Manajemen 20 Akun Petugas</span>
+          <span>Manajemen 55 Akun Petugas</span>
         </button>
 
         <button
@@ -556,6 +558,34 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* SECTION: BERSIHKAN & RESET DATA CONTOH */}
+        <div className="bg-white p-6 rounded-3xl border border-rose-200/90 shadow-xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold shrink-0">
+                <RotateCcw className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-slate-900">Bersihkan & Reset Data Contoh (Clean Database)</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Kembalikan database ke kondisi awal bersih: 0 kasus pelanggaran, seluruh murid 24 rombel berstatus Hadir, dan log notifikasi dikosongkan.
+                </p>
+              </div>
+            </div>
+
+            {onResetData && (
+              <button
+                type="button"
+                onClick={onResetData}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-xs transition-transform active:scale-95 cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-2"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Reset Data Sekarang</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -106,8 +106,53 @@ export interface SchoolProfile {
 export type ViewMode = 
   | 'dashboard'
   | 'students'
+  | 'attendance'
   | 'violations'
   | 'whatsapp'
   | 'reports'
   | 'tatatertib'
   | 'settings';
+
+export interface AttendanceStudentEntry {
+  studentId: string;
+  nisn: string;
+  nama: string;
+  gender: Gender;
+  status: AttendanceStatus;
+  keterangan?: string;
+}
+
+export interface AttendanceSheet {
+  id: string; // e.g. "att-2026-10-29-7A"
+  date: string; // YYYY-MM-DD
+  kelas: string; // '7A'..'9H' (24 classes)
+  recordedBy: string;
+  recordedByNip?: string;
+  recordedAt: string;
+  entries: AttendanceStudentEntry[];
+  summary: {
+    total: number;
+    hadir: number;
+    sakit: number;
+    izin: number;
+    alfa: number;
+    persentaseHadir: number;
+  };
+}
+
+export type AttendancePeriod = 'harian' | 'mingguan' | 'bulanan' | 'semester' | 'tahunan';
+
+export interface AttendanceRecapRow {
+  studentId: string;
+  nisn: string;
+  nama: string;
+  kelas: string;
+  gender: Gender;
+  totalHadir: number;
+  totalSakit: number;
+  totalIzin: number;
+  totalAlfa: number;
+  totalHari: number;
+  persentaseHadir: number;
+  keteranganTerakhir?: string;
+}

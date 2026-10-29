@@ -186,11 +186,11 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
           <div className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-[#83C532]" />
             <h3 className="font-extrabold text-base tracking-tight text-white">
-              Manajemen Hak Akses & Kontrol 20 Akun Petugas
+              Manajemen Hak Akses & Kontrol 55 Akun Petugas
             </h3>
           </div>
           <p className="text-xs text-slate-300 mt-1 max-w-xl">
-            Sistem dibatasi secara ketat maksimal <strong>{MAX_ACCOUNTS} akun resmi</strong> yang dapat login dan melakukan input/perubahan data. Akun di luar ini atau mode tamu hanya dapat melihat menu tanpa hak modifikasi.
+            Sistem dibatasi secara ketat maksimal <strong>{MAX_ACCOUNTS} akun resmi</strong> yang dapat login dan melakukan input/perubahan data. Tiap akun dapat dirubah Nama, NIP, dan Passwordnya. Mode tamu otomatis aktif untuk pengguna baru dengan hak view-only.
           </p>
         </div>
 
@@ -209,7 +209,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
             onClick={() => setIsAddModalOpen(true)}
             disabled={accounts.length >= MAX_ACCOUNTS}
             className="flex items-center gap-2 px-4 py-2.5 bg-[#83C532] hover:bg-[#94db3a] disabled:opacity-40 disabled:hover:bg-[#83C532] text-[#0B231E] font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
-            title={accounts.length >= MAX_ACCOUNTS ? 'Kuota 20 akun penuh' : 'Tambah Akun Petugas Baru'}
+            title={accounts.length >= MAX_ACCOUNTS ? 'Kuota 55 akun penuh' : 'Tambah Akun Petugas Baru'}
           >
             <UserPlus className="w-4 h-4 stroke-[2.5]" />
             <span>Tambah Akun ({MAX_ACCOUNTS - accounts.length} Sisa)</span>

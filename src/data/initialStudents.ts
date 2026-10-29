@@ -1,252 +1,122 @@
 import { Student, ViolationRecord, WhatsAppMessageLog } from '../types';
+import { KELAS_LIST } from './schoolConfig';
 
-export const INITIAL_STUDENTS: Student[] = [
-  {
-    id: 'std-001',
-    nisn: '0089218201',
-    nama: 'Ahmad Faiz Ramadhan',
-    kelas: '7A',
-    jenjang: 7,
-    gender: 'L',
-    noHpSiswa: '081234567891',
-    namaOrtu: 'Bambang Supriyanto',
-    noWaOrtu: '6281234567891',
-    alamat: 'Dusun Krajan RT 02 RW 01, Ds. Kandangan, Temanggung',
-    statusKehadiran: 'Hadir',
-    totalPelanggaranRingan: 0,
-    totalPelanggaranSedang: 0,
-    totalPelanggaranBerat: 0,
-  },
-  {
-    id: 'std-002',
-    nisn: '0089218202',
-    nama: 'Anindya Putri Kirana',
-    kelas: '7A',
-    jenjang: 7,
-    gender: 'P',
-    noHpSiswa: '081398765401',
-    namaOrtu: 'Sri Wahyuni, S.Pd.',
-    noWaOrtu: '6281398765401',
-    alamat: 'Jl. Raya Maron No. 14, Ds. Caruban, Kandangan, Temanggung',
-    statusKehadiran: 'Sakit',
-    keteranganKehadiran: 'Demam dan flu (surat dokter Puskesmas Kandangan)',
-    totalPelanggaranRingan: 1,
-    totalPelanggaranSedang: 0,
-    totalPelanggaranBerat: 0,
-  },
-  {
-    id: 'std-003',
-    nisn: '0089218203',
-    nama: 'Bagus Dwi Wicaksono',
-    kelas: '7B',
-    jenjang: 7,
-    gender: 'L',
-    noHpSiswa: '085712349901',
-    namaOrtu: 'Suhartono',
-    noWaOrtu: '6285712349901',
-    alamat: 'Dusun Blimbing RT 03 RW 02, Ds. Blimbing, Kandangan, Temanggung',
-    statusKehadiran: 'Alfa',
-    keteranganKehadiran: 'Tidak hadir tanpa keterangan izin',
-    totalPelanggaranRingan: 2,
-    totalPelanggaranSedang: 1,
-    totalPelanggaranBerat: 0,
-  },
-  {
-    id: 'std-004',
-    nisn: '0089218204',
-    nama: 'Cantika Dewi Lestari',
-    kelas: '7C',
-    jenjang: 7,
-    gender: 'P',
-    noHpSiswa: '081255443322',
-    namaOrtu: 'Joko Widodo',
-    noWaOrtu: '6281255443322',
-    alamat: 'Dusun Gesing RT 01 RW 04, Ds. Gesing, Kandangan, Temanggung',
-    statusKehadiran: 'Hadir',
-    totalPelanggaranRingan: 0,
-    totalPelanggaranSedang: 0,
-    totalPelanggaranBerat: 0,
-  },
-  {
-    id: 'std-005',
-    nisn: '0089218205',
-    nama: 'Dimas Aditya Pratama',
-    kelas: '7D',
-    jenjang: 7,
-    gender: 'L',
-    noHpSiswa: '085299887766',
-    namaOrtu: 'Hadi Purwanto',
-    noWaOrtu: '6285299887766',
-    alamat: 'Dusun Rowo RT 02 RW 03, Ds. Rowo, Kandangan, Temanggung',
-    statusKehadiran: 'Izin',
-    keteranganKehadiran: 'Menghadiri acara keluarga di Temanggung Kota',
-    totalPelanggaranRingan: 1,
-    totalPelanggaranSedang: 0,
-    totalPelanggaranBerat: 0,
-  },
-  {
-    id: 'std-006',
-    nisn: '0078129001',
-    nama: 'Farhan Maulana Akbar',
-    kelas: '8A',
-    jenjang: 8,
-    gender: 'L',
-    noHpSiswa: '081344556677',
-    namaOrtu: 'H. Sudirman',
-    noWaOrtu: '6281344556677',
-    alamat: 'Dusun Batusari RT 04 RW 01, Kandangan, Temanggung',
-    statusKehadiran: 'Hadir',
-    totalPelanggaranRingan: 3,
-    totalPelanggaranSedang: 0,
-    totalPelanggaranBerat: 0,
-  },
-  {
-    id: 'std-007',
-    nisn: '0078129002',
-    nama: 'Gita Nurul Aulia',
-    kelas: '8B',
-    jenjang: 8,
-    gender: 'P',
-    noHpSiswa: '087788990011',
-    namaOrtu: 'Siti Aminah',
-    noWaOrtu: '6287788990011',
-    alamat: 'Dusun Wadas RT 02 RW 02, Ds. Wadas, Kandangan, Temanggung',
-    statusKehadiran: 'Hadir',
-    totalPelanggaranRingan: 0,
-    totalPelanggaranSedang: 0,
-    totalPelanggaranBerat: 0,
-  },
-  {
-    id: 'std-008',
-    nisn: '0078129003',
-    nama: 'Hendrik Setiawan',
-    kelas: '8C',
-    jenjang: 8,
-    gender: 'L',
-    noHpSiswa: '085811223344',
-    namaOrtu: 'Agus Salim',
-    noWaOrtu: '6285811223344',
-    alamat: 'Dusun Kedungboto RT 01 RW 03, Kandangan, Temanggung',
-    statusKehadiran: 'Alfa',
-    keteranganKehadiran: 'Alfa hari kedua tanpa pemberitahuan orang tua',
-    totalPelanggaranRingan: 1,
-    totalPelanggaranSedang: 2,
-    totalPelanggaranBerat: 0,
-  },
-  {
-    id: 'std-009',
-    nisn: '0078129004',
-    nama: 'Indah Permata Sari',
-    kelas: '8D',
-    jenjang: 8,
-    gender: 'P',
-    noHpSiswa: '082166778899',
-    namaOrtu: 'Kurniawan Eko',
-    noWaOrtu: '6282166778899',
-    alamat: 'Perumahan Asri Kandangan Blok C-2, Temanggung',
-    statusKehadiran: 'Hadir',
-    totalPelanggaranRingan: 1,
-    totalPelanggaranSedang: 0,
-    totalPelanggaranBerat: 0,
-  },
-  {
-    id: 'std-010',
-    nisn: '0078129005',
-    nama: 'Kevin Jonathan',
-    kelas: '8E',
-    jenjang: 8,
-    gender: 'L',
-    noHpSiswa: '089677881122',
-    namaOrtu: 'Andreas Taufiq',
-    noWaOrtu: '6289677881122',
-    alamat: 'Jl. Tentara Pelajar No. 8, Kandangan, Temanggung',
-    statusKehadiran: 'Hadir',
-    totalPelanggaranRingan: 2,
-    totalPelanggaranSedang: 1,
-    totalPelanggaranBerat: 0,
-  },
-  {
-    id: 'std-011',
-    nisn: '0067330101',
-    nama: 'Muhammad Arya Saputra',
-    kelas: '9A',
-    jenjang: 9,
-    gender: 'L',
-    noHpSiswa: '081290887711',
-    namaOrtu: 'Drs. Supriyadi',
-    noWaOrtu: '6281290887711',
-    alamat: 'Dusun Malebo RT 05 RW 01, Kandangan, Temanggung',
-    statusKehadiran: 'Hadir',
-    totalPelanggaranRingan: 0,
-    totalPelanggaranSedang: 0,
-    totalPelanggaranBerat: 0,
-  },
-  {
-    id: 'std-012',
-    nisn: '0067330102',
-    nama: 'Nabila Zahra Syakirah',
-    kelas: '9B',
-    jenjang: 9,
-    gender: 'P',
-    noHpSiswa: '085733445566',
-    namaOrtu: 'Rahmat Hidayat',
-    noWaOrtu: '6285733445566',
-    alamat: 'Dusun Ngemplak RT 02 RW 02, Ds. Kandangan, Temanggung',
-    statusKehadiran: 'Hadir',
-    totalPelanggaranRingan: 1,
-    totalPelanggaranSedang: 0,
-    totalPelanggaranBerat: 0,
-  },
-  {
-    id: 'std-013',
-    nisn: '0067330103',
-    nama: 'Rangga Danendra',
-    kelas: '9C',
-    jenjang: 9,
-    gender: 'L',
-    noHpSiswa: '082211998877',
-    namaOrtu: 'Budi Santoso',
-    noWaOrtu: '6282211998877',
-    alamat: 'Dusun Tlogowungu RT 03 RW 03, Ds. Margolelo, Kandangan, Temanggung',
-    statusKehadiran: 'Hadir',
-    totalPelanggaranRingan: 1,
-    totalPelanggaranSedang: 0,
-    totalPelanggaranBerat: 1,
-  },
-  {
-    id: 'std-014',
-    nisn: '0067330104',
-    nama: 'Siti Rahmawati',
-    kelas: '9D',
-    jenjang: 9,
-    gender: 'P',
-    noHpSiswa: '081988776655',
-    namaOrtu: 'Suwandi',
-    noWaOrtu: '6281988776655',
-    alamat: 'Dusun Kembangsari RT 01 RW 02, Kandangan, Temanggung',
-    statusKehadiran: 'Sakit',
-    keteranganKehadiran: 'Tifus, rawat jalan di rumah',
-    totalPelanggaranRingan: 0,
-    totalPelanggaranSedang: 0,
-    totalPelanggaranBerat: 0,
-  },
-  {
-    id: 'std-015',
-    nisn: '0067330105',
-    nama: 'Zidan Al-Farizi',
-    kelas: '9E',
-    jenjang: 9,
-    gender: 'L',
-    noHpSiswa: '085344332211',
-    namaOrtu: 'Ahmad Kusnan',
-    noWaOrtu: '6285344332211',
-    alamat: 'Jl. Pahlawan No. 7, Kandangan, Temanggung',
-    statusKehadiran: 'Hadir',
-    totalPelanggaranRingan: 2,
-    totalPelanggaranSedang: 1,
-    totalPelanggaranBerat: 0,
-  },
+// Names pool for realistic SMPN 1 Kandangan student roster
+const FIRST_NAMES_MALE = [
+  'Ahmad', 'Bagus', 'Dimas', 'Fajar', 'Galih', 'Hafizh', 'Irfan', 'Joko',
+  'Kevin', 'Lukman', 'Maulana', 'Naufal', 'Oki', 'Pandu', 'Rangga', 'Surya',
+  'Tegar', 'Wahyu', 'Yoga', 'Zidan', 'Bayu', 'Candra', 'Daffa', 'Eko',
+  'Gilang', 'Ilham', 'Kurniawan', 'Muhammad', 'Rifqi', 'Satria'
 ];
+
+const FIRST_NAMES_FEMALE = [
+  'Anindya', 'Cantika', 'Dina', 'Eka', 'Fitri', 'Gita', 'Hana', 'Indah',
+  'Jasmine', 'Karina', 'Lestari', 'Maya', 'Nabila', 'Putri', 'Rani', 'Siti',
+  'Tiara', 'Ulfa', 'Vina', 'Wulan', 'Zahra', 'Alya', 'Bunga', 'Citra',
+  'Dwi', 'Farida', 'Intan', 'Melati', 'Nurul', 'Salma'
+];
+
+const LAST_NAMES = [
+  'Pratama', 'Saputra', 'Wicaksono', 'Kusuma', 'Ramadhan', 'Hidayat', 'Santoso',
+  'Utomo', 'Wibowo', 'Nugroho', 'Setiawan', 'Permadi', 'Handayani', 'Lestari',
+  'Anggraini', 'Rahmawati', 'Dewi', 'Safitri', 'Kurnia', 'Puspitasari'
+];
+
+const DUSUN_LIST = [
+  'Dusun Krajan, Ds. Kandangan',
+  'Dusun Blimbing, Ds. Blimbing',
+  'Dusun Maron, Ds. Caruban',
+  'Dusun Tlogowungu, Ds. Margolelo',
+  'Dusun Kembangsari, Ds. Kandangan',
+  'Dusun Kedungumpul, Ds. Kedungumpul',
+  'Dusun Ngemplak, Ds. Malebo',
+  'Dusun Baledono, Ds. Baledono',
+  'Dusun Gesing, Ds. Gesing',
+  'Dusun Rowocacing, Ds. Kandangan'
+];
+
+const PARENT_NAMES = [
+  'Bambang Supriyanto', 'Suhartono', 'Budi Santoso', 'Agus Triono', 'H. Sudirman',
+  'Andreas Taufiq', 'Ahmad Kusnan', 'Suwandi', 'Haryanto', 'Dwi Cahyono',
+  'Slamet Riyadi', 'Purnomo', 'Widodo', 'Mulyadi', 'Joko Susanto'
+];
+
+// Helper to generate a realistic student roster across all 24 classes (7A-9H)
+const generateRosterFor24Classes = (): Student[] => {
+  const students: Student[] = [];
+  let stdCounter = 1;
+
+  KELAS_LIST.forEach((kelasName) => {
+    const jenjangNum = parseInt(kelasName.charAt(0), 10) || 7;
+    const baseNisnPrefix = jenjangNum === 7 ? '0089' : jenjangNum === 8 ? '0078' : '0067';
+    
+    // Generate 7-8 students for each class
+    const count = 7;
+    for (let i = 0; i < count; i++) {
+      const isMale = (i % 2 === 0);
+      const firstNameList = isMale ? FIRST_NAMES_MALE : FIRST_NAMES_FEMALE;
+      const fName = firstNameList[(stdCounter * 7 + i * 3) % firstNameList.length];
+      const lName = LAST_NAMES[(stdCounter * 5 + i * 2) % LAST_NAMES.length];
+      const fullName = `${fName} ${lName}`;
+      
+      const padNum = String(stdCounter).padStart(3, '0');
+      const id = `std-${padNum}`;
+      const nisn = `${baseNisnPrefix}${String(218000 + stdCounter)}`;
+      const phoneDigits = String(10000000 + stdCounter);
+      const parentName = PARENT_NAMES[(stdCounter + i) % PARENT_NAMES.length];
+      const dusun = DUSUN_LIST[(stdCounter + i) % DUSUN_LIST.length];
+
+      // Initial attendance distribution
+      let status: 'Hadir' | 'Sakit' | 'Izin' | 'Alfa' = 'Hadir';
+      let keterangan: string | undefined = undefined;
+
+      if (stdCounter === 2) {
+        status = 'Sakit';
+        keterangan = 'Demam dan flu (surat dokter Puskesmas Kandangan)';
+      } else if (stdCounter === 3) {
+        status = 'Alfa';
+        keterangan = 'Tidak hadir tanpa keterangan izin';
+      } else if (stdCounter === 9) {
+        status = 'Izin';
+        keterangan = 'Izin mengikuti lomba OSN tingkat kabupaten';
+      } else if (stdCounter === 14) {
+        status = 'Sakit';
+        keterangan = 'Tifus rawat jalan di rumah';
+      } else if (stdCounter === 23) {
+        status = 'Izin';
+        keterangan = 'Keperluan keluarga di luar kota';
+      } else if (stdCounter === 35) {
+        status = 'Alfa';
+        keterangan = 'Tanpa surat keterangan';
+      }
+
+      students.push({
+        id,
+        nisn,
+        nama: fullName,
+        kelas: kelasName,
+        jenjang: jenjangNum,
+        gender: isMale ? 'L' : 'P',
+        noHpSiswa: `0812${phoneDigits}`,
+        namaOrtu: parentName,
+        noWaOrtu: `62812${phoneDigits}`,
+        alamat: `${dusun}, Kec. Kandangan, Temanggung`,
+        statusKehadiran: status,
+        keteranganKehadiran: keterangan,
+        totalPelanggaranRingan: stdCounter === 3 ? 2 : stdCounter === 6 ? 1 : 0,
+        totalPelanggaranSedang: stdCounter === 3 ? 1 : 0,
+        totalPelanggaranBerat: stdCounter === 13 ? 1 : 0,
+        totalPoinPelanggaran: stdCounter === 3 ? 15 : stdCounter === 13 ? 50 : 0
+      });
+
+      stdCounter++;
+    }
+  });
+
+  return students;
+};
+
+export const INITIAL_STUDENTS: Student[] = generateRosterFor24Classes();
 
 export const INITIAL_VIOLATIONS: ViolationRecord[] = [
   {
@@ -258,38 +128,40 @@ export const INITIAL_VIOLATIONS: ViolationRecord[] = [
     pasalNumber: 5,
     pasalTitle: 'Pelanggaran Berat & Tindak Kriminal',
     kodePasal: 'IND-05.3',
-    uraian: 'Terlibat dalam perkelahian fisik antar siswa di area belakang kantin sekolah',
+    uraian: 'Terlibat perkelahian fisik dengan teman sebaya di luar pagar sekolah saat jam istirahat kedua',
     tingkat: 'Berat',
     tanggal: '2026-10-24',
     waktu: '11:45',
     lokasi: 'Area Belakang Kantin SMPN 1 Kandangan',
-    guruPencatat: 'Drs. Subagyo (Guru Piket)',
-    tahapPembinaan: 'Kepala Sekolah & Tim Penanganan (Pemeriksaan Khusus)',
+    guruPencatat: 'Bambang Triyono, S.Pd.',
+    tahapPembinaan: 'Wakasek Kesiswaan (Pemanggilan Ortu & SP)',
     statusSurat: 'Diterbitkan',
-    catatanKhusus: 'Orang tua telah dihubungi dan dijadwalkan hadir ke sekolah untuk sidang pembinaan khusus',
+    catatanKhusus: 'Orang tua siswa telah dihubungi via WhatsApp resmi dan diundang hadir ke sekolah',
     noWaOrtu: '6282211998877',
     namaOrtu: 'Budi Santoso',
+    poin: 50,
   },
   {
     id: 'viol-002',
-    studentId: 'std-008',
-    studentName: 'Hendrik Setiawan',
-    kelas: '8C',
-    pasalId: 'p6-4',
-    pasalNumber: 6,
-    pasalTitle: 'Ketertiban Lingkungan & Fasilitas Sekolah',
-    kodePasal: 'IND-06.4',
-    uraian: 'Membawa kendaraan bermotor (sepeda motor) ke sekolah pada jam sekolah tanpa izin',
-    tingkat: 'Sedang',
+    studentId: 'std-003',
+    studentName: 'Bagus Dwi Wicaksono',
+    kelas: '7B',
+    pasalId: 'p3-2',
+    pasalNumber: 3,
+    pasalTitle: 'Disiplin Kehadiran & Ketepatan Waktu',
+    kodePasal: 'IND-03.2',
+    uraian: 'Terlambat masuk sekolah lebih dari 30 menit (pukul 07.35 WIB) tanpa surat keterangan izin orang tua',
+    tingkat: 'Ringan',
     tanggal: '2026-10-25',
-    waktu: '06:55',
-    lokasi: 'Pintu Gerbang Barat',
-    guruPencatat: 'Siti Rahayu, S.Pd. (Guru Piket)',
-    tahapPembinaan: 'Wakasek Kesiswaan (Pemanggilan Ortu & SP)',
-    statusSurat: 'Diterbitkan',
-    catatanKhusus: 'Kunci kontak dititipkan di kesiswaan, hanya boleh diambil orang tua murid',
-    noWaOrtu: '6285811223344',
-    namaOrtu: 'Agus Salim',
+    waktu: '07:35',
+    lokasi: 'Gerbang Depan SMPN 1 Kandangan',
+    guruPencatat: 'Siti Aminah, S.Pd.',
+    tahapPembinaan: 'Guru Mapel / Piket (Teguran Lisan & Buku Kontrol)',
+    statusSurat: 'Selesai',
+    catatanKhusus: 'Telah diberikan sanksi edukatif menyiram tanaman di taman literasi sekolah',
+    noWaOrtu: '6285712349901',
+    namaOrtu: 'Suhartono',
+    poin: 5,
   },
   {
     id: 'viol-003',
@@ -311,6 +183,7 @@ export const INITIAL_VIOLATIONS: ViolationRecord[] = [
     catatanKhusus: 'Diberikan waktu 2 hari untuk merapikan potongan rambut sesuai standar Grisaka',
     noWaOrtu: '6285712349901',
     namaOrtu: 'Suhartono',
+    poin: 10,
   },
   {
     id: 'viol-004',
@@ -332,27 +205,7 @@ export const INITIAL_VIOLATIONS: ViolationRecord[] = [
     catatanKhusus: 'Pelanggaran seragam ke-3, telah dibuatkan surat pernyataan binaan',
     noWaOrtu: '6281344556677',
     namaOrtu: 'H. Sudirman',
-  },
-  {
-    id: 'viol-005',
-    studentId: 'std-010',
-    studentName: 'Kevin Jonathan',
-    kelas: '8E',
-    pasalId: 'p6-5',
-    pasalNumber: 6,
-    pasalTitle: 'Ketertiban Lingkungan & Fasilitas Sekolah',
-    kodePasal: 'IND-06.5',
-    uraian: 'Bermain game di Handphone saat pergantian jam pelajaran tanpa izin guru',
-    tingkat: 'Sedang',
-    tanggal: '2026-10-25',
-    waktu: '09:40',
-    lokasi: 'Ruang Kelas 8E',
-    guruPencatat: 'Budi Santoso, S.Kom.',
-    tahapPembinaan: 'Guru BK (Konseling Individu & Kontrak Perilaku)',
-    statusSurat: 'Selesai',
-    catatanKhusus: 'HP telah diamankan di loker BK dan orang tua sudah diberikan konseling singkat',
-    noWaOrtu: '6289677881122',
-    namaOrtu: 'Andreas Taufiq',
+    poin: 5,
   },
 ];
 

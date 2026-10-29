@@ -9,6 +9,7 @@ import {
   AlertTriangle, 
   Sparkles
 } from 'lucide-react';
+import { getCurrentUser } from '../../services/authService';
 
 interface RecordViolationModalProps {
   isOpen: boolean;
@@ -35,7 +36,9 @@ export const RecordViolationModal: React.FC<RecordViolationModalProps> = ({
   const [searchStudent, setSearchStudent] = useState<string>('');
   const [searchRule, setSearchRule] = useState<string>('');
   const [lokasi, setLokasi] = useState<string>('Halaman Upacara / Piket');
-  const [guruPencatat, setGuruPencatat] = useState<string>('Drs. Subagyo (Guru Piket)');
+  const [guruPencatat, setGuruPencatat] = useState<string>(() => {
+    return getCurrentUser()?.name || 'Petugas Piket / Kesiswaan';
+  });
   const [catatanKhusus, setCatatanKhusus] = useState<string>('');
   const [customWaktu, setCustomWaktu] = useState<string>(() => {
     const d = new Date();

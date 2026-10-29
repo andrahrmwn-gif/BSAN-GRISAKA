@@ -34,12 +34,24 @@ export interface GoogleSyncStatus {
 const STORAGE_KEY_SPREADSHEET_ID = 'bsan_gdrive_spreadsheet_id';
 const STORAGE_KEY_LAST_SYNC = 'bsan_gdrive_last_synced_at';
 
+export const getCurrentAppDomain = (): string => {
+  try {
+    return window.location.hostname;
+  } catch {
+    return 'localhost';
+  }
+};
+
 export const getStoredSpreadsheetId = (): string | null => {
   return localStorage.getItem(STORAGE_KEY_SPREADSHEET_ID);
 };
 
 export const getStoredLastSync = (): string | null => {
   return localStorage.getItem(STORAGE_KEY_LAST_SYNC);
+};
+
+export const setManualAccessToken = (token: string): void => {
+  cachedAccessToken = token.trim();
 };
 
 export const initAuth = (
@@ -51,17 +63,32 @@ export const initAuth = (
       if (cachedAccessToken) {
         if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
       } else if (!isSigningIn) {
-        // Token might need re-acquisition or prompt
         if (onAuthFailure) onAuthFailure();
       }
     } else {
-      cachedAccessToken = null;
-      if (onAuthFailure) onAuthFailure();
+      if (!cachedAccessToken && onAuthFailure) {
+        onAuthFailure();
+      }
     }
   });
 };
 
-export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
+export class GoogleAuthDomainError extends Error {
+  isUnauthorizedDomain = true;
+  domain: string;
+  constructor(domain: string, originalMsg: string) {
+    super(`Domain "${domain}" belum terdaftar di Firebase Authorized Domains. Gunakan opsi Token Direct atau tambahkan domain ke Firebase Console.`);
+    this.name = 'GoogleAuthDomainError';
+    this.domain = domain;
+  }
+}
+
+export const googleSignIn = async (): Promise<{ user: User | null; accessToken: string } | null> => {
+  // If user already set a manual token
+  if (cachedAccessToken) {
+    return { user: auth.currentUser, accessToken: cachedAccessToken };
+  }
+
   try {
     isSigningIn = true;
     const result = await signInWithPopup(auth, provider);
@@ -72,6 +99,12 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     cachedAccessToken = credential.accessToken;
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
+    const errorStr = String(error?.code || error?.message || '');
+    if (errorStr.includes('auth/unauthorized-domain')) {
+      const currentDomain = getCurrentAppDomain();
+      console.warn(`[GoogleWorkspace] Domain ${currentDomain} is unauthorized in Firebase Auth.`);
+      throw new GoogleAuthDomainError(currentDomain, error?.message || '');
+    }
     console.error('Google Sign-in error:', error);
     throw error;
   } finally {
@@ -84,7 +117,9 @@ export const getAccessToken = async (): Promise<string | null> => {
 };
 
 export const logoutGoogle = async () => {
-  await signOut(auth);
+  try {
+    await signOut(auth);
+  } catch {}
   cachedAccessToken = null;
 };
 
@@ -191,14 +226,14 @@ export const syncDataToGoogleSheets = async (
 
   // 2. Prepare Buku_Pelanggaran sheet data
   const violationHeaders = [
-    'ID Kasus', 'Tanggal', 'Waktu (WIB)', 'Nama Siswa', 'Kelas',
-    'Kode Pasal', 'Pasal Tata Tertib', 'Uraian Pelanggaran', 'Klasifikasi',
-    'Tahap Pembinaan', 'Guru Pencatat', 'Status Dokumen', 'Catatan Khusus', 'No WA Ortu'
+    'ID Pelanggaran', 'Tanggal', 'Waktu', 'Nama Siswa', 'Kelas',
+    'Kode Kasus', 'Pasal Tata Tertib', 'Uraian Pelanggaran', 'Tingkat',
+    'Tahap Pembinaan', 'Guru Pencatat', 'Status Surat', 'Catatan Khusus', 'No WA Ortu'
   ];
   const violationRows = violations.map((v) => [
     v.id,
     v.tanggal,
-    v.waktu || '07:30',
+    v.waktu,
     v.studentName,
     v.kelas,
     v.kodePasal,
@@ -208,33 +243,33 @@ export const syncDataToGoogleSheets = async (
     v.tahapPembinaan,
     v.guruPencatat,
     v.statusSurat,
-    v.catatanKhusus || '',
+    v.catatanKhusus || '-',
     v.noWaOrtu
   ]);
 
   // 3. Prepare Profil_Sekolah sheet data
   const profileRows = [
-    ['Parameter', 'Nilai Konfigurasi'],
+    ['Parameter Profil', 'Nilai Konfigurasi'],
     ['Nama Sekolah', schoolConfig.name],
     ['Singkatan', schoolConfig.shortName],
     ['NPSN', schoolConfig.npsn],
     ['Akreditasi', schoolConfig.accreditation],
+    ['Kepala Sekolah', schoolConfig.principalName],
+    ['NIP Kepala Sekolah', schoolConfig.principalNip],
+    ['Nama Tim Kesiswaan / Wakasek', schoolConfig.timKesiswaanName || schoolConfig.wakasekName || '-'],
+    ['Jabatan Kesiswaan', schoolConfig.timKesiswaanTitle || '-'],
+    ['NIP Tim Kesiswaan', schoolConfig.timKesiswaanNip || schoolConfig.wakasekNip || '-'],
+    ['Koordinator Guru BK', schoolConfig.bkName || '-'],
+    ['Motto BSAN', schoolConfig.motto],
     ['Alamat Lengkap', schoolConfig.address],
-    ['Kabupaten/Kota', schoolConfig.city],
-    ['Provinsi', schoolConfig.province],
-    ['Kode Pos', schoolConfig.postalCode],
+    ['Kota / Kabupaten', schoolConfig.city],
     ['Telepon', schoolConfig.phone],
     ['Email', schoolConfig.email],
     ['Website', schoolConfig.website],
-    ['Kepala Sekolah', schoolConfig.principalName],
-    ['NIP Kepala Sekolah', schoolConfig.principalNip],
-    ['Nama Tim Kesiswaan / Wakasek', schoolConfig.timKesiswaanName || schoolConfig.wakasekName || ''],
-    ['Jabatan Kesiswaan', schoolConfig.timKesiswaanTitle || 'Wakasek Urusan Kesiswaan'],
-    ['NIP Tim Kesiswaan', schoolConfig.timKesiswaanNip || schoolConfig.wakasekNip || ''],
-    ['Motto BSAN', schoolConfig.motto]
+    ['Terakhir Diperbarui', new Date().toLocaleString('id-ID')]
   ];
 
-  // Batch update sheets values
+  // Batch update all 3 sheets
   const updateDataPayload = {
     valueInputOption: 'USER_ENTERED',
     data: [
@@ -375,4 +410,79 @@ export const pullDataFromGoogleSheets = async (
     violations: parsedViolations,
     partialConfig
   };
+};
+
+/**
+ * Direct Google Sheets formatted CSV export bridge that teachers can upload or open directly
+ * in Google Sheets (Buka di Google Spreadsheet) without any authentication domain issues!
+ */
+export const exportDirectSheetsFile = (
+  students: Student[],
+  violations: ViolationRecord[],
+  schoolConfig: SchoolProfile
+): void => {
+  const lines: string[] = [];
+
+  // Sheet 1: Data Siswa
+  lines.push('### SHEET: DATA SISWA ###');
+  lines.push(['ID Siswa', 'NISN', 'Nama Siswa', 'Kelas', 'Jenjang', 'Gender', 'No HP Siswa', 'Nama Orang Tua/Wali', 'No WhatsApp Ortu', 'Alamat', 'Status Kehadiran', 'Pelanggaran Ringan', 'Pelanggaran Sedang', 'Pelanggaran Berat'].map(v => `"${v}"`).join(','));
+  students.forEach((s) => {
+    lines.push([
+      `"${s.id}"`,
+      `="${s.nisn}"`,
+      `"${s.nama.replace(/"/g, '""')}"`,
+      `"${s.kelas}"`,
+      s.jenjang,
+      `"${s.gender}"`,
+      `="${s.noHpSiswa}"`,
+      `"${s.namaOrtu.replace(/"/g, '""')}"`,
+      `="${s.noWaOrtu}"`,
+      `"${s.alamat.replace(/"/g, '""')}"`,
+      `"${s.statusKehadiran}"`,
+      s.totalPelanggaranRingan,
+      s.totalPelanggaranSedang,
+      s.totalPelanggaranBerat
+    ].join(','));
+  });
+
+  lines.push('');
+  lines.push('### SHEET: BUKU PELANGGARAN ###');
+  lines.push(['ID Pelanggaran', 'Tanggal', 'Waktu', 'Nama Siswa', 'Kelas', 'Kode Kasus', 'Pasal Tata Tertib', 'Uraian Pelanggaran', 'Tingkat', 'Tahap Pembinaan', 'Guru Pencatat', 'Status Surat', 'No WA Ortu'].map(v => `"${v}"`).join(','));
+  violations.forEach((v) => {
+    lines.push([
+      `"${v.id}"`,
+      `"${v.tanggal}"`,
+      `"${v.waktu}"`,
+      `"${v.studentName.replace(/"/g, '""')}"`,
+      `"${v.kelas}"`,
+      `"${v.kodePasal}"`,
+      `"${v.pasalTitle.replace(/"/g, '""')}"`,
+      `"${v.uraian.replace(/"/g, '""')}"`,
+      `"${v.tingkat}"`,
+      `"${v.tahapPembinaan.replace(/"/g, '""')}"`,
+      `"${v.guruPencatat.replace(/"/g, '""')}"`,
+      `"${v.statusSurat}"`,
+      `="${v.noWaOrtu}"`
+    ].join(','));
+  });
+
+  lines.push('');
+  lines.push('### SHEET: PROFIL SEKOLAH ###');
+  lines.push(['Parameter', 'Nilai'].map(v => `"${v}"`).join(','));
+  lines.push(`"Nama Sekolah","${schoolConfig.name}"`);
+  lines.push(`"NPSN","${schoolConfig.npsn}"`);
+  lines.push(`"Kepala Sekolah","${schoolConfig.principalName}"`);
+  lines.push(`"NIP Kepala Sekolah","${schoolConfig.principalNip}"`);
+  lines.push(`"Tim Kesiswaan","${schoolConfig.timKesiswaanName || '-'}"`);
+  lines.push(`"Motto","${schoolConfig.motto}"`);
+
+  const csvContent = '\uFEFF' + lines.join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `BSAN_GoogleSheets_Sync_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 };

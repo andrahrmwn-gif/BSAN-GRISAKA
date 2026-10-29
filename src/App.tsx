@@ -18,6 +18,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { ExecutiveDashboard } from './components/dashboard/ExecutiveDashboard';
 import { StudentCentralHub } from './components/students/StudentCentralHub';
+import { AttendanceManagerView } from './components/attendance/AttendanceManagerView';
 import { ViolationsManager } from './components/violations/ViolationsManager';
 import { TataTertibDocView } from './components/violations/TataTertibDocView';
 import { WhatsAppGateway } from './components/whatsapp/WhatsAppGateway';
@@ -27,7 +28,7 @@ import { RecordViolationModal } from './components/modals/RecordViolationModal';
 import { SuratPernyataanModal } from './components/modals/SuratPernyataanModal';
 import { StudentSlipDetailModal } from './components/modals/StudentSlipDetailModal';
 import { AccountSwitchModal } from './components/modals/AccountSwitchModal';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, AlertTriangle, CheckCircle2, X, ShieldAlert } from 'lucide-react';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>('dashboard');
@@ -39,6 +40,14 @@ export default function App() {
   // User Authentication & Guest Mode state
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
   const [isAccountSwitchOpen, setIsAccountSwitchOpen] = useState(false);
+
+  // Mobile sidebar drawer state
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // Reset database modal & toast state
+  const [isResetConfirmModalOpen, setIsResetConfirmModalOpen] = useState(false);
+  const [resetSuccessToast, setResetSuccessToast] = useState<string | null>(null);
+  const [resetErrorToast, setResetErrorToast] = useState<string | null>(null);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -73,7 +82,7 @@ export default function App() {
   // Handlers for students
   const handleAddStudent = (newStudent: Student) => {
     if (isGuestMode()) {
-      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak menambah siswa.');
+      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 55 akun petugas resmi yang berhak menambah siswa.');
       logAudit({
         actionType: 'BLOCKED',
         module: 'Siswa',
@@ -96,7 +105,7 @@ export default function App() {
 
   const handleUpdateStudent = (updatedStudent: Student) => {
     if (isGuestMode()) {
-      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak mengedit biodata siswa.');
+      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 55 akun petugas resmi yang berhak mengedit biodata siswa.');
       logAudit({
         actionType: 'BLOCKED',
         module: 'Siswa',
@@ -274,7 +283,7 @@ export default function App() {
   // Quick Violation modal trigger
   const handleTriggerQuickViolation = (studentId?: string) => {
     if (isGuestMode()) {
-      alert('Akses Ditolak: Anda saat ini berada dalam Mode Tamu (Guest - View Only). Mode Tamu hanya berhak membuka dan melihat menu. Silakan login ke salah satu dari 20 akun petugas untuk mencatat pelanggaran.');
+      alert('Akses Ditolak: Anda saat ini berada dalam Mode Tamu (Guest - View Only). Mode Tamu hanya berhak membuka dan melihat menu. Silakan login ke salah satu dari 55 akun petugas untuk mencatat pelanggaran.');
       logAudit({
         actionType: 'BLOCKED',
         module: 'Pelanggaran',
@@ -293,22 +302,23 @@ export default function App() {
     setSchoolConfig(newConfig);
   };
 
-  // Reset to default data - CLEAN & BERSIH
-  const handleResetData = () => {
+  // Trigger Reset Data with In-App Confirmation Modal (no window.confirm / alert)
+  const handleTriggerResetData = () => {
     if (isGuestMode()) {
-      alert('Akses Ditolak: Anda sedang dalam Mode Tamu. Hanya akun petugas resmi yang berwenang mereset database.');
-      logAudit({
-        actionType: 'BLOCKED',
-        module: 'Sistem',
-        description: 'Percobaan reset data contoh ditolak karena pengguna berada dalam Mode Tamu',
-        status: 'BLOCKED',
-      });
+      setResetErrorToast('Akses Ditolak: Anda saat ini berada dalam Mode Tamu (Guest - View Only). Silakan login ke salah satu dari 55 akun petugas resmi untuk mereset database.');
+      setTimeout(() => setResetErrorToast(null), 6000);
       setIsAccountSwitchOpen(true);
       return;
     }
+    setIsResetConfirmModalOpen(true);
+  };
 
-    if (window.confirm('Reset data contoh sekarang? Seluruh data anak akan dibersihkan secara tuntas (0 pelanggaran, status Hadir) dan buku pelanggaran dikosongkan.')) {
+  // Perform full database reset
+  const handleConfirmResetData = () => {
+    try {
       const reset = resetToDefaultData();
+      localStorage.removeItem('bsan_grisaka_attendance_sheets_v1');
+      
       setStudents(reset.students);
       setViolations(reset.violations);
       setWaLogs(reset.logs);
@@ -317,28 +327,70 @@ export default function App() {
       logAudit({
         actionType: 'RESET',
         module: 'Sistem',
-        description: 'Mereset data contoh: Seluruh data anak dibersihkan secara tuntas (0 kasus pelanggaran, status Hadir) dan riwayat pelanggaran dikosongkan.',
+        description: 'Mereset database: Seluruh 24 rombel dibersihkan secara tuntas (0 kasus pelanggaran, status Hadir) dan riwayat pelanggaran dikosongkan.',
         status: 'SUCCESS',
       });
 
-      alert('Berhasil! Seluruh data anak telah clean dan bersih (0 kasus pelanggaran, status Hadir).');
+      setIsResetConfirmModalOpen(false);
+      setResetSuccessToast('Database berhasil dibersihkan & di-reset! Seluruh 24 rombel kini berada dalam kondisi bersih (0 kasus pelanggaran, status Hadir).');
+      setTimeout(() => setResetSuccessToast(null), 5000);
+    } catch (err) {
+      console.error('Reset error:', err);
+      setResetErrorToast('Terjadi kesalahan saat mereset database.');
+      setTimeout(() => setResetErrorToast(null), 5000);
     }
   };
 
   return (
-    <div className="min-h-screen flex bg-[#F4F6F8] text-slate-800">
-      {/* Sidebar Navigation */}
+    <div className="min-h-screen flex bg-[#F4F6F8] text-slate-800 relative">
+      {/* Toast Notifications */}
+      {resetSuccessToast && (
+        <div className="fixed top-5 right-5 z-[999] max-w-md bg-emerald-600 text-white px-5 py-4 rounded-xl shadow-2xl flex items-start gap-3 border border-emerald-400/30 animate-in fade-in slide-in-from-top-4">
+          <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-emerald-100" />
+          <div className="flex-1 text-sm font-medium leading-relaxed">
+            {resetSuccessToast}
+          </div>
+          <button 
+            onClick={() => setResetSuccessToast(null)} 
+            className="text-emerald-200 hover:text-white p-1 rounded transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {resetErrorToast && (
+        <div className="fixed top-5 right-5 z-[999] max-w-md bg-rose-600 text-white px-5 py-4 rounded-xl shadow-2xl flex items-start gap-3 border border-rose-400/30 animate-in fade-in slide-in-from-top-4">
+          <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5 text-rose-100" />
+          <div className="flex-1 text-sm font-medium leading-relaxed">
+            {resetErrorToast}
+          </div>
+          <button 
+            onClick={() => setResetErrorToast(null)} 
+            className="text-rose-200 hover:text-white p-1 rounded transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Sidebar Navigation (with Mobile Drawer support) */}
       <Sidebar
         currentView={currentView}
-        onSelectView={(view) => setCurrentView(view)}
+        onSelectView={(view) => {
+          setCurrentView(view);
+          setIsMobileSidebarOpen(false);
+        }}
         activeViolationsCount={violations.filter((v) => v.statusSurat !== 'Selesai').length}
         pendingWaCount={students.filter((s) => s.statusKehadiran !== 'Hadir').length}
         schoolConfig={schoolConfig}
+        isOpenMobile={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-        {/* Top Header with Account Switcher & Mode Tamu Indicator */}
+        {/* Top Header with Mobile Hamburger, Account Switcher & Mode Tamu Indicator */}
         <Header
           currentView={currentView}
           currentUser={currentUser}
@@ -347,10 +399,11 @@ export default function App() {
           onSearchGlobal={(q) => setSearchQuery(q)}
           searchQuery={searchQuery}
           schoolConfig={schoolConfig}
+          onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
         />
 
         {/* Viewport Content */}
-        <main className="flex-1 p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
           {currentView === 'dashboard' && (
             <ExecutiveDashboard
               students={students}
@@ -373,6 +426,15 @@ export default function App() {
               onBulkImport={handleBulkImportStudents}
               onOpenRecordViolation={(studentId) => handleTriggerQuickViolation(studentId)}
               onSelectStudentProfile={(student) => setDetailedSlipStudent(student)}
+            />
+          )}
+
+          {currentView === 'attendance' && (
+            <AttendanceManagerView
+              students={students}
+              schoolConfig={schoolConfig}
+              onUpdateStudentsAttendance={(updated) => setStudents(updated)}
+              onOpenAccountSwitchModal={() => setIsAccountSwitchOpen(true)}
             />
           )}
 
@@ -418,9 +480,11 @@ export default function App() {
               students={students}
               violations={violations}
               onUpdateSchoolConfig={handleUpdateSchoolConfig}
+              onResetData={handleTriggerResetData}
               onPullDataFromSheets={(newStudents, newViolations, partialConfig) => {
                 if (isGuestMode()) {
-                  alert('Akses Ditolak: Mode Tamu tidak berhak memuat atau menimpa data.');
+                  setResetErrorToast('Akses Ditolak: Mode Tamu tidak berhak memuat atau menimpa data.');
+                  setTimeout(() => setResetErrorToast(null), 5000);
                   return;
                 }
                 if (newStudents && newStudents.length > 0) setStudents(newStudents);
@@ -438,22 +502,22 @@ export default function App() {
         </main>
 
         {/* Bottom Quiet Footer */}
-        <footer className="no-print mt-auto py-4 px-8 border-t border-slate-200/80 bg-white text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+        <footer className="no-print mt-auto py-4 px-6 lg:px-8 border-t border-slate-200/80 bg-white text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-center sm:text-left">
             <span className="font-semibold text-slate-800">{schoolConfig.name} ({schoolConfig.shortName})</span>
             <span>·</span>
             <span>Budaya Sekolah Aman dan Nyaman (BSAN)</span>
           </div>
 
-          <div className="flex items-center gap-4 text-[11px]">
+          <div className="flex items-center gap-4 text-[11px] flex-wrap justify-center">
             <span>Kepala Sekolah: <strong>{schoolConfig.principalName}</strong></span>
             <span>·</span>
             <button
-              onClick={handleResetData}
-              className="text-slate-400 hover:text-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
+              onClick={handleTriggerResetData}
+              className="text-slate-500 hover:text-rose-600 flex items-center gap-1.5 transition-colors cursor-pointer font-medium"
               title="Kembalikan data contoh awal ke kondisi clean dan bersih"
             >
-              <RotateCcw className="w-3 h-3" />
+              <RotateCcw className="w-3.5 h-3.5 text-rose-500" />
               <span>Reset Data Contoh (Clean & Bersih)</span>
             </button>
           </div>
@@ -503,7 +567,7 @@ export default function App() {
         }}
       />
 
-      {/* Account Switch & 20 Accounts Login Modal */}
+      {/* Account Switch & 55 Accounts Login Modal */}
       <AccountSwitchModal
         isOpen={isAccountSwitchOpen}
         onClose={() => setIsAccountSwitchOpen(false)}
@@ -511,6 +575,69 @@ export default function App() {
           setCurrentUser(user);
         }}
       />
+
+      {/* In-App Confirmation Modal for Clean & Reset Database */}
+      {isResetConfirmModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-1">
+                Konfirmasi Reset Database & Clean Data
+              </h3>
+              <p className="text-sm text-slate-600 mb-4">
+                Tindakan ini akan membersihkan data contoh dan mengembalikan sistem ke kondisi awal yang bersih (<span className="font-semibold text-slate-800">Clean Database</span>):
+              </p>
+
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-2.5 text-xs text-slate-700 mb-5">
+                <div className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0"></span>
+                  <span>Presensi seluruh siswa di <strong>24 Rombel</strong> (Kelas 7A–9H) diset kembali ke <strong>Hadir (100%)</strong>.</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0"></span>
+                  <span>Poin pelanggaran seluruh siswa direset kembali ke <strong>0 poin</strong>.</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0"></span>
+                  <span>Buku riwayat pelanggaran dan arsip log WhatsApp dikosongkan.</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0"></span>
+                  <span>Arsip rekap presensi harian di-refresh ke kondisi bersih.</span>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                <span>
+                  Pastikan Anda telah mengunduh rekap jika ada arsip lama yang masih diperlukan.
+                </span>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsResetConfirmModalOpen(false)}
+                className="px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmResetData}
+                className="px-5 py-2 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md transition-colors flex items-center gap-2 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Ya, Bersihkan & Reset Database</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

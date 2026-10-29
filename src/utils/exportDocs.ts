@@ -697,16 +697,72 @@ export async function exportElementToPDF(
 ): Promise<{ success: boolean; blobUrl?: string }> {
   const cleanFilename = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
 
+  // Create isolated offscreen container to avoid viewport clipping and scrollbar constraints
+  const offscreen = document.createElement('div');
+  offscreen.style.position = 'fixed';
+  offscreen.style.top = '-99999px';
+  offscreen.style.left = '0';
+  offscreen.style.width = '794px'; // Standard A4 width at 96 DPI
+  offscreen.style.padding = '0';
+  offscreen.style.margin = '0';
+  offscreen.style.backgroundColor = '#ffffff';
+  offscreen.style.color = '#000000';
+  offscreen.style.zIndex = '-99999';
+
+  const clone = element.cloneNode(true) as HTMLElement;
+  clone.style.width = '794px';
+  clone.style.maxWidth = '794px';
+  clone.style.minHeight = 'auto';
+  clone.style.height = 'auto';
+  clone.style.overflow = 'visible';
+  clone.style.transform = 'none';
+  clone.style.boxShadow = 'none';
+  clone.style.border = 'none';
+  clone.style.margin = '0';
+  clone.style.backgroundColor = '#ffffff';
+  clone.style.color = '#000000';
+
+  // Sanitize any modern CSS color functions (like oklch) that crash html2canvas
+  const allElements = clone.querySelectorAll('*');
+  allElements.forEach((node) => {
+    const el = node as HTMLElement;
+    if (el.style) {
+      // Force safe fallback colors if modern color strings exist
+      const computed = window.getComputedStyle(el);
+      if (computed.color && computed.color.includes('oklch')) {
+        el.style.color = '#111827';
+      }
+      if (computed.backgroundColor && computed.backgroundColor.includes('oklch')) {
+        el.style.backgroundColor = '#ffffff';
+      }
+      if (computed.borderColor && computed.borderColor.includes('oklch')) {
+        el.style.borderColor = '#000000';
+      }
+    }
+  });
+
+  offscreen.appendChild(clone);
+  document.body.appendChild(offscreen);
+
   try {
-    // Render element to canvas with safety flags
-    const canvas = await html2canvas(element, {
+    const totalHeight = Math.max(clone.scrollHeight, clone.offsetHeight, 1000);
+
+    const canvas = await html2canvas(clone, {
       scale: options?.scale || 2,
       useCORS: true,
       allowTaint: true,
       logging: false,
       backgroundColor: '#ffffff',
+      scrollX: 0,
+      scrollY: 0,
+      width: 794,
+      height: totalHeight,
+      windowWidth: 794,
+      windowHeight: totalHeight,
       ignoreElements: (el) => el.classList?.contains('no-print') || el.classList?.contains('exclude-pdf')
     });
+
+    document.body.removeChild(offscreen);
 
     const imgData = canvas.toDataURL('image/jpeg', 0.98);
     const orientation = options?.landscape ? 'landscape' : 'portrait';
@@ -734,55 +790,218 @@ export async function exportElementToPDF(
       heightLeft -= pdfHeight;
     }
 
-    // Direct multi-method automatic download (works across desktop, mobile & sandboxed iframes)
     const blob = pdf.output('blob');
     const blobUrl = URL.createObjectURL(blob);
     triggerFileDownload(blob, cleanFilename);
 
     return { success: true, blobUrl };
   } catch (err) {
-    console.error('PDF canvas direct generation error, generating native PDF fallback...', err);
-    
-    // Direct native fallback in jsPDF without html2canvas
-    try {
-      const fallbackPdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      fallbackPdf.setFont('times', 'bold');
-      fallbackPdf.setFontSize(14);
-      fallbackPdf.text('PEMERINTAH KABUPATEN TEMANGGUNG', 105, 20, { align: 'center' });
-      fallbackPdf.setFontSize(12);
-      fallbackPdf.text('DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA', 105, 26, { align: 'center' });
-      fallbackPdf.setFontSize(15);
-      fallbackPdf.setTextColor(11, 35, 30);
-      fallbackPdf.text('SMP NEGERI 1 KANDANGAN', 105, 33, { align: 'center' });
-      fallbackPdf.setFont('times', 'normal');
-      fallbackPdf.setFontSize(9);
-      fallbackPdf.setTextColor(80, 80, 80);
-      fallbackPdf.text('Jl. Raya Kandangan No. 1, Kec. Kandangan, Kab. Temanggung, Jawa Tengah', 105, 38, { align: 'center' });
-      fallbackPdf.setDrawColor(0, 0, 0);
-      fallbackPdf.setLineWidth(0.6);
-      fallbackPdf.line(20, 42, 190, 42);
-
-      fallbackPdf.setFont('times', 'bold');
-      fallbackPdf.setFontSize(13);
-      fallbackPdf.setTextColor(0, 0, 0);
-      fallbackPdf.text('DOKUMEN RESMI KESISWAAN DAN KEDISIPLINAN BSAN', 105, 52, { align: 'center' });
-
-      fallbackPdf.setFont('times', 'normal');
-      fallbackPdf.setFontSize(10);
-      fallbackPdf.text(`Nama Dokumen: ${cleanFilename}`, 20, 62);
-      fallbackPdf.text(`Tanggal Cetak: ${new Intl.DateTimeFormat('id-ID', { dateStyle: 'full' }).format(new Date())}`, 20, 68);
-      fallbackPdf.text('Status: Terverifikasi oleh Sistem BSAN SMPN 1 Kandangan', 20, 74);
-
-      const blob = fallbackPdf.output('blob');
-      const blobUrl = URL.createObjectURL(blob);
-      triggerFileDownload(blob, cleanFilename);
-      return { success: true, blobUrl };
-    } catch (fallbackErr) {
-      console.error('All PDF engines failed, triggering window.print', fallbackErr);
-      window.print();
-      return { success: false };
+    if (document.body.contains(offscreen)) {
+      document.body.removeChild(offscreen);
     }
+    console.error('PDF canvas direct generation error, triggering window.print fallback...', err);
+    window.print();
+    return { success: false };
   }
+}
+
+export interface AttendanceExportRow {
+  no: number;
+  nisn: string;
+  nama: string;
+  kelas: string;
+  gender: string;
+  hadir: number;
+  sakit: number;
+  izin: number;
+  alfa: number;
+  percent: string;
+  keterangan?: string;
+}
+
+export interface AttendanceExportSummary {
+  totalStudents: number;
+  hadir: number;
+  sakit: number;
+  izin: number;
+  alfa: number;
+  percentHadir: string;
+}
+
+/**
+ * Export Attendance Report to clean CSV (opens in Excel & Google Sheets)
+ */
+export function exportAttendanceToCSV(
+  periodLabel: string,
+  kelasLabel: string,
+  summary: AttendanceExportSummary,
+  rows: AttendanceExportRow[],
+  schoolConfig = SCHOOL_CONFIG
+): void {
+  const headers = ['No', 'NISN', 'Nama Siswa', 'L/P', 'Kelas', 'Hadir (H)', 'Sakit (S)', 'Izin (I)', 'Alfa (A)', '% Kehadiran', 'Keterangan'];
+  
+  const csvRows = [
+    `"PEMERINTAH KABUPATEN TEMANGGUNG"`,
+    `"DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA"`,
+    `"${schoolConfig.name} (${schoolConfig.shortName}) - NPSN: ${schoolConfig.npsn}"`,
+    `"LAPORAN REKAPITULASI PRESENSI KEHADIRAN SISWA"`,
+    `"Periode: ${periodLabel} | Rombel: ${kelasLabel}"`,
+    `"Ringkasan: Total Siswa=${summary.totalStudents}, Hadir=${summary.hadir}, Sakit=${summary.sakit}, Izin=${summary.izin}, Alfa=${summary.alfa}, Rata-rata Kehadiran=${summary.percentHadir}"`,
+    '',
+    headers.map(h => `"${h}"`).join(','),
+    ...rows.map(r => [
+      r.no,
+      `="${r.nisn}"`,
+      `"${r.nama.replace(/"/g, '""')}"`,
+      `"${r.gender}"`,
+      `"${r.kelas}"`,
+      r.hadir,
+      r.sakit,
+      r.izin,
+      r.alfa,
+      `"${r.percent}"`,
+      `"${(r.keterangan || '-').replace(/"/g, '""')}"`
+    ].join(',')),
+    '',
+    `"Mengetahui Kepala Sekolah: ${schoolConfig.principalName} (NIP: ${schoolConfig.principalNip})"`,
+    `"Dicetak pada: ${new Intl.DateTimeFormat('id-ID', { dateStyle: 'full', timeStyle: 'short' }).format(new Date())}"`
+  ];
+
+  const csvContent = '\uFEFF' + csvRows.join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  triggerFileDownload(blob, `Rekap_Presensi_${kelasLabel.replace(/\s+/g, '_')}_${periodLabel.replace(/[\s,]+/g, '_')}.csv`);
+}
+
+/**
+ * Export Attendance Report to formatted Microsoft Word (.doc) with official KOP Surat and signatures
+ */
+export function exportAttendanceToWord(
+  periodLabel: string,
+  kelasLabel: string,
+  summary: AttendanceExportSummary,
+  rows: AttendanceExportRow[],
+  schoolConfig = SCHOOL_CONFIG
+): void {
+  const dateFormatted = new Intl.DateTimeFormat('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  }).format(new Date());
+
+  const tableRows = rows.map(r => `
+    <tr>
+      <td style="border:1px solid #333; padding:5px; text-align:center;">${r.no}</td>
+      <td style="border:1px solid #333; padding:5px; text-align:center; font-family:Courier New, monospace;">${r.nisn}</td>
+      <td style="border:1px solid #333; padding:5px; font-weight:500;">${r.nama}</td>
+      <td style="border:1px solid #333; padding:5px; text-align:center;">${r.gender}</td>
+      <td style="border:1px solid #333; padding:5px; text-align:center;">${r.kelas}</td>
+      <td style="border:1px solid #333; padding:5px; text-align:center; font-weight:bold; color:#15803D;">${r.hadir}</td>
+      <td style="border:1px solid #333; padding:5px; text-align:center; color:#B45309;">${r.sakit}</td>
+      <td style="border:1px solid #333; padding:5px; text-align:center; color:#1D4ED8;">${r.izin}</td>
+      <td style="border:1px solid #333; padding:5px; text-align:center; font-weight:bold; color:#DC2626;">${r.alfa}</td>
+      <td style="border:1px solid #333; padding:5px; text-align:center; font-weight:bold;">${r.percent}</td>
+      <td style="border:1px solid #333; padding:5px; font-size:9pt; color:#4B5563;">${r.keterangan || '-'}</td>
+    </tr>
+  `).join('');
+
+  const html = `
+    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    <head>
+      <meta charset='utf-8'>
+      <title>Rekap Presensi ${kelasLabel} - ${periodLabel}</title>
+      <style>
+        body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.25; color: #000; margin: 20px; }
+        .kop-table { width: 100%; border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 16px; text-align: center; }
+        .kop-instansi { font-size: 13pt; font-weight: bold; text-transform: uppercase; margin: 0; }
+        .kop-sekolah { font-size: 16pt; font-weight: bold; letter-spacing: 0.5px; color: #0B231E; margin: 2px 0; }
+        .kop-sub { font-size: 9pt; margin: 1px 0; color: #333; }
+        h2 { font-size: 13pt; text-align: center; text-transform: uppercase; margin: 16px 0 4px 0; font-weight: bold; }
+        .sub-header { text-align: center; font-size: 10.5pt; margin-bottom: 16px; }
+        .summary-box { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 10pt; background-color: #F8FAFC; }
+        .summary-box td { border: 1px solid #CBD5E1; padding: 6px 10px; }
+        table.data-table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 24px; font-size: 9.5pt; }
+        table.data-table th { border: 1px solid #333; padding: 6px; background-color: #E2E8F0; text-align: center; font-weight: bold; font-size: 9pt; }
+        .ttd-table { width: 100%; margin-top: 30px; border: none; }
+        .ttd-table td { border: none; text-align: center; font-size: 10pt; vertical-align: top; width: 33.3%; }
+        .ttd-space { height: 65px; }
+      </style>
+    </head>
+    <body>
+      <div class="kop-table">
+        <div class="kop-instansi">PEMERINTAH KABUPATEN TEMANGGUNG</div>
+        <div class="kop-instansi">DINAS PENDIDIKAN, KEPEMUDAAN DAN OLAHRAGA</div>
+        <div class="kop-sekolah">${schoolConfig.name} (${schoolConfig.shortName})</div>
+        <div class="kop-sub">NPSN: ${schoolConfig.npsn} | Status Akreditasi: ${schoolConfig.accreditation}</div>
+        <div class="kop-sub">${schoolConfig.address}, ${schoolConfig.city}, ${schoolConfig.province} ${schoolConfig.postalCode}</div>
+        <div class="kop-sub">Telp: ${schoolConfig.phone} | Website: ${schoolConfig.website} | Email: ${schoolConfig.email}</div>
+      </div>
+
+      <h2>REKAPITULASI PRESENSI & KEHADIRAN SISWA</h2>
+      <div class="sub-header"><strong>Periode:</strong> ${periodLabel} &nbsp;|&nbsp; <strong>Rombongan Belajar:</strong> ${kelasLabel}</div>
+
+      <table class="summary-box">
+        <tr>
+          <td><strong>Total Peserta Didik:</strong> ${summary.totalStudents} Siswa</td>
+          <td><strong>Total Hadir (H):</strong> ${summary.hadir}</td>
+          <td><strong>Sakit (S):</strong> ${summary.sakit}</td>
+          <td><strong>Izin (I):</strong> ${summary.izin}</td>
+          <td><strong>Alfa (A):</strong> ${summary.alfa}</td>
+          <td><strong>Tingkat Kehadiran:</strong> <span style="font-weight:bold; color:#15803D;">${summary.percentHadir}</span></td>
+        </tr>
+      </table>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width:30px;">NO</th>
+            <th style="width:85px;">NISN</th>
+            <th>NAMA SISWA</th>
+            <th style="width:30px;">L/P</th>
+            <th style="width:40px;">KLS</th>
+            <th style="width:35px;">H</th>
+            <th style="width:35px;">S</th>
+            <th style="width:35px;">I</th>
+            <th style="width:35px;">A</th>
+            <th style="width:55px;">% HADIR</th>
+            <th style="width:140px;">KETERANGAN</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+
+      <table class="ttd-table">
+        <tr>
+          <td>
+            Kandangan, ${dateFormatted}<br>
+            Wali Kelas / Petugas Piket,
+            <div class="ttd-space"></div>
+            <strong><u>${kelasLabel.includes('Kelas') ? `Wali ${kelasLabel}` : 'Petugas Presensi BSAN'}</u></strong><br>
+            NIP. ........................................
+          </td>
+          <td>
+            <br>
+            Tim Kesiswaan & Ketertiban,
+            <div class="ttd-space"></div>
+            <strong><u>${schoolConfig.timKesiswaanName || 'Tim Kesiswaan'}</u></strong><br>
+            NIP. ${schoolConfig.timKesiswaanNip || '-'}
+          </td>
+          <td>
+            Mengetahui,<br>
+            Kepala ${schoolConfig.name},
+            <div class="ttd-space"></div>
+            <strong><u>${schoolConfig.principalName}</u></strong><br>
+            NIP. ${schoolConfig.principalNip}
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob(['\ufeff', html], { type: 'application/msword;charset=utf-8' });
+  triggerFileDownload(blob, `Rekap_Presensi_${kelasLabel.replace(/\s+/g, '_')}_${periodLabel.replace(/[\s,]+/g, '_')}.doc`);
 }
 
 

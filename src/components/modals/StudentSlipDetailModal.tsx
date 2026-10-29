@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Student, ViolationRecord, SchoolProfile } from '../../types';
 import { getWhatsAppUrl, generateAttendanceMessage } from '../../utils/whatsapp';
 import { 
@@ -41,17 +41,35 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
   onOpenSurat,
 }) => {
   const [activeTab, setActiveTab] = useState<'timeline' | 'document'>('timeline');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
+
+  const todayStr = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat('id-ID', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      }).format(new Date());
+    } catch {
+      return new Date().toLocaleDateString('id-ID');
+    }
+  }, []);
 
   if (!isOpen || !student) return null;
 
-  // Filter student violations and sort newest first
-  const studentViolations = violations
-    .filter((v) => v.studentId === student.id)
-    .sort((a, b) => new Date(`${b.tanggal}T${b.waktu || '00:00'}`).getTime() - new Date(`${a.tanggal}T${a.waktu || '00:00'}`).getTime());
+  // Filter student violations and sort newest first safely
+  const studentViolations = (violations || [])
+    .filter((v) => v && v.studentId === student.id)
+    .sort((a, b) => {
+      const dateA = a.tanggal ? new Date(a.tanggal).getTime() : 0;
+      const dateB = b.tanggal ? new Date(b.tanggal).getTime() : 0;
+      return dateB - dateA;
+    });
 
-  const hasBerat = student.totalPelanggaranBerat > 0;
-  const hasSedang = student.totalPelanggaranSedang > 0;
-  const hasRingan = student.totalPelanggaranRingan > 0;
+  const hasBerat = (student.totalPelanggaranBerat || 0) > 0;
+  const hasSedang = (student.totalPelanggaranSedang || 0) > 0;
+  const hasRingan = (student.totalPelanggaranRingan || 0) > 0;
 
   // Disciplinary status label purely based on Ringan, Sedang, Berat (No points)
   const getDisciplineStatus = () => {
@@ -92,9 +110,6 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
   };
 
   const discipline = getDisciplineStatus();
-
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
 
   const handlePrintSlip = () => {
     if (activeTab !== 'document') {
@@ -211,12 +226,6 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
 
   const attendanceWa = generateAttendanceMessage(student);
   const attendanceWaUrl = getWhatsAppUrl(student.noWaOrtu, attendanceWa);
-
-  const todayStr = new Intl.DateTimeFormat('id-ID', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date());
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">

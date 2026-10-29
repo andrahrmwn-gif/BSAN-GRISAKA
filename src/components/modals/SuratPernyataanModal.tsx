@@ -206,7 +206,11 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
 
         {/* Document Printable Viewport */}
         <div className="flex-1 overflow-y-auto p-8 bg-slate-100 flex justify-center">
-          <div id="surat-printable-area" className="print-area bg-white text-slate-900 w-full max-w-[210mm] min-h-[297mm] p-10 shadow-lg rounded-xl border border-slate-200 font-serif leading-relaxed text-sm">
+          <div 
+            id="surat-printable-area" 
+            style={{ backgroundColor: '#ffffff', color: '#000000' }}
+            className="print-area bg-white text-black w-full max-w-[210mm] min-h-[297mm] p-10 shadow-lg rounded-xl border border-slate-200 font-serif leading-relaxed text-sm"
+          >
             {/* Kop Surat Resmi - TEMANGGUNG */}
             <div className="border-b-[3px] border-double border-black pb-3 mb-6 text-center flex items-center justify-between gap-4">
               {currentConfig.logoUrl && (

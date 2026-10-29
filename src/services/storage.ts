@@ -16,7 +16,12 @@ export const getStoredStudents = (): Student[] => {
       localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
       return INITIAL_STUDENTS;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length < 30) {
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
+      return INITIAL_STUDENTS;
+    }
+    return parsed;
   } catch (err) {
     console.error('Failed reading students storage', err);
     return INITIAL_STUDENTS;

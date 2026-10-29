@@ -18,6 +18,7 @@ import {
   TrendingUp,
   ShieldCheck,
   CheckCircle2,
+  CalendarCheck,
   Activity,
   Calendar,
   BarChart3,
@@ -225,6 +226,18 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
       })
       .slice(0, 5);
   }, [classStats]);
+
+  // Today Attendance Metrics for Executive Dashboard
+  const todayAttendanceMetrics = useMemo(() => {
+    const total = filteredStudents.length;
+    const hadir = filteredStudents.filter(s => (s.statusKehadiran || 'Hadir') === 'Hadir').length;
+    const sakit = filteredStudents.filter(s => s.statusKehadiran === 'Sakit').length;
+    const izin = filteredStudents.filter(s => s.statusKehadiran === 'Izin').length;
+    const alfa = filteredStudents.filter(s => s.statusKehadiran === 'Alfa').length;
+    const percentHadir = total > 0 ? Math.round((hadir / total) * 100) : 100;
+
+    return { total, hadir, sakit, izin, alfa, percentHadir };
+  }, [filteredStudents]);
 
   // Recharts Monthly Trends Aggregator (Academic Year Cycle: Jul - Jun)
   const monthlyTrendsData = useMemo(() => {
@@ -1011,74 +1024,97 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </div>
         </div>
 
-        {/* Leaderboard Kedisiplinan Kelas (1 Column) */}
+        {/* Informasi Presensi & Kehadiran Siswa 24 Rombel (1 Column) */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
-                  <Award className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                  <CalendarCheck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm">Leaderboard Kedisiplinan</h3>
-                  <p className="text-[11px] text-slate-500">Peringkat Kepatuhan BSAN Terbaik</p>
+                  <h3 className="font-bold text-slate-900 text-sm">Informasi Presensi Rombel</h3>
+                  <p className="text-[11px] text-slate-500">Monitoring Kehadiran Siswa Hari Ini</p>
                 </div>
+              </div>
+              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                {todayAttendanceMetrics.percentHadir}% Hadir
+              </span>
+            </div>
+
+            {/* Quick 4-Status Counter Grid */}
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-200">
+                <span className="text-[10px] uppercase font-bold text-emerald-800">Hadir (H)</span>
+                <div className="text-xl font-black font-mono text-emerald-700 mt-0.5">
+                  {todayAttendanceMetrics.hadir}
+                </div>
+                <span className="text-[10px] text-emerald-600">Siswa Masuk</span>
+              </div>
+
+              <div className="p-2.5 rounded-2xl bg-amber-50/70 border border-amber-200">
+                <span className="text-[10px] uppercase font-bold text-amber-800">Sakit (S)</span>
+                <div className="text-xl font-black font-mono text-amber-700 mt-0.5">
+                  {todayAttendanceMetrics.sakit}
+                </div>
+                <span className="text-[10px] text-amber-600">Izin Sakit</span>
+              </div>
+
+              <div className="p-2.5 rounded-2xl bg-blue-50/70 border border-blue-200">
+                <span className="text-[10px] uppercase font-bold text-blue-800">Izin (I)</span>
+                <div className="text-xl font-black font-mono text-blue-700 mt-0.5">
+                  {todayAttendanceMetrics.izin}
+                </div>
+                <span className="text-[10px] text-blue-600">Izin Resmi</span>
+              </div>
+
+              <div className="p-2.5 rounded-2xl bg-rose-50/70 border border-rose-200">
+                <span className="text-[10px] uppercase font-bold text-rose-800">Alpa (A)</span>
+                <div className="text-xl font-black font-mono text-rose-700 mt-0.5">
+                  {todayAttendanceMetrics.alfa}
+                </div>
+                <span className="text-[10px] text-rose-600">Tanpa Ket.</span>
               </div>
             </div>
 
-            <div className="space-y-3 mt-4">
-              {leaderboardClasses.map((item, index) => (
-                <div
-                  key={item.kelas}
-                  onClick={() => handleSelectKelas(item.kelas)}
-                  className={`p-3 rounded-2xl border transition-all flex items-center justify-between cursor-pointer hover:shadow-xs ${
-                    selectedKelasFilter === item.kelas
-                      ? 'bg-emerald-50/80 border-[#83C532] ring-1 ring-[#83C532]'
-                      : index === 0
-                      ? 'bg-amber-50/60 border-amber-200'
-                      : index === 1
-                      ? 'bg-slate-50 border-slate-200'
-                      : 'bg-white border-slate-200'
-                  }`}
-                  title={`Klik untuk memfilter Dashboard ke Kelas ${item.kelas}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${
-                        index === 0
-                          ? 'bg-amber-500 text-white'
-                          : index === 1
-                          ? 'bg-slate-400 text-white'
-                          : 'bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      {index + 1}
-                    </span>
-                    <div>
-                      <div className="font-extrabold text-slate-900 text-sm">
-                        Kelas {item.kelas}
+            {/* Jenjang 7, 8, 9 Summary Bars */}
+            <div className="space-y-2 mt-4">
+              <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                Kehadiran Per-Jenjang (24 Rombel):
+              </span>
+              {[7, 8, 9].map((jenjang) => {
+                const jStudents = students.filter(s => s.jenjang === jenjang);
+                const jHadir = jStudents.filter(s => (s.statusKehadiran || 'Hadir') === 'Hadir').length;
+                const jTotal = jStudents.length;
+                const jPct = jTotal > 0 ? Math.round((jHadir / jTotal) * 100) : 100;
+
+                return (
+                  <div key={jenjang} className="p-2 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-lg bg-[#0B231E] text-white flex items-center justify-center font-bold text-[10px]">
+                        {jenjang}
+                      </span>
+                      <span className="font-semibold text-slate-800">Kelas {jenjang} (8 Rombel)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-16 bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                        <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${jPct}%` }}></div>
                       </div>
-                      <div className="text-[11px] text-slate-500">
-                        Kepatuhan {item.complianceRate}% · {item.violationsCount === 0 ? 'Nihil Pelanggaran' : `${item.violationsCount} Kasus`}
-                      </div>
+                      <span className="font-mono font-bold text-slate-900 text-[11px]">{jPct}%</span>
                     </div>
                   </div>
-
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                    Bintang Disiplin
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-slate-100 text-center">
             <button
-              onClick={() => onNavigate('reports')}
-              className="text-xs text-[#0B231E] font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
+              onClick={() => onNavigate('attendance')}
+              className="text-xs text-[#0B231E] font-bold hover:text-emerald-800 inline-flex items-center gap-1.5 cursor-pointer bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl transition-all w-full justify-center"
             >
-              <span>Lihat Detail Rekapitulasi Rombel</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
+              <CalendarCheck className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Buka Menu Presensi & Rekap 24 Rombel &rarr;</span>
             </button>
           </div>
         </div>

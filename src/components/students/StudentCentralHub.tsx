@@ -120,7 +120,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
 
   const openEditModal = (student: Student) => {
     if (isGuestMode()) {
-      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak mengubah biodata siswa.');
+      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 55 akun petugas resmi yang berhak mengubah biodata siswa.');
       return;
     }
     setEditingStudent(student);
@@ -142,7 +142,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
   // CSV Import handler
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isGuestMode()) {
-      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak mengimpor data siswa.');
+      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 55 akun petugas resmi yang berhak mengimpor data siswa.');
       e.target.value = '';
       return;
     }
@@ -271,7 +271,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
           <button
             onClick={() => {
               if (isGuestMode()) {
-                alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak menambah siswa baru.');
+                alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 55 akun petugas resmi yang berhak menambah siswa baru.');
                 return;
               }
               setFormData(initialForm);
@@ -571,7 +571,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
                         <button
                           onClick={() => {
                             if (isGuestMode()) {
-                              alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak menghapus data siswa.');
+                              alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 55 akun petugas resmi yang berhak menghapus data siswa.');
                               return;
                             }
                             setDeletingStudent(student);

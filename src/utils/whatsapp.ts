@@ -18,7 +18,8 @@ export function formatPhoneNumber(phone: string): string {
  * Generate formal WhatsApp greeting and message for attendance
  */
 export function generateAttendanceMessage(student: Student): string {
-  const statusStr = student.statusKehadiran.toUpperCase();
+  const currentStatus = student.statusKehadiran || 'Hadir';
+  const statusStr = currentStatus.toUpperCase();
   const dateStr = new Intl.DateTimeFormat('id-ID', {
     weekday: 'long',
     day: 'numeric',
@@ -26,7 +27,7 @@ export function generateAttendanceMessage(student: Student): string {
     year: 'numeric'
   }).format(new Date());
 
-  if (student.statusKehadiran === 'Alfa') {
+  if (currentStatus === 'Alfa') {
     return `Yth. Bapak/Ibu Orang Tua/Wali dari ananda *${student.nama}* (Kelas ${student.kelas}),\n\n` +
       `Melalui pesan resmi dari Sistem Informasi Budaya Sekolah Aman dan Nyaman (BSAN) ${SCHOOL_CONFIG.name} (${SCHOOL_CONFIG.shortName}), kami menginformasikan bahwa ananda pada hari *${dateStr}* tercatat *TIDAK HADIR TANPA KETERANGAN (ALFA)*.\n\n` +
       `Mohon konfirmasi terkait keberadaan ananda kepada pihak sekolah demi keselamatan dan ketertiban belajar siswa.\n\n` +
@@ -34,7 +35,7 @@ export function generateAttendanceMessage(student: Student): string {
       `Kepala Sekolah: ${SCHOOL_CONFIG.principalName}`;
   }
 
-  if (student.statusKehadiran === 'Sakit') {
+  if (currentStatus === 'Sakit') {
     return `Yth. Bapak/Ibu Orang Tua/Wali dari ananda *${student.nama}* (Kelas ${student.kelas}),\n\n` +
       `Kami dari ${SCHOOL_CONFIG.name} telah menerima laporan bahwa ananda hari ini (*${dateStr}*) sedang berhalangan hadir dikarenakan *SAKIT*${student.keteranganKehadiran ? ' (' + student.keteranganKehadiran + ')' : ''}.\n\n` +
       `Keluarga besar ${SCHOOL_CONFIG.shortName} mendoakan semoga ananda lekas sembuh dan dapat beraktivitas kembali seperti sedia kala.\n\n` +
