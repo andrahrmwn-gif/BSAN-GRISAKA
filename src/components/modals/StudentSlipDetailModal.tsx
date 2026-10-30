@@ -20,7 +20,11 @@ import {
   ExternalLink,
   Trash2
 } from 'lucide-react';
-import { exportToCSV, exportElementToPDF } from '../../utils/exportDocs';
+import { 
+  exportStudentSlipToWord, 
+  exportStudentSlipToExcel, 
+  exportStudentSlipToPDF 
+} from '../../utils/exportDocs';
 
 interface StudentSlipDetailModalProps {
   isOpen: boolean;
@@ -127,105 +131,27 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
   };
 
   const handleDownloadPdf = async () => {
-    if (activeTab !== 'document') {
-      setActiveTab('document');
-      await new Promise((resolve) => setTimeout(resolve, 300));
-    }
-    const el = document.getElementById('student-slip-printable-area');
-    if (el) {
-      setIsExportingPdf(true);
-      const filename = `Rapor_Disiplin_${student.nama.replace(/\s+/g, '_')}_${student.kelas}`;
-      const res = await exportElementToPDF(el, filename);
-      setIsExportingPdf(false);
-      if (res.blobUrl) {
+    setIsExportingPdf(true);
+    try {
+      const printArea = activeTab === 'document' ? document.getElementById('student-slip-printable-area') : null;
+      const res = await exportStudentSlipToPDF(student, violations, schoolConfig, printArea);
+      if (res?.blobUrl) {
         setPdfDownloadUrl(res.blobUrl);
       }
-    } else {
+    } catch (err) {
+      console.error('Error generating PDF slip', err);
       window.print();
+    } finally {
+      setIsExportingPdf(false);
     }
   };
 
   const handleDownloadWord = () => {
-    const html = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-      <head>
-        <meta charset='utf-8'>
-        <title>Rapor Kedisiplinan - ${student.nama}</title>
-        <style>
-          body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; color: #111; line-height: 1.3; margin: 15mm; }
-          .kop { text-align: center; border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 14px; }
-          table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-          th, td { border: 1px solid #333; padding: 6px; font-size: 10pt; }
-          th { background: #e2e8f0; }
-        </style>
-      </head>
-      <body>
-        <div class="kop">
-          <div style="font-size:11pt; font-weight:bold;">PEMERINTAH KABUPATEN TEMANGGUNG</div>
-          <div style="font-size:11pt; font-weight:bold;">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
-          <div style="font-size:15pt; font-weight:bold; color:#0B231E;">${schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'}</div>
-          <div style="font-size:9pt; font-style:italic;">${schoolConfig.address}, ${schoolConfig.city}, ${schoolConfig.province}</div>
-        </div>
-        <h2 style="text-align:center; text-transform:uppercase; font-size:13pt;">RAPOR REKAPITULASI KEDISIPLINAN SISWA</h2>
-        <p><strong>Nama:</strong> ${student.nama} | <strong>NISN:</strong> ${student.nisn} | <strong>Kelas:</strong> ${student.kelas} | <strong>Presensi:</strong> ${student.statusKehadiran}</p>
-        <p><strong>Ringan:</strong> ${student.totalPelanggaranRingan} | <strong>Sedang:</strong> ${student.totalPelanggaranSedang} | <strong>Berat:</strong> ${student.totalPelanggaranBerat}</p>
-        <table>
-          <thead>
-            <tr><th>No</th><th>Tanggal</th><th>Kode</th><th>Pelanggaran</th><th>Tingkat</th><th>Tahap Pembinaan</th></tr>
-          </thead>
-          <tbody>
-            ${studentViolations.map((v, i) => `<tr><td style="text-align:center;">${i+1}</td><td>${v.tanggal}</td><td>${v.kodePasal}</td><td>${v.uraian}</td><td style="text-align:center;">${v.tingkat}</td><td>${v.tahapPembinaan}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;">Nihil catatan pelanggaran.</td></tr>'}
-          </tbody>
-        </table>
-        <table style="width:100%; margin-top:24px; border:none; text-align:center;">
-          <tr>
-            <td style="border:none;">Mengetahui,<br>Orang Tua / Wali<br><br><br><br><u>( ${student.namaOrtu} )</u></td>
-            <td style="border:none;">Kandangan, ${todayStr}<br>Kepala Sekolah<br><br><br><br><u><strong>${schoolConfig.principalName || 'Kepala Sekolah'}</strong></u></td>
-          </tr>
-        </table>
-      </body>
-      </html>
-    `;
-    const blob = new Blob(['\uFEFF' + html], { type: 'application/msword;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Rapor_Disiplin_${student.nama.replace(/\s+/g, '_')}_${student.kelas}.doc`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportStudentSlipToWord(student, violations, schoolConfig);
   };
 
   const handleDownloadExcel = () => {
-    const data = studentViolations.length > 0 
-      ? studentViolations.map((v, i) => ({
-          No: i + 1,
-          Nama_Siswa: student.nama,
-          NISN: student.nisn,
-          Kelas: student.kelas,
-          Tanggal: v.tanggal,
-          Waktu: v.waktu,
-          Kode_Pasal: v.kodePasal,
-          Pasal: v.pasalTitle,
-          Uraian: v.uraian,
-          Klasifikasi: v.tingkat,
-          Tahap_Pembinaan: v.tahapPembinaan,
-          Guru_Pencatat: v.guruPencatat,
-          Status_Dokumen: v.statusSurat,
-          Nama_Ortu: student.namaOrtu,
-          No_WA: student.noWaOrtu,
-        }))
-      : [{
-          No: 1,
-          Nama_Siswa: student.nama,
-          NISN: student.nisn,
-          Kelas: student.kelas,
-          Status_Kehadiran: student.statusKehadiran,
-          Total_Pelanggaran: 0,
-          Catatan: 'Nihil Catatan Pelanggaran - Sangat Disiplin',
-          Nama_Ortu: student.namaOrtu,
-          No_WA: student.noWaOrtu,
-        }];
-    exportToCSV(data, `Slip_Disiplin_${student.nama.replace(/\s+/g, '_')}_${student.kelas}`);
+    exportStudentSlipToExcel(student, violations, schoolConfig);
   };
 
   const attendanceWa = generateAttendanceMessage(student);
@@ -283,38 +209,47 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
               </button>
             </div>
 
-            {/* Direct Downloads: Word, PDF, Excel */}
+            {/* Multi-Format Direct Downloads: Word, PDF, Excel, Cetak */}
+            <button
+              onClick={handleDownloadPdf}
+              disabled={isExportingPdf}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 cursor-pointer"
+              title="Unduh langsung dokumen resmi dalam format PDF"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>{isExportingPdf ? 'PDF...' : 'PDF'}</span>
+            </button>
+
             <button
               onClick={handleDownloadWord}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95"
-              title="Unduh Rapor Siswa dalam format Word (.doc)"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 cursor-pointer"
+              title="Unduh Rapor Siswa dalam format Word (.doc) resmi dengan Kop Surat"
             >
               <FileDown className="w-3.5 h-3.5" />
               <span>Word</span>
             </button>
 
             <button
-              onClick={handleDownloadPdf}
-              disabled={isExportingPdf}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95"
-              title="Unduh langsung dokumen PDF resmi"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>{isExportingPdf ? 'Mengunduh...' : 'PDF'}</span>
-            </button>
-
-            <button
               onClick={handleDownloadExcel}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95"
-              title="Unduh Rekap dalam format Excel (.csv)"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 cursor-pointer"
+              title="Unduh Rekapitulasi Pelanggaran dalam format Excel (.csv)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>Excel</span>
             </button>
 
             <button
+              onClick={handlePrintSlip}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              title="Cetak langsung ke mesin printer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Cetak</span>
+            </button>
+
+            <button
               onClick={onClose}
-              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer ml-1"
             >
               <X className="w-5 h-5" />
             </button>
@@ -466,6 +401,63 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                       <span>Hubungi Orang Tua via WhatsApp</span>
                     </a>
                   </div>
+                </div>
+              </div>
+
+              {/* Multi-Format Export Quick Action Banner */}
+              <div className="bg-gradient-to-r from-[#0B231E] via-[#133830] to-slate-900 p-5 rounded-3xl text-white shadow-md flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border border-[#83C532]/20">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#83C532] animate-pulse"></span>
+                    <h4 className="font-bold text-sm tracking-tight text-white">
+                      Unduh Berkas & Slip Kedisiplinan Siswa
+                    </h4>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white/10 text-emerald-300 font-bold">
+                      Format Resmi Temanggung
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed max-w-xl">
+                    Dilengkapi Kop Surat resmi (Pemerintah Kab. Temanggung), data identitas, rekapitulasi status BSAN, tabel riwayat kasus, dan lembar pengesahan tanda tangan.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={isExportingPdf}
+                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 cursor-pointer"
+                    title="Unduh Slip Lengkap dalam format PDF resmi"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>{isExportingPdf ? 'Memproses PDF...' : 'Unduh PDF'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownloadWord}
+                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 cursor-pointer"
+                    title="Unduh Dokumen Word (.doc) lengkap dengan Kop Surat"
+                  >
+                    <FileDown className="w-4 h-4" />
+                    <span>Unduh Word (.doc)</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownloadExcel}
+                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 cursor-pointer"
+                    title="Unduh Rekapitulasi Pelanggaran dalam format Excel (.csv)"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>Unduh Excel (.csv)</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('document')}
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-medium text-xs rounded-xl transition-colors cursor-pointer"
+                    title="Buka Pratinjau Lembar Rapor Resmi"
+                  >
+                    <Printer className="w-4 h-4 text-[#83C532]" />
+                    <span>Lihat Lembar</span>
+                  </button>
                 </div>
               </div>
 
@@ -628,38 +620,105 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
             </div>
           ) : (
             /* TAB 2: PRATINJAU LEMBAR RAPOR RESMI (PRINT-READY PREVIEW) */
-            <div className="flex justify-center">
-              <div id="student-slip-printable-area" className="print-area bg-white text-slate-900 w-full max-w-[210mm] min-h-[297mm] p-10 lg:p-12 shadow-xl rounded-2xl border border-slate-300 font-serif leading-relaxed text-xs">
-                {/* Official School Letterhead (Kop Surat) - TEMANGGUNG */}
+            <div className="flex flex-col items-center space-y-4">
+              {/* Document View Top Action Bar */}
+              <div className="no-print bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-xs max-w-[210mm] w-full flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-slate-800">
+                      Pratinjau Lembar Rapor Resmi
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Sesuai standar cetak A4 Bimbingan Konseling & Kesiswaan SMPN 1 Kandangan
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={isExportingPdf}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 cursor-pointer"
+                    title="Unduh langsung lembar ini sebagai dokumen PDF"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>{isExportingPdf ? 'Memproses PDF...' : 'Unduh PDF'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownloadWord}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 cursor-pointer"
+                    title="Unduh Lembar dalam format Word (.doc) lengkap dengan Kop Surat"
+                  >
+                    <FileDown className="w-3.5 h-3.5" />
+                    <span>Unduh Word (.doc)</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownloadExcel}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 cursor-pointer"
+                    title="Unduh Rekapitulasi Data dalam format Excel (.csv)"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>Unduh Excel (.csv)</span>
+                  </button>
+
+                  <button
+                    onClick={handlePrintSlip}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl shadow-xs transition-transform active:scale-95 cursor-pointer"
+                    title="Cetak lembar langsung ke printer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Cetak Lembar</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Printable Paper Area (A4) */}
+              <div id="student-slip-printable-area" className="print-area bg-white text-slate-900 w-full max-w-[210mm] min-h-[297mm] p-8 sm:p-10 lg:p-12 shadow-xl rounded-2xl border border-slate-300 font-serif leading-relaxed text-xs">
+                {/* Official School Letterhead (Kop Surat) - PEMKAB TEMANGGUNG */}
                 <div className="border-b-[3px] border-double border-black pb-4 mb-6 text-center flex items-center justify-between gap-4">
-                  {schoolConfig.logoUrl && (
-                    <div className="w-20 h-20 shrink-0 flex items-center justify-center">
+                  <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+                    {schoolConfig.logoUrl ? (
                       <img
                         src={schoolConfig.logoUrl}
                         alt="Logo Sekolah"
-                        className="max-h-20 max-w-20 object-contain"
+                        className="max-h-16 max-w-16 object-contain"
                       />
-                    </div>
-                  )}
+                    ) : (
+                      <div className="w-14 h-14 rounded-full border-2 border-slate-900 flex flex-col items-center justify-center font-serif font-black text-slate-900 bg-slate-50 text-[10px] leading-tight">
+                        <span className="font-sans font-extrabold text-[9px] text-[#0B231E]">KAB</span>
+                        <span>TMG</span>
+                      </div>
+                    )}
+                  </div>
 
-                  <div className="flex-1 text-center">
-                    <div className="text-xs uppercase tracking-wider font-bold">PEMERINTAH KABUPATEN TEMANGGUNG</div>
-                    <div className="text-xs uppercase tracking-wider font-bold">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
-                    <div className="text-xl font-black uppercase tracking-wide text-black mt-0.5">
+                  <div className="flex-1 text-center font-serif">
+                    <div className="text-xs uppercase tracking-wider font-bold text-black">PEMERINTAH KABUPATEN TEMANGGUNG</div>
+                    <div className="text-xs uppercase tracking-wider font-bold text-black">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
+                    <div className="text-lg sm:text-xl font-black uppercase tracking-wide text-black mt-0.5">
                       {schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'} ({schoolConfig.shortName || 'GRISAKA'})
                     </div>
                     <div className="text-[11px] text-black mt-0.5 font-sans">
-                      NPSN: {schoolConfig.npsn}
+                      NPSN: {schoolConfig.npsn || '20321456'} · Status Akreditasi: {schoolConfig.accreditation || 'A'}
                     </div>
-                    <div className="text-[11px] text-black">
-                      {schoolConfig.address}, {schoolConfig.city}, {schoolConfig.province} {schoolConfig.postalCode}
+                    <div className="text-[10.5px] text-black">
+                      {schoolConfig.address || 'Jl. Raya Kandangan'}, {schoolConfig.city || 'Kabupaten Temanggung'} · Jawa Tengah {schoolConfig.postalCode || '56281'}
                     </div>
-                    <div className="text-[10px] text-black font-sans">
-                      Telp: {schoolConfig.phone} · Website: {schoolConfig.website} · Email: {schoolConfig.email}
+                    <div className="text-[9.5px] text-black font-sans">
+                      Telp: {schoolConfig.phone || '-'} · Website: {schoolConfig.website || '-'} · Email: {schoolConfig.email || '-'}
                     </div>
                   </div>
 
-                  {schoolConfig.logoUrl && <div className="w-20 shrink-0"></div>}
+                  <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-full border-2 border-slate-900 flex flex-col items-center justify-center font-serif font-black text-slate-900 bg-slate-50 text-[9px] leading-tight text-center">
+                      <span className="font-sans text-[8px] text-[#0B231E] font-bold">BSAN</span>
+                      <span className="text-[10px]">GRISAKA</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Report Document Title */}

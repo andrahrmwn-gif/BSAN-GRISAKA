@@ -747,7 +747,7 @@ export default function App() {
       <StudentSlipDetailModal
         isOpen={!!detailedSlipStudent}
         onClose={() => setDetailedSlipStudent(null)}
-        student={detailedSlipStudent}
+        student={students.find((s) => s.id === detailedSlipStudent?.id) || detailedSlipStudent}
         violations={violations}
         schoolConfig={schoolConfig}
         onOpenRecordViolation={(studentId) => {
@@ -758,6 +758,7 @@ export default function App() {
           setDetailedSlipStudent(null);
           handleOpenSuratModal(v);
         }}
+        onDeleteViolation={handleDeleteViolation}
       />
 
       {/* Account Switch & 55 Accounts Login Modal */}

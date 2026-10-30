@@ -1,4 +1,4 @@
-import { Student, ViolationRecord } from '../types';
+import { Student, ViolationRecord, SchoolProfile } from '../types';
 import { SCHOOL_CONFIG } from '../data/schoolConfig';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -418,6 +418,539 @@ export function exportViolationsToPrintPDF(
       document.body.removeChild(iframe);
     }, 2000);
   }, 400);
+}
+
+/**
+ * Export complete individual student violation slip and dossier to official Word (.doc) format
+ * Includes official government school KOP (Pemerintah Kabupaten Temanggung), complete student bio,
+ * disciplinary summary, full violation table with dates/pasal/uraian/pencatat, and formal signature blocks.
+ */
+export function exportStudentSlipToWord(
+  student: Student,
+  violations: ViolationRecord[],
+  schoolConfig: SchoolProfile = SCHOOL_CONFIG
+): void {
+  const dateStr = new Intl.DateTimeFormat('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  }).format(new Date());
+
+  const studentViolations = (violations || [])
+    .filter(v => v && v.studentId === student.id)
+    .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
+
+  const hasBerat = (student.totalPelanggaranBerat || 0) > 0;
+  const hasSedang = (student.totalPelanggaranSedang || 0) > 0;
+  const hasRingan = (student.totalPelanggaranRingan || 0) > 0;
+
+  let statusDisiplin = 'Sangat Disiplin (Nihil Catatan)';
+  let keteranganDisiplin = 'Peserta didik tertib dan mematuhi seluruh norma Budaya Sekolah Aman dan Nyaman (BSAN).';
+  if (hasBerat) {
+    statusDisiplin = 'Peringatan Khusus / Sidang Kesiswaan (Tingkat Berat)';
+    keteranganDisiplin = 'Memerlukan penanganan terpadu Kepala Sekolah, Tim Kesiswaan, dan pemanggilan orang tua.';
+  } else if (hasSedang) {
+    statusDisiplin = 'Perhatian Khusus / Konseling BK (Tingkat Sedang)';
+    keteranganDisiplin = 'Memerlukan pembinaan intensif Guru BK dan penandatanganan kontrak perilaku.';
+  } else if (hasRingan) {
+    statusDisiplin = 'Tingkat Pembinaan Ringan';
+    keteranganDisiplin = 'Dalam pendampingan Wali Kelas dan Guru Piket dengan penugasan edukatif.';
+  }
+
+  const rows = studentViolations.map((v, i) => `
+    <tr>
+      <td style="border:1px solid #333; padding:6px; text-align:center;">${i + 1}</td>
+      <td style="border:1px solid #333; padding:6px;">
+        <strong>${v.tanggal}</strong><br>
+        <span style="font-size:8.5pt; color:#444;">${v.waktu || ''} WIB</span><br>
+        <span style="font-size:8.5pt; color:#555; font-style:italic;">Lokasi: ${v.lokasi || 'Lingkungan Sekolah'}</span>
+      </td>
+      <td style="border:1px solid #333; padding:6px;">
+        <strong>${v.kodePasal}</strong> - ${v.pasalTitle}
+      </td>
+      <td style="border:1px solid #333; padding:6px;">
+        ${v.uraian}
+        ${v.catatanKhusus ? `<div style="font-size:8.5pt; margin-top:4px; color:#92400E; background:#FEF3C7; padding:3px 6px; border-radius:4px;"><strong>Catatan Penanganan:</strong> ${v.catatanKhusus}</div>` : ''}
+      </td>
+      <td style="border:1px solid #333; padding:6px; text-align:center; font-weight:bold; color:${v.tingkat === 'Berat' ? '#DC2626' : v.tingkat === 'Sedang' ? '#D97706' : '#16A34A'};">
+        ${v.tingkat}
+      </td>
+      <td style="border:1px solid #333; padding:6px;">
+        <strong>${v.tahapPembinaan}</strong>
+      </td>
+      <td style="border:1px solid #333; padding:6px; text-align:center;">
+        ${v.guruPencatat}
+      </td>
+    </tr>
+  `).join('');
+
+  const wordHtml = `
+    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    <head>
+      <meta charset='utf-8'>
+      <title>Slip_Kedisiplinan_${student.nama}_${student.kelas}</title>
+      <style>
+        body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.3; color: #000; margin: 15mm; }
+        .kop-table { width: 100%; border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 16px; text-align: center; }
+        .kop-instansi { font-size: 11pt; font-weight: bold; text-transform: uppercase; margin: 0; }
+        .kop-sekolah { font-size: 15pt; font-weight: bold; letter-spacing: 0.5px; color: #0B231E; margin: 2px 0; }
+        .kop-sub { font-size: 9pt; margin: 1px 0; color: #222; }
+        h1 { font-size: 13pt; text-align: center; text-transform: uppercase; margin: 14px 0 2px 0; font-weight: bold; }
+        .doc-no { text-align: center; font-size: 9.5pt; margin-bottom: 16px; color: #333; }
+        .section-title { font-size: 10.5pt; font-weight: bold; text-transform: uppercase; background-color: #F1F5F9; padding: 4px 8px; border: 1px solid #CBD5E1; margin-top: 14px; margin-bottom: 6px; }
+        table.bio-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 10pt; }
+        table.bio-table td { padding: 4px 6px; vertical-align: top; border: 1px solid #E2E8F0; }
+        table.data-table { width: 100%; border-collapse: collapse; margin-top: 6px; margin-bottom: 16px; font-size: 9.5pt; }
+        table.data-table th { border: 1px solid #333; padding: 6px; background-color: #E2E8F0; text-align: center; font-weight: bold; }
+        .summary-box { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 10pt; }
+        .summary-box td { border: 1px solid #333; padding: 6px; text-align: center; }
+        .ttd-table { width: 100%; margin-top: 28px; border: none; font-size: 10pt; }
+        .ttd-table td { border: none; text-align: center; vertical-align: top; width: 25%; }
+        .ttd-space { height: 60px; }
+      </style>
+    </head>
+    <body>
+      <!-- Official School Letterhead (KOP) -->
+      <table class="kop-table">
+        <tr>
+          <td>
+            <div class="kop-instansi">PEMERINTAH KABUPATEN TEMANGGUNG</div>
+            <div class="kop-instansi">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
+            <div class="kop-sekolah">${schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'} (${schoolConfig.shortName || 'GRISAKA'})</div>
+            <div class="kop-sub">NPSN: ${schoolConfig.npsn || '20321456'} · Status Akreditasi: ${schoolConfig.accreditation || 'A'}</div>
+            <div class="kop-sub">${schoolConfig.address || 'Jl. Raya Kandangan'}, ${schoolConfig.city || 'Kabupaten Temanggung'}, ${schoolConfig.province || 'Jawa Tengah'} ${schoolConfig.postalCode || '56281'}</div>
+            <div class="kop-sub">Telp: ${schoolConfig.phone || '-'} · Email: ${schoolConfig.email || '-'} · Website: ${schoolConfig.website || '-'}</div>
+          </td>
+        </tr>
+      </table>
+
+      <h1>RAPOR REKAPITULASI & SLIP KONTROL KEDISIPLINAN SISWA</h1>
+      <div class="doc-no">Nomor: 421.3 / ${student.nisn || '000'} / BSAN-GRISAKA / ${new Date().getFullYear()} · Dicetak: ${dateStr}</div>
+
+      <!-- I. Identitas Siswa -->
+      <div class="section-title">I. IDENTITAS PESERTA DIDIK</div>
+      <table class="bio-table">
+        <tr>
+          <td style="width: 20%; font-weight: bold; background: #F8FAFC;">Nama Lengkap</td>
+          <td style="width: 30%;"><strong>${student.nama}</strong></td>
+          <td style="width: 20%; font-weight: bold; background: #F8FAFC;">Kelas / Jenjang</td>
+          <td style="width: 30%;">Kelas ${student.kelas} / Jenjang ${student.jenjang} SMP</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; background: #F8FAFC;">NISN</td>
+          <td style="font-family: Courier New, monospace;">${student.nisn}</td>
+          <td style="font-weight: bold; background: #F8FAFC;">Jenis Kelamin</td>
+          <td>${student.gender === 'L' ? 'Laki-laki (L)' : 'Perempuan (P)'}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; background: #F8FAFC;">Nama Orang Tua / Wali</td>
+          <td>${student.namaOrtu}</td>
+          <td style="font-weight: bold; background: #F8FAFC;">No. WhatsApp Wali</td>
+          <td style="font-family: Courier New, monospace;">${student.noWaOrtu}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; background: #F8FAFC;">Presensi Hari Ini</td>
+          <td><strong>${student.statusKehadiran}</strong></td>
+          <td style="font-weight: bold; background: #F8FAFC;">Alamat Rumah</td>
+          <td>${student.alamat}</td>
+        </tr>
+      </table>
+
+      <!-- II. Rekapitulasi Status Kedisiplinan -->
+      <div class="section-title">II. REKAPITULASI STATUS KEDISIPLINAN (BSAN)</div>
+      <table class="summary-box">
+        <tr style="background: #F1F5F9; font-weight: bold;">
+          <td style="width: 25%;">Presensi Harian</td>
+          <td style="width: 25%;">Kasus Ringan</td>
+          <td style="width: 25%;">Kasus Sedang</td>
+          <td style="width: 25%;">Kasus Berat</td>
+        </tr>
+        <tr>
+          <td><strong>${student.statusKehadiran}</strong></td>
+          <td><strong style="color: #2563EB;">${student.totalPelanggaranRingan || 0} Kasus</strong></td>
+          <td><strong style="color: #D97706;">${student.totalPelanggaranSedang || 0} Kasus</strong></td>
+          <td><strong style="color: #DC2626;">${student.totalPelanggaranBerat || 0} Kasus</strong></td>
+        </tr>
+        <tr>
+          <td colspan="4" style="text-align: left; padding: 8px; font-size: 9.5pt; background: #FAFAFA;">
+            <strong>Status Evaluasi:</strong> <span style="font-weight: bold;">${statusDisiplin}</span><br>
+            <span style="font-style: italic; color: #4B5563;">${keteranganDisiplin}</span>
+          </td>
+        </tr>
+      </table>
+
+      <!-- III. Riwayat Pelanggaran -->
+      <div class="section-title">III. DAFTAR LENGKAP RIWAYAT PELANGGARAN TATA TERTIB</div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 4%;">No</th>
+            <th style="width: 14%;">Waktu & Tempat</th>
+            <th style="width: 20%;">Pasal Tata Tertib</th>
+            <th style="width: 28%;">Uraian Pelanggaran & Catatan</th>
+            <th style="width: 10%;">Klasifikasi</th>
+            <th style="width: 14%;">Tahap Pembinaan</th>
+            <th style="width: 10%;">Pencatat</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows || '<tr><td colspan="7" style="text-align:center; padding:12px; font-style:italic; color:#4B5563;">Nihil catatan pelanggaran tata tertib sekolah. Peserta didik menunjukkan kepatuhan dan integritas yang tinggi dalam menerapkan norma Budaya Sekolah Aman dan Nyaman (BSAN).</td></tr>'}
+        </tbody>
+      </table>
+
+      <!-- IV. Tanda Tangan Resmi -->
+      <table class="ttd-table">
+        <tr>
+          <td>
+            Mengetahui,<br>
+            <strong>Orang Tua / Wali Siswa</strong>
+            <div class="ttd-space"></div>
+            <u><strong>( ${student.namaOrtu} )</strong></u>
+          </td>
+          <td>
+            Mengetahui,<br>
+            <strong>Wali Kelas ${student.kelas}</strong>
+            <div class="ttd-space"></div>
+            <u><strong>( Wali Kelas ${student.kelas} )</strong></u><br>
+            <span style="font-size: 8.5pt;">NIP. ........................................</span>
+          </td>
+          <td>
+            Mengetahui,<br>
+            <strong>${schoolConfig.bkTitle || 'Guru Bimbingan Konseling'}</strong>
+            <div class="ttd-space"></div>
+            <u><strong>( ${schoolConfig.bkName || 'Sri Wahyuni, S.Pd., M.Si.'} )</strong></u><br>
+            <span style="font-size: 8.5pt;">NIP. ${schoolConfig.bkNip || '19780824 200501 2 008'}</span>
+          </td>
+          <td>
+            Kandangan, ${dateStr}<br>
+            <strong>Kepala Sekolah</strong>
+            <div class="ttd-space"></div>
+            <u><strong>( ${schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'} )</strong></u><br>
+            <span style="font-size: 8.5pt;">NIP. ${schoolConfig.principalNip || '19740512 199802 2 003'}</span>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob(['\ufeff' + wordHtml], { type: 'application/msword;charset=utf-8' });
+  const filename = `Slip_Kedisiplinan_${student.nama.replace(/\s+/g, '_')}_${student.kelas}.doc`;
+  triggerFileDownload(blob, filename);
+}
+
+/**
+ * Export student violation history and metadata to Excel (.csv) with school header and bio blocks
+ */
+export function exportStudentSlipToExcel(
+  student: Student,
+  violations: ViolationRecord[],
+  schoolConfig: SchoolProfile = SCHOOL_CONFIG
+): void {
+  const dateStr = new Intl.DateTimeFormat('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  }).format(new Date());
+
+  const studentViolations = (violations || [])
+    .filter(v => v && v.studentId === student.id)
+    .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
+
+  const csvRows: (string | number)[][] = [
+    ['PEMERINTAH KABUPATEN TEMANGGUNG'],
+    ['DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA'],
+    [`${schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'} (${schoolConfig.shortName || 'GRISAKA'}) - NPSN: ${schoolConfig.npsn || '20321456'}`],
+    ['RAPOR REKAPITULASI & SLIP KONTROL KEDISIPLINAN SISWA (BSAN)'],
+    [`Tanggal Cetak Dokumen: ${dateStr}`],
+    [''],
+    ['I. DATA IDENTITAS PESERTA DIDIK'],
+    ['Nama Siswa', student.nama, 'Kelas', student.kelas, 'Jenjang', `${student.jenjang} SMP`],
+    ['NISN', `="${student.nisn}"`, 'Jenis Kelamin', student.gender === 'L' ? 'Laki-laki (L)' : 'Perempuan (P)', 'Presensi Hari Ini', student.statusKehadiran],
+    ['Nama Orang Tua/Wali', student.namaOrtu, 'No. WA Ortu', `="${student.noWaOrtu}"`, 'Alamat', student.alamat],
+    [''],
+    ['II. REKAPITULASI KEDISIPLINAN'],
+    ['Pelanggaran Ringan', `${student.totalPelanggaranRingan || 0} Kasus`, 'Pelanggaran Sedang', `${student.totalPelanggaranSedang || 0} Kasus`, 'Pelanggaran Berat', `${student.totalPelanggaranBerat || 0} Kasus`],
+    [''],
+    ['III. DAFTAR LENGKAP RIWAYAT PELANGGARAN'],
+    ['No', 'Tanggal', 'Waktu', 'Lokasi', 'Kode Pasal', 'Pasal Tata Tertib', 'Uraian Pelanggaran', 'Catatan Penanganan', 'Klasifikasi', 'Tahap Pembinaan (SOP)', 'Guru Pencatat', 'Status Dokumen']
+  ];
+
+  if (studentViolations.length === 0) {
+    csvRows.push([
+      1,
+      '-',
+      '-',
+      '-',
+      '-',
+      'Nihil Pelanggaran',
+      'Peserta didik tercatat sangat disiplin dan mematuhi seluruh tata tertib BSAN.',
+      '-',
+      'Nihil',
+      'Pembinaan Rutin Karakter',
+      '-',
+      'Tertib'
+    ]);
+  } else {
+    studentViolations.forEach((v, i) => {
+      csvRows.push([
+        i + 1,
+        v.tanggal,
+        v.waktu ? `${v.waktu} WIB` : '-',
+        v.lokasi || '-',
+        v.kodePasal,
+        v.pasalTitle,
+        v.uraian,
+        v.catatanKhusus || '-',
+        v.tingkat,
+        v.tahapPembinaan,
+        v.guruPencatat,
+        v.statusSurat || 'Tercatat'
+      ]);
+    });
+  }
+
+  csvRows.push(
+    [''],
+    [`Kandangan, ${dateStr}`],
+    [`Kepala Sekolah: ${schoolConfig.principalName || 'Kepala Sekolah'} (NIP: ${schoolConfig.principalNip || '-'})`],
+    [`Guru BK: ${schoolConfig.bkName || 'Guru BK'} (NIP: ${schoolConfig.bkNip || '-'})`],
+    [`Tim Kesiswaan: ${schoolConfig.timKesiswaanName || 'Tim Kesiswaan'} (NIP: ${schoolConfig.timKesiswaanNip || '-'})`]
+  );
+
+  const csvContent = '\uFEFF' + csvRows.map(row =>
+    row.map(cell => {
+      let val = cell ?? '';
+      if (typeof val === 'string') {
+        val = `"${val.replace(/"/g, '""')}"`;
+      }
+      return val;
+    }).join(',')
+  ).join('\r\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const filename = `Slip_Kedisiplinan_${student.nama.replace(/\s+/g, '_')}_${student.kelas}.csv`;
+  triggerFileDownload(blob, filename);
+}
+
+/**
+ * Export student slip directly to official PDF with Temanggung school KOP, bio, full violation table, and signatures
+ */
+export async function exportStudentSlipToPDF(
+  student: Student,
+  violations: ViolationRecord[],
+  schoolConfig: SchoolProfile = SCHOOL_CONFIG,
+  existingElement?: HTMLElement | null
+): Promise<{ success: boolean; blobUrl?: string }> {
+  const filename = `Rapor_Disiplin_${student.nama.replace(/\s+/g, '_')}_${student.kelas}`;
+
+  if (existingElement) {
+    return exportElementToPDF(existingElement, filename);
+  }
+
+  // If no existing element provided, find it in DOM or build a pristine offscreen element
+  const domEl = document.getElementById('student-slip-printable-area');
+  if (domEl) {
+    return exportElementToPDF(domEl, filename);
+  }
+
+  // Create clean offscreen element with complete school KOP and tables
+  const container = document.createElement('div');
+  container.id = 'temp-pdf-export-container';
+  container.style.position = 'fixed';
+  container.style.top = '-99999px';
+  container.style.left = '0';
+  container.style.width = '794px';
+  container.style.backgroundColor = '#ffffff';
+  container.style.color = '#000000';
+  container.style.padding = '32px';
+  container.style.fontFamily = "'Times New Roman', Times, serif";
+
+  const dateStr = new Intl.DateTimeFormat('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  }).format(new Date());
+
+  const studentViolations = (violations || [])
+    .filter(v => v && v.studentId === student.id)
+    .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
+
+  const hasBerat = (student.totalPelanggaranBerat || 0) > 0;
+
+  const rowsHtml = studentViolations.length === 0
+    ? `<tr><td colspan="5" style="border:1px solid #000; padding:10px; text-align:center; font-style:italic;">Nihil catatan pelanggaran tata tertib sekolah. Peserta didik menunjukkan kepatuhan dan integritas yang tinggi dalam menerapkan norma Budaya Sekolah Aman dan Nyaman (BSAN).</td></tr>`
+    : studentViolations.map((v, i) => `
+      <tr>
+        <td style="border:1px solid #000; padding:6px; text-align:center; font-family:Courier New, monospace;">${i + 1}</td>
+        <td style="border:1px solid #000; padding:6px; font-size:9pt;">
+          <strong>${v.tanggal}</strong><br>
+          ${v.waktu ? `${v.waktu} WIB<br>` : ''}
+          <span style="font-style:italic; font-size:8.5pt;">${v.lokasi || 'Sekolah'}</span>
+        </td>
+        <td style="border:1px solid #000; padding:6px; font-size:9pt;">
+          <strong>${v.kodePasal} - ${v.pasalTitle}</strong><br>
+          ${v.uraian}
+          ${v.catatanKhusus ? `<br><small style="color:#b45309; font-style:italic;">Catatan: ${v.catatanKhusus}</small>` : ''}
+        </td>
+        <td style="border:1px solid #000; padding:6px; text-align:center; font-weight:bold; font-size:9pt;">
+          ${v.tingkat}
+        </td>
+        <td style="border:1px solid #000; padding:6px; font-size:8.5pt;">
+          <strong>${v.tahapPembinaan}</strong><br>
+          <span style="color:#555;">Pencatat: ${v.guruPencatat}</span>
+        </td>
+      </tr>
+    `).join('');
+
+  container.innerHTML = `
+    <div style="border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 14px; text-align: center;">
+      <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">PEMERINTAH KABUPATEN TEMANGGUNG</div>
+      <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
+      <div style="font-size: 15pt; font-weight: bold; color: #0B231E; margin: 2px 0;">${schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'} (${schoolConfig.shortName || 'GRISAKA'})</div>
+      <div style="font-size: 9pt;">NPSN: ${schoolConfig.npsn || '20321456'} · Status Akreditasi: ${schoolConfig.accreditation || 'A'}</div>
+      <div style="font-size: 9pt;">${schoolConfig.address || 'Jl. Raya Kandangan'}, ${schoolConfig.city || 'Kabupaten Temanggung'} · Jawa Tengah 56281</div>
+      <div style="font-size: 8.5pt;">Telp: ${schoolConfig.phone || '-'} · Email: ${schoolConfig.email || '-'} · Website: ${schoolConfig.website || '-'}</div>
+    </div>
+
+    <div style="text-align: center; margin-bottom: 14px;">
+      <div style="font-size: 13pt; font-weight: bold; text-decoration: underline; text-transform: uppercase;">
+        LEMBAR KONTROL & RAPOR KEDISIPLINAN SISWA (BSAN)
+      </div>
+      <div style="font-size: 9pt; margin-top: 2px;">
+        Dokumen Resmi Bimbingan Konseling & Kesiswaan · Dicetak pada: ${dateStr}
+      </div>
+    </div>
+
+    <div style="border: 1px solid #000; padding: 8px 12px; margin-bottom: 12px; font-size: 9.5pt; font-family: Arial, sans-serif; background: #fafafa;">
+      <div style="font-weight: bold; text-transform: uppercase; font-size: 10pt; border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px;">
+        I. IDENTITAS PESERTA DIDIK
+      </div>
+      <table style="width: 100%; font-size: 9.5pt; border-collapse: collapse;">
+        <tr>
+          <td style="width: 25%; padding: 2px 0;">Nama Lengkap</td>
+          <td style="width: 3%;">:</td>
+          <td style="width: 32%; font-weight: bold; font-size: 10.5pt;">${student.nama}</td>
+          <td style="width: 18%; padding: 2px 0;">Kelas / Rombel</td>
+          <td style="width: 3%;">:</td>
+          <td style="width: 19%;">Kelas ${student.kelas} (Jenjang ${student.jenjang})</td>
+        </tr>
+        <tr>
+          <td style="padding: 2px 0;">NISN</td>
+          <td>:</td>
+          <td style="font-family: monospace; font-weight: bold;">${student.nisn}</td>
+          <td style="padding: 2px 0;">Jenis Kelamin</td>
+          <td>:</td>
+          <td>${student.gender === 'L' ? 'Laki-laki (L)' : 'Perempuan (P)'}</td>
+        </tr>
+        <tr>
+          <td style="padding: 2px 0;">Nama Orang Tua/Wali</td>
+          <td>:</td>
+          <td style="font-weight: bold;">${student.namaOrtu}</td>
+          <td style="padding: 2px 0;">No. WhatsApp Wali</td>
+          <td>:</td>
+          <td style="font-family: monospace;">${student.noWaOrtu}</td>
+        </tr>
+        <tr>
+          <td style="padding: 2px 0;">Alamat Rumah</td>
+          <td>:</td>
+          <td colspan="4">${student.alamat}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="border: 1px solid #000; margin-bottom: 12px; font-size: 9.5pt; font-family: Arial, sans-serif;">
+      <div style="background: #f1f5f9; padding: 4px 8px; font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #000;">
+        II. REKAPITULASI STATUS KEDISIPLINAN PESERTA DIDIK
+      </div>
+      <table style="width: 100%; text-align: center; border-collapse: collapse;">
+        <tr>
+          <td style="border-right: 1px solid #000; padding: 6px; width: 25%;">
+            <div style="font-size: 8pt; text-transform: uppercase; color: #555;">Presensi Harian</div>
+            <div style="font-weight: bold; font-size: 11pt; margin-top: 2px;">${student.statusKehadiran}</div>
+          </td>
+          <td style="border-right: 1px solid #000; padding: 6px; width: 25%;">
+            <div style="font-size: 8pt; text-transform: uppercase; color: #555;">Pelanggaran Ringan</div>
+            <div style="font-weight: bold; font-size: 11pt; color: #2563eb; margin-top: 2px;">${student.totalPelanggaranRingan || 0} Kasus</div>
+          </td>
+          <td style="border-right: 1px solid #000; padding: 6px; width: 25%;">
+            <div style="font-size: 8pt; text-transform: uppercase; color: #555;">Pelanggaran Sedang</div>
+            <div style="font-weight: bold; font-size: 11pt; color: #d97706; margin-top: 2px;">${student.totalPelanggaranSedang || 0} Kasus</div>
+          </td>
+          <td style="padding: 6px; width: 25%;">
+            <div style="font-size: 8pt; text-transform: uppercase; color: #555;">Pelanggaran Berat</div>
+            <div style="font-weight: bold; font-size: 11pt; color: ${hasBerat ? '#dc2626' : '#111'}; margin-top: 2px;">${student.totalPelanggaranBerat || 0} Kasus</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="margin-bottom: 14px; font-family: Arial, sans-serif;">
+      <div style="font-weight: bold; font-size: 9.5pt; text-transform: uppercase; margin-bottom: 4px;">
+        III. DAFTAR RIWAYAT PELANGGARAN TATA TERTIB RESMI
+      </div>
+      <table style="width: 100%; border-collapse: collapse; border: 1px solid #000; font-size: 9pt;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th style="border: 1px solid #000; padding: 5px; width: 4%;">No</th>
+            <th style="border: 1px solid #000; padding: 5px; width: 18%;">Waktu & Tempat</th>
+            <th style="border: 1px solid #000; padding: 5px;">Pasal & Deskripsi Pelanggaran</th>
+            <th style="border: 1px solid #000; padding: 5px; width: 12%;">Klasifikasi</th>
+            <th style="border: 1px solid #000; padding: 5px; width: 26%;">Bentuk Pembinaan & SOP</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top: 20px; font-family: Arial, sans-serif; font-size: 9.5pt;">
+      <table style="width: 100%; border-collapse: collapse; text-align: center;">
+        <tr>
+          <td style="width: 25%; vertical-align: top;">
+            Mengetahui,<br>
+            <strong>Orang Tua / Wali</strong>
+            <div style="height: 50px;"></div>
+            <u><strong>( ${student.namaOrtu} )</strong></u>
+          </td>
+          <td style="width: 25%; vertical-align: top;">
+            Mengetahui,<br>
+            <strong>Guru BK / Konselor</strong>
+            <div style="height: 50px;"></div>
+            <u><strong>( ${schoolConfig.bkName || 'Sri Wahyuni, S.Pd., M.Si.'} )</strong></u><br>
+            <span style="font-size: 8pt; font-family: monospace;">NIP. ${schoolConfig.bkNip || '19780824 200501 2 008'}</span>
+          </td>
+          <td style="width: 25%; vertical-align: top;">
+            Mengetahui,<br>
+            <strong>Tim Kesiswaan</strong>
+            <div style="height: 50px;"></div>
+            <u><strong>( ${schoolConfig.timKesiswaanName || schoolConfig.wakasekName || 'Tim Kesiswaan'} )</strong></u><br>
+            <span style="font-size: 8pt; font-family: monospace;">NIP. ${schoolConfig.timKesiswaanNip || schoolConfig.wakasekNip || '-'}</span>
+          </td>
+          <td style="width: 25%; vertical-align: top;">
+            Kandangan, ${dateStr}<br>
+            <strong>Kepala Sekolah</strong>
+            <div style="height: 50px;"></div>
+            <u><strong>( ${schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'} )</strong></u><br>
+            <span style="font-size: 8pt; font-family: monospace;">NIP. ${schoolConfig.principalNip || '19740512 199802 2 003'}</span>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+  try {
+    const res = await exportElementToPDF(container, filename);
+    document.body.removeChild(container);
+    return res;
+  } catch (err) {
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
+    throw err;
+  }
 }
 
 /**
