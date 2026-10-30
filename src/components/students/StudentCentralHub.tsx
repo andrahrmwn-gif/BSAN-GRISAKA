@@ -459,7 +459,15 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
               {filteredStudents.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-12 text-center text-slate-500">
-                    Tidak ditemukan data siswa dengan kriteria filter tersebut.
+                    <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="font-bold text-slate-700">
+                      {students.length === 0 ? 'Database Siswa Bersih (0 Siswa)' : 'Tidak Ditemukan Siswa'}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                      {students.length === 0
+                        ? 'Data contoh telah dibersihkan secara tuntas. Silakan klik "Tambah Siswa" atau "Impor Excel" untuk memasukkan data siswa riil sekolah.'
+                        : 'Tidak ada data siswa yang cocok dengan kriteria pencarian atau filter saat ini.'}
+                    </p>
                   </td>
                 </tr>
               ) : (

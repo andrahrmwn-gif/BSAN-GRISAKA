@@ -58,34 +58,45 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="bg-white border-b border-slate-200/80 px-6 py-3.5 sticky top-0 z-20 shadow-xs">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <header className="bg-white border-b border-slate-200/80 px-3.5 sm:px-6 py-2.5 sm:py-3.5 sticky top-0 z-30 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         {/* Left: Hamburger & Breadcrumbs & View Name */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           {onToggleMobileSidebar && (
             <button
               onClick={onToggleMobileSidebar}
-              className="lg:hidden p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 transition-colors cursor-pointer shrink-0"
+              className="lg:hidden p-2 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 transition-colors cursor-pointer shrink-0 border border-slate-200"
               title="Buka Menu Navigasi"
+              aria-label="Buka Menu Navigasi"
             >
               <Menu className="w-5 h-5 text-slate-700" />
             </button>
           )}
 
-          <div>
-            <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-500 font-medium truncate">
               <span>{schoolConfig.shortName || 'SMPN 1 Kandangan'}</span>
               <span>/</span>
-              <span className="text-[#0B231E] font-semibold">{getBreadcrumbTitle()}</span>
+              <span className="text-[#0B231E] font-semibold truncate">{getBreadcrumbTitle()}</span>
             </div>
-            <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+            <h1 className="text-sm sm:text-base lg:text-lg font-bold text-slate-900 tracking-tight truncate">
               {getBreadcrumbTitle()}
             </h1>
           </div>
         </div>
 
+
         {/* Center / Right widgets */}
         <div className="flex flex-wrap items-center gap-3">
+          {/* Real-Time Cloud Sync Badge */}
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50/80 border border-emerald-200/90 text-emerald-800 text-[11px] font-bold shadow-2xs" title="Tersinkronisasi Real-Time multi-akun & lintas perangkat">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+            </span>
+            <span className="tracking-tight">Real-Time Cloud</span>
+          </div>
+
           {/* BMKG Weather Widget */}
           <div className="hidden lg:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/70 text-xs">
             <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">

@@ -25,7 +25,8 @@ import {
   Edit2,
   Smartphone,
   Eye,
-  Info
+  Info,
+  Trash2
 } from 'lucide-react';
 
 export interface WaTemplates {
@@ -59,6 +60,8 @@ interface WhatsAppGatewayProps {
   waLogs: WhatsAppMessageLog[];
   schoolConfig?: SchoolProfile;
   onAddLog: (log: WhatsAppMessageLog) => void;
+  onDeleteLog?: (logId: string) => void;
+  onClearAllLogs?: () => void;
 }
 
 export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
@@ -67,7 +70,10 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
   waLogs,
   schoolConfig = SCHOOL_CONFIG,
   onAddLog,
+  onDeleteLog,
+  onClearAllLogs,
 }) => {
+
   const [activeTab, setActiveTab] = useState<'absensi' | 'pelanggaran' | 'templates' | 'logs'>('absensi');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -855,13 +861,32 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
       {/* ========================================================================= */}
       {activeTab === 'logs' && (
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="font-bold text-sm text-slate-900">
-              Riwayat Pengiriman Pesan WhatsApp Gateway
-            </h3>
-            <span className="text-xs text-slate-500 font-mono">
-              Total Log: {waLogs.length} Pesan
-            </span>
+          <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900">
+                Riwayat Pengiriman Pesan WhatsApp Gateway
+              </h3>
+              <p className="text-xs text-slate-500">
+                Daftar arsip pesan notifikasi dan panggilan yang telah terkirim ke wali murid.
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-slate-500 font-mono">
+                Total Log: {waLogs.length} Pesan
+              </span>
+
+              {onClearAllLogs && waLogs.length > 0 && (
+                <button
+                  onClick={onClearAllLogs}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold border border-rose-200 transition-colors cursor-pointer"
+                  title="Kosongkan seluruh riwayat pesan WhatsApp"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Kosongkan Semua Log</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -874,13 +899,14 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                   <th className="py-3 px-3 font-bold">Kategori</th>
                   <th className="py-3 px-4 font-bold">Isi Ringkas Pesan</th>
                   <th className="py-3 px-3 font-bold">Status</th>
+                  <th className="py-3 px-3 font-bold text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {waLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-500">
-                      Belum ada pesan yang dikirim melalui gateway.
+                    <td colSpan={7} className="py-12 text-center text-slate-500">
+                      Belum ada riwayat pesan yang dikirim melalui gateway.
                     </td>
                   </tr>
                 ) : (
@@ -911,12 +937,24 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                           <span>{log.status}</span>
                         </span>
                       </td>
+                      <td className="py-3 px-3 text-center">
+                        {onDeleteLog && (
+                          <button
+                            onClick={() => onDeleteLog(log.id)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            title="Hapus Log Pesan Ini"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
+
         </div>
       )}
     </div>

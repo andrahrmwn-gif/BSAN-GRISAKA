@@ -17,7 +17,8 @@ import {
   Info,
   FileDown,
   FileSpreadsheet,
-  ExternalLink
+  ExternalLink,
+  Trash2
 } from 'lucide-react';
 import { exportToCSV, exportElementToPDF } from '../../utils/exportDocs';
 
@@ -29,6 +30,7 @@ interface StudentSlipDetailModalProps {
   schoolConfig: SchoolProfile;
   onOpenRecordViolation: (studentId: string) => void;
   onOpenSurat: (violation: ViolationRecord) => void;
+  onDeleteViolation?: (violationId: string) => void;
 }
 
 export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
@@ -39,10 +41,12 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
   schoolConfig,
   onOpenRecordViolation,
   onOpenSurat,
+  onDeleteViolation,
 }) => {
   const [activeTab, setActiveTab] = useState<'timeline' | 'document'>('timeline');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const todayStr = useMemo(() => {
     try {
@@ -569,16 +573,50 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                                 </div>
                               </div>
 
-                              <button
-                                onClick={() => {
-                                  onClose();
-                                  onOpenSurat(v);
-                                }}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#0B231E] hover:bg-[#143d34] text-white text-xs font-semibold shadow-xs transition-colors"
-                              >
-                                <FileText className="w-3.5 h-3.5 text-[#83C532]" />
-                                <span>Buka Surat Resmi</span>
-                              </button>
+                              <div className="flex items-center gap-2">
+                                {onDeleteViolation && (
+                                  confirmDeleteId === v.id ? (
+                                    <div className="flex items-center gap-1.5 bg-rose-100 p-1 rounded-xl">
+                                      <span className="text-[10px] text-rose-800 font-bold px-1">Yakin hapus?</span>
+                                      <button
+                                        onClick={() => {
+                                          onDeleteViolation(v.id);
+                                          setConfirmDeleteId(null);
+                                        }}
+                                        className="px-2 py-0.5 bg-rose-600 text-white rounded-lg text-[10px] font-bold"
+                                      >
+                                        Ya
+                                      </button>
+                                      <button
+                                        onClick={() => setConfirmDeleteId(null)}
+                                        className="px-2 py-0.5 bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold"
+                                      >
+                                        Batal
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setConfirmDeleteId(v.id)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                                      title="Hapus Catatan Kasus Ini Secara Manual"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                      <span>Hapus</span>
+                                    </button>
+                                  )
+                                )}
+
+                                <button
+                                  onClick={() => {
+                                    onClose();
+                                    onOpenSurat(v);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#0B231E] hover:bg-[#143d34] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                                >
+                                  <FileText className="w-3.5 h-3.5 text-[#83C532]" />
+                                  <span>Buka Surat Resmi</span>
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>

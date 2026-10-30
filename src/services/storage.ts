@@ -1,6 +1,7 @@
 import { Student, ViolationRecord, WhatsAppMessageLog, SchoolProfile } from '../types';
 import { INITIAL_STUDENTS, INITIAL_VIOLATIONS, INITIAL_WA_LOGS } from '../data/initialStudents';
 import { SCHOOL_CONFIG } from '../data/schoolConfig';
+import { resetAttendanceToClean, clearAllAttendanceSheets } from './attendanceStorage';
 
 const STORAGE_KEYS = {
   STUDENTS: 'bsan_grisaka_students_v1',
@@ -12,19 +13,18 @@ const STORAGE_KEYS = {
 export const getStoredStudents = (): Student[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.STUDENTS);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
-      return INITIAL_STUDENTS;
+    if (raw === null) {
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify([]));
+      return [];
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length < 30) {
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
-      return INITIAL_STUDENTS;
+    if (!Array.isArray(parsed)) {
+      return [];
     }
     return parsed;
   } catch (err) {
     console.error('Failed reading students storage', err);
-    return INITIAL_STUDENTS;
+    return [];
   }
 };
 
@@ -115,17 +115,8 @@ export const resetToDefaultData = (): {
   logs: WhatsAppMessageLog[];
   config: SchoolProfile;
 } => {
-  // Ensure all student records are completely clean and pristine (zero violations, status Hadir)
-  const cleanStudents: Student[] = INITIAL_STUDENTS.map((s) => ({
-    ...s,
-    statusKehadiran: 'Hadir',
-    keteranganKehadiran: undefined,
-    totalPelanggaranRingan: 0,
-    totalPelanggaranSedang: 0,
-    totalPelanggaranBerat: 0,
-    totalPoinPelanggaran: 0,
-  }));
-
+  // Completely pristine reset: 0 students, 0 violations, 0 logs, 0 attendance sheets
+  const cleanStudents: Student[] = [];
   const cleanViolations: ViolationRecord[] = [];
   const cleanLogs: WhatsAppMessageLog[] = [];
 
@@ -134,6 +125,9 @@ export const resetToDefaultData = (): {
   localStorage.setItem(STORAGE_KEYS.WA_LOGS, JSON.stringify(cleanLogs));
   localStorage.setItem(STORAGE_KEYS.SCHOOL_CONFIG, JSON.stringify(SCHOOL_CONFIG));
 
+  // Clear all attendance sheets so attendance menu has no dummy student names
+  clearAllAttendanceSheets();
+
   return {
     students: cleanStudents,
     violations: cleanViolations,
@@ -141,3 +135,23 @@ export const resetToDefaultData = (): {
     config: SCHOOL_CONFIG,
   };
 };
+
+export const loadDemoData = (): {
+  students: Student[];
+  violations: ViolationRecord[];
+  logs: WhatsAppMessageLog[];
+  config: SchoolProfile;
+} => {
+  localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
+  localStorage.setItem(STORAGE_KEYS.VIOLATIONS, JSON.stringify(INITIAL_VIOLATIONS));
+  localStorage.setItem(STORAGE_KEYS.WA_LOGS, JSON.stringify(INITIAL_WA_LOGS));
+  localStorage.setItem(STORAGE_KEYS.SCHOOL_CONFIG, JSON.stringify(SCHOOL_CONFIG));
+
+  return {
+    students: INITIAL_STUDENTS,
+    violations: INITIAL_VIOLATIONS,
+    logs: INITIAL_WA_LOGS,
+    config: SCHOOL_CONFIG,
+  };
+};
+

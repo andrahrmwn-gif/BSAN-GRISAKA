@@ -7,84 +7,62 @@ const STORAGE_KEYS = {
 };
 
 // Seed sample attendance sheets for recent school days
-const generateSeedAttendanceSheets = (): AttendanceSheet[] => {
+// Generate clean today attendance sheets for all 24 classes (100% Hadir, 0 Sakit, 0 Izin, 0 Alfa)
+// Generate clean today attendance sheets based on actual students in database
+export const generateCleanTodayAttendanceSheets = (currentStudents?: Student[]): AttendanceSheet[] => {
   const sheets: AttendanceSheet[] = [];
-  const today = new Date();
+  const todayStr = new Date().toISOString().split('T')[0];
   
-  // Generate for past 14 days (excluding Sundays)
-  for (let offset = 0; offset < 14; offset++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - offset);
-    
-    // Skip Sunday (0)
-    if (d.getDay() === 0) continue;
-    
-    const dateStr = d.toISOString().split('T')[0];
-
-    // Create sheets for classes
-    KELAS_LIST.forEach((kelasName, idx) => {
-      // Pick students in this class
-      const classStudents = INITIAL_STUDENTS.filter((s) => s.kelas === kelasName);
-      if (classStudents.length === 0) return;
-
-      let hadir = 0;
-      let sakit = 0;
-      let izin = 0;
-      let alfa = 0;
-
-      const entries = classStudents.map((std, sIdx) => {
-        let status: AttendanceStatus = 'Hadir';
-        let keterangan: string | undefined = undefined;
-
-        // Occasional illness or leave for realistic simulation
-        if ((offset + idx + sIdx) % 19 === 0) {
-          status = 'Sakit';
-          keterangan = 'Demam / flu';
-          sakit++;
-        } else if ((offset * 3 + idx + sIdx) % 29 === 0) {
-          status = 'Izin';
-          keterangan = 'Acara keluarga';
-          izin++;
-        } else if ((offset * 5 + idx + sIdx) % 37 === 0) {
-          status = 'Alfa';
-          keterangan = 'Tanpa keterangan';
-          alfa++;
-        } else {
-          hadir++;
-        }
-
-        return {
-          studentId: std.id,
-          nisn: std.nisn,
-          nama: std.nama,
-          gender: std.gender,
-          status,
-          keterangan,
-        };
-      });
-
-      const total = entries.length;
-      const persentaseHadir = total > 0 ? Math.round((hadir / total) * 100) : 100;
-
-      sheets.push({
-        id: `att-${dateStr}-${kelasName}`,
-        date: dateStr,
-        kelas: kelasName,
-        recordedBy: 'Wali Kelas ' + kelasName,
-        recordedByNip: '-',
-        recordedAt: `${dateStr} 07:15 WIB`,
-        entries,
-        summary: {
-          total,
-          hadir,
-          sakit,
-          izin,
-          alfa,
-          persentaseHadir,
-        },
-      });
-    });
+  // Use passed students or fallback to stored students
+  let studentPool = currentStudents;
+  if (!studentPool) {
+    try {
+      const raw = localStorage.getItem('bsan_grisaka_students_v1');
+      if (raw) {
+        studentPool = JSON.parse(raw);
+      }
+    } catch {
+      studentPool = [];
+    }
   }
+
+  if (!studentPool || studentPool.length === 0) {
+    return [];
+  }
+
+  KELAS_LIST.forEach((kelasName) => {
+    const classStudents = (studentPool || []).filter((s) => s.kelas === kelasName);
+    if (classStudents.length === 0) return;
+
+    const entries = classStudents.map((std) => ({
+      studentId: std.id,
+      nisn: std.nisn,
+      nama: std.nama,
+      gender: std.gender,
+      status: 'Hadir' as AttendanceStatus,
+      keterangan: undefined,
+    }));
+
+    const total = entries.length;
+
+    sheets.push({
+      id: `att-${todayStr}-${kelasName}`,
+      date: todayStr,
+      kelas: kelasName,
+      recordedBy: 'Wali Kelas ' + kelasName,
+      recordedByNip: '-',
+      recordedAt: `${todayStr} 07:00 WIB`,
+      entries,
+      summary: {
+        total,
+        hadir: total,
+        sakit: 0,
+        izin: 0,
+        alfa: 0,
+        persentaseHadir: 100,
+      },
+    });
+  });
 
   return sheets;
 };
@@ -92,23 +70,36 @@ const generateSeedAttendanceSheets = (): AttendanceSheet[] => {
 export const getStoredAttendanceSheets = (): AttendanceSheet[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.ATTENDANCE);
-    if (!raw) {
-      const seeded = generateSeedAttendanceSheets();
-      localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(seeded));
-      return seeded;
+    if (raw === null) {
+      const clean = generateCleanTodayAttendanceSheets();
+      localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(clean));
+      return clean;
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      const seeded = generateSeedAttendanceSheets();
-      localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(seeded));
-      return seeded;
+    if (!Array.isArray(parsed)) {
+      return [];
     }
     return parsed;
   } catch (err) {
     console.error('Failed reading attendance storage', err);
-    return generateSeedAttendanceSheets();
+    return [];
   }
 };
+
+export const clearAllAttendanceSheets = (): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify([]));
+  } catch (err) {
+    console.error('Failed clearing attendance sheets', err);
+  }
+};
+
+export const resetAttendanceToClean = (currentStudents?: Student[]): AttendanceSheet[] => {
+  const clean = generateCleanTodayAttendanceSheets(currentStudents);
+  saveAttendanceSheets(clean);
+  return clean;
+};
+
 
 export const saveAttendanceSheets = (sheets: AttendanceSheet[]): void => {
   try {

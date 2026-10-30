@@ -14,7 +14,9 @@ import {
   saveSingleAttendanceSheet, 
   getAttendanceByClassAndDate,
   filterAttendanceSheets,
-  calculateStudentRecap 
+  calculateStudentRecap,
+  resetAttendanceToClean,
+  clearAllAttendanceSheets 
 } from '../../services/attendanceStorage';
 import { isGuestMode, getCurrentUser } from '../../services/authService';
 import { logAudit } from '../../services/auditLogger';
@@ -40,8 +42,11 @@ import {
   RotateCcw,
   Sparkles,
   ExternalLink,
-  X
+  X,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
+
 
 interface AttendanceManagerViewProps {
   students: Student[];
@@ -78,6 +83,8 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
   const [isPdfExporting, setIsPdfExporting] = useState(false);
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Filter students belonging to the currently selected class
   const classStudents = useMemo(() => {
@@ -142,10 +149,64 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
     setEntries(fresh);
   };
 
+  // Reset all attendance sheets cleanly
+  const handleResetAllAttendance = () => {
+    if (isGuestMode()) {
+      setActionFeedback({
+        type: 'error',
+        message: 'Akses Ditolak: Anda saat ini dalam Mode Tamu. Hanya akun petugas resmi yang berwenang mereset rekap presensi.',
+      });
+      setTimeout(() => setActionFeedback(null), 5000);
+      if (onOpenAccountSwitchModal) onOpenAccountSwitchModal();
+      return;
+    }
+
+    clearAllAttendanceSheets();
+
+    // Reset student presence status in state
+    const cleanStudents = students.map((s) => ({
+      ...s,
+      statusKehadiran: 'Hadir' as AttendanceStatus,
+      keteranganKehadiran: undefined,
+    }));
+    if (onUpdateStudentsAttendance) {
+      onUpdateStudentsAttendance(cleanStudents);
+    }
+
+    // Refresh current entries from actual students (will be empty if 0 students)
+    const freshEntries: AttendanceStudentEntry[] = classStudents.map((std) => ({
+      studentId: std.id,
+      nisn: std.nisn,
+      nama: std.nama,
+      gender: std.gender,
+      status: 'Hadir',
+      keterangan: '',
+    }));
+    setEntries(freshEntries);
+
+    logAudit({
+      actionType: 'RESET',
+      module: 'Presensi',
+      description: 'Mereset & membersihkan seluruh lembar presensi kelas secara total.',
+      status: 'SUCCESS',
+    });
+
+    setIsResetModalOpen(false);
+    setActionFeedback({
+      type: 'success',
+      message: 'Seluruh rekap dan lembar presensi berhasil dibersihkan total!',
+    });
+    setTimeout(() => setActionFeedback(null), 5000);
+  };
+
   // Save current attendance sheet
   const handleSaveAttendance = () => {
     if (isGuestMode()) {
-      alert('Akses Ditolak: Anda saat ini berada dalam Mode Tamu (Guest - View Only). Hanya 55 akun petugas resmi yang berhak menginput dan menyimpan presensi. Silakan beralih akun petugas.');
+      setActionFeedback({
+        type: 'error',
+        message: 'Akses Ditolak: Anda saat ini berada dalam Mode Tamu (Guest - View Only). Hanya 55 akun petugas resmi yang berhak menginput dan menyimpan presensi. Silakan beralih akun petugas.',
+      });
+      setTimeout(() => setActionFeedback(null), 6000);
       logAudit({
         actionType: 'BLOCKED',
         module: 'Presensi',
@@ -155,6 +216,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
       if (onOpenAccountSwitchModal) onOpenAccountSwitchModal();
       return;
     }
+
 
     setIsSaving(true);
 
@@ -778,8 +840,19 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
                   <Printer className="w-4 h-4 text-[#0B231E]" />
                   <span>{isPdfExporting ? 'Memproses PDF...' : 'Unduh PDF'}</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsResetModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                  title="Bersihkan seluruh data rekap presensi dan reset ke Hadir 100%"
+                >
+                  <Trash2 className="w-4 h-4 text-rose-600" />
+                  <span>Reset / Bersihkan Rekap</span>
+                </button>
               </div>
             </div>
+
 
             {/* Direct Fallback PDF Download link if available */}
             {pdfDownloadUrl && (
@@ -950,6 +1023,64 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Floating Action Feedback Toast */}
+      {actionFeedback && (
+        <div className={`fixed bottom-6 right-6 z-50 max-w-md p-4 rounded-2xl shadow-xl flex items-center gap-3 border animate-in fade-in slide-in-from-bottom-4 ${
+          actionFeedback.type === 'success'
+            ? 'bg-emerald-800 text-white border-emerald-600'
+            : 'bg-rose-800 text-white border-rose-600'
+        }`}>
+          {actionFeedback.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-300 shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-rose-300 shrink-0" />
+          )}
+          <span className="text-xs font-semibold flex-1 leading-relaxed">
+            {actionFeedback.message}
+          </span>
+          <button
+            onClick={() => setActionFeedback(null)}
+            className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* In-App Confirmation Modal: Reset Rekap Presensi */}
+      {isResetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
+              <RotateCcw className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 mb-1">
+              Reset Semua Rekap Presensi?
+            </h3>
+            <p className="text-xs text-slate-600 mb-4 leading-relaxed">
+              Tindakan ini akan membersihkan catatan sakit, izin, dan alpa pada lembar presensi seluruh 24 rombel dan mengembalikan status kehadiran seluruh siswa ke <strong>Hadir (100%)</strong>.
+            </p>
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setIsResetModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleResetAllAttendance}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                Ya, Bersihkan & Reset Rekap
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

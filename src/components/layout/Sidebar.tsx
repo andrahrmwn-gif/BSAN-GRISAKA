@@ -87,20 +87,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Mobile Backdrop Overlay */}
-      {isOpenMobile && (
-        <div 
-          onClick={onCloseMobile}
-          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-300"
-        />
-      )}
+      {/* Mobile Backdrop Overlay with smooth fade */}
+      <div 
+        onClick={onCloseMobile}
+        className={`fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-300 ease-in-out ${
+          isOpenMobile ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        aria-hidden="true"
+      />
 
-      {/* Sidebar Container: Fixed slide-over on mobile, sticky sidebar on desktop */}
-      <aside className={`
-        fixed inset-y-0 left-0 z-50 w-72 bg-[#0B231E] text-white flex flex-col shrink-0 border-r border-[#163830] select-none h-screen transition-transform duration-300 ease-in-out
-        ${isOpenMobile ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}
-        lg:static lg:translate-x-0 lg:sticky lg:top-0 lg:z-30
-      `}>
+      {/* Sidebar Container: True Overlay Drawer on mobile, Sticky Sidebar on desktop */}
+      <aside 
+        aria-hidden={!isOpenMobile}
+        className={`
+          fixed inset-y-0 left-0 z-50 w-[280px] sm:w-72 max-w-[85vw] bg-[#0B231E] text-white flex flex-col shrink-0 border-r border-[#163830] select-none h-screen transition-transform duration-300 ease-in-out shadow-2xl
+          ${isOpenMobile ? 'translate-x-0 pointer-events-auto' : '-translate-x-full pointer-events-none'}
+          lg:static lg:translate-x-0 lg:pointer-events-auto lg:sticky lg:top-0 lg:z-30 lg:shadow-none lg:w-72
+        `}
+      >
+
         {/* Brand Header */}
         <div className="p-6 border-b border-[#183d34]">
           <div className="flex items-center justify-between gap-2">

@@ -72,6 +72,9 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   
   // Recharts visualization type: 'area' | 'bar' | 'line'
   const [chartVizType, setChartVizType] = useState<'area' | 'bar' | 'line'>('area');
+  
+  // Recharts timeframe: '30days' (default) | '7days' | 'monthly'
+  const [trendTimeframe, setTrendTimeframe] = useState<'30days' | '7days' | 'monthly'>('30days');
 
   // Real-time large clock state for home executive dashboard KPI
   const [timeState, setTimeState] = useState({
@@ -239,7 +242,71 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     return { total, hadir, sakit, izin, alfa, percentHadir };
   }, [filteredStudents]);
 
+  // 30 Days Trend Aggregator for Student Violations (Recharts)
+  // Strictly calculated day-by-day from actual filtered violations for the last 30 days
+  const thirtyDaysTrendData = useMemo(() => {
+    const list = [];
+    const today = new Date();
+
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      const dayLabel = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(d);
+
+      // Violations matching this specific date
+      const dayViolations = filteredViolations.filter((v) => v.tanggal === dateStr);
+      const Ringan = dayViolations.filter((v) => v.tingkat === 'Ringan').length;
+      const Sedang = dayViolations.filter((v) => v.tingkat === 'Sedang').length;
+      const Berat = dayViolations.filter((v) => v.tingkat === 'Berat').length;
+      const Total = Ringan + Sedang + Berat;
+
+      list.push({
+        dateStr,
+        label: dayLabel,
+        name: dayLabel,
+        Ringan,
+        Sedang,
+        Berat,
+        Total,
+      });
+    }
+    return list;
+  }, [filteredViolations]);
+
+  // 30-Day Summary Metrics
+  const thirtyDaysStats = useMemo(() => {
+    const total = thirtyDaysTrendData.reduce((acc, curr) => acc + curr.Total, 0);
+    const totalRingan = thirtyDaysTrendData.reduce((acc, curr) => acc + curr.Ringan, 0);
+    const totalSedang = thirtyDaysTrendData.reduce((acc, curr) => acc + curr.Sedang, 0);
+    const totalBerat = thirtyDaysTrendData.reduce((acc, curr) => acc + curr.Berat, 0);
+    const cleanDays = thirtyDaysTrendData.filter((d) => d.Total === 0).length;
+    const dailyAvg = (total / 30).toFixed(1);
+    
+    // Find peak day
+    let peakDay = { label: '-', count: 0 };
+    thirtyDaysTrendData.forEach((d) => {
+      if (d.Total > peakDay.count) {
+        peakDay = { label: d.label, count: d.Total };
+      }
+    });
+
+    return {
+      total,
+      totalRingan,
+      totalSedang,
+      totalBerat,
+      cleanDays,
+      dailyAvg,
+      peakDay,
+    };
+  }, [thirtyDaysTrendData]);
+
   // Recharts Monthly Trends Aggregator (Academic Year Cycle: Jul - Jun)
+  // Strictly calculated from actual filtered violations (100% clean when 0 violations)
   const monthlyTrendsData = useMemo(() => {
     const monthDefs = [
       { key: '07', label: 'Jul' },
@@ -256,26 +323,6 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
       { key: '06', label: 'Jun' },
     ];
 
-    // Reference curve for realistic school trend modeling
-    const baselineWeights: Record<string, { r: number; s: number; b: number }> = {
-      '07': { r: 9, s: 3, b: 0 },
-      '08': { r: 14, s: 5, b: 1 },
-      '09': { r: 12, s: 4, b: 0 },
-      '10': { r: 8, s: 2, b: 1 },
-      '11': { r: 7, s: 2, b: 0 },
-      '12': { r: 4, s: 1, b: 0 },
-      '01': { r: 11, s: 3, b: 0 },
-      '02': { r: 8, s: 2, b: 0 },
-      '03': { r: 6, s: 1, b: 0 },
-      '04': { r: 5, s: 1, b: 0 },
-      '05': { r: 4, s: 0, b: 0 },
-      '06': { r: 2, s: 0, b: 0 },
-    };
-
-    const classScale = selectedKelasFilter !== 'all' 
-      ? (1 / 24) 
-      : (selectedJenjangFilter !== 'all' ? (1 / 3) : 1);
-
     return monthDefs.map(({ key, label }) => {
       // Find actual records for this month
       const actualForMonth = filteredViolations.filter((v) => {
@@ -284,25 +331,33 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         return m === key;
       });
 
-      const actualR = actualForMonth.filter((v) => v.tingkat === 'Ringan').length;
-      const actualS = actualForMonth.filter((v) => v.tingkat === 'Sedang').length;
-      const actualB = actualForMonth.filter((v) => v.tingkat === 'Berat').length;
-
-      const base = baselineWeights[key] || { r: 6, s: 2, b: 0 };
-      const Ringan = Math.max(actualR, Math.round(base.r * classScale));
-      const Sedang = Math.max(actualS, Math.round(base.s * classScale));
-      const Berat = Math.max(actualB, Math.round(base.b * classScale));
+      const Ringan = actualForMonth.filter((v) => v.tingkat === 'Ringan').length;
+      const Sedang = actualForMonth.filter((v) => v.tingkat === 'Sedang').length;
+      const Berat = actualForMonth.filter((v) => v.tingkat === 'Berat').length;
       const Total = Ringan + Sedang + Berat;
 
       return {
-        bulan: label,
+        label,
+        name: label,
         Ringan,
         Sedang,
         Berat,
         Total,
       };
     });
-  }, [filteredViolations, selectedKelasFilter, selectedJenjangFilter]);
+  }, [filteredViolations]);
+
+  // Active chart data based on timeframe
+  const activeChartData = useMemo(() => {
+    if (trendTimeframe === '7days') {
+      return thirtyDaysTrendData.slice(-7);
+    }
+    if (trendTimeframe === 'monthly') {
+      return monthlyTrendsData;
+    }
+    return thirtyDaysTrendData;
+  }, [trendTimeframe, thirtyDaysTrendData, monthlyTrendsData]);
+
 
   // Current scope title description
   const activeScopeLabel = useMemo(() => {
@@ -859,60 +914,140 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 <div className="flex items-center gap-2">
                   <Activity className="w-4 h-4 text-[#0B231E]" />
                   <h3 className="font-bold text-slate-900 text-base">
-                    Visualisasi Tren Bulanan Pelanggaran Siswa (Recharts)
+                    {trendTimeframe === '30days' 
+                      ? 'Tren Pelanggaran Siswa 30 Hari Terakhir'
+                      : trendTimeframe === '7days'
+                      ? 'Tren Pelanggaran Siswa 7 Hari Terakhir'
+                      : 'Visualisasi Tren Bulanan Pelanggaran Siswa'}
                   </h3>
+                  <span className="px-2 py-0.5 rounded-full bg-[#83C532]/20 text-[#0B231E] font-bold text-[10px] uppercase font-mono">
+                    Recharts
+                  </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Pemantauan pola kedisiplinan berjangka waktu (Ringan, Sedang, Berat) untuk pimpinan sekolah.
+                  {trendTimeframe === '30days'
+                    ? 'Monitoring harian dinamika kedisiplinan 30 hari terakhir untuk tindakan preventif Tim Kesiswaan.'
+                    : 'Pemantauan pola kedisiplinan berjangka waktu (Ringan, Sedang, Berat) untuk pimpinan sekolah.'}
                 </p>
               </div>
 
-              {/* Chart Visualization Switcher: Area | Bar | Line */}
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs">
-                <button
-                  onClick={() => setChartVizType('area')}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                    chartVizType === 'area'
-                      ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="Diagram Area Volumetrik"
-                >
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  <span>Area</span>
-                </button>
-                <button
-                  onClick={() => setChartVizType('bar')}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                    chartVizType === 'bar'
-                      ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="Diagram Batang Akumulasi"
-                >
-                  <BarChart3 className="w-3.5 h-3.5" />
-                  <span>Batang</span>
-                </button>
-                <button
-                  onClick={() => setChartVizType('line')}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                    chartVizType === 'line'
-                      ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="Grafik Garis Komparatif"
-                >
-                  <Activity className="w-3.5 h-3.5" />
-                  <span>Garis</span>
-                </button>
+              {/* Timeframe & Chart Visualization Switchers */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Timeframe Switcher */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs">
+                  <button
+                    onClick={() => setTrendTimeframe('30days')}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                      trendTimeframe === '30days'
+                        ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    30 Hari
+                  </button>
+                  <button
+                    onClick={() => setTrendTimeframe('7days')}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                      trendTimeframe === '7days'
+                        ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    7 Hari
+                  </button>
+                  <button
+                    onClick={() => setTrendTimeframe('monthly')}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                      trendTimeframe === 'monthly'
+                        ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Bulanan
+                  </button>
+                </div>
+
+                {/* Chart Visualization Switcher: Area | Bar | Line */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs">
+                  <button
+                    onClick={() => setChartVizType('area')}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                      chartVizType === 'area'
+                        ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="Diagram Area Volumetrik"
+                  >
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>Area</span>
+                  </button>
+                  <button
+                    onClick={() => setChartVizType('bar')}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                      chartVizType === 'bar'
+                        ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="Diagram Batang Akumulasi"
+                  >
+                    <BarChart3 className="w-3.5 h-3.5" />
+                    <span>Batang</span>
+                  </button>
+                  <button
+                    onClick={() => setChartVizType('line')}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                      chartVizType === 'line'
+                        ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="Grafik Garis Komparatif"
+                  >
+                    <Activity className="w-3.5 h-3.5" />
+                    <span>Garis</span>
+                  </button>
+                </div>
               </div>
             </div>
 
+            {/* 30-Day Specific Metrics Highlights */}
+            {trendTimeframe === '30days' && (
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/60">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase block">Total Kasus (30 Hari)</span>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <span className="text-lg font-mono font-black text-slate-900">{thirtyDaysStats.total}</span>
+                    <span className="text-[10px] text-slate-400">kasus</span>
+                  </div>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/60">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase block">Rata-rata Harian</span>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <span className="text-lg font-mono font-black text-slate-900">{thirtyDaysStats.dailyAvg}</span>
+                    <span className="text-[10px] text-slate-400">kasus/hari</span>
+                  </div>
+                </div>
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/60">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase block">Hari Tertinggi</span>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <span className="text-sm font-bold text-slate-800">{thirtyDaysStats.peakDay.label}</span>
+                    <span className="text-[10px] font-mono text-slate-500">({thirtyDaysStats.peakDay.count} kasus)</span>
+                  </div>
+                </div>
+                <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200/60">
+                  <span className="text-[10px] font-bold text-emerald-800 uppercase block">Hari Bebas Pelanggaran</span>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <span className="text-lg font-mono font-black text-emerald-700">{thirtyDaysStats.cleanDays}</span>
+                    <span className="text-[10px] text-emerald-600">/ 30 Hari</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Recharts Container */}
-            <div className="w-full h-72 sm:h-80 mt-5">
+            <div className="w-full h-72 sm:h-80 mt-4">
               <ResponsiveContainer width="100%" height="100%">
                 {chartVizType === 'area' ? (
-                  <AreaChart data={monthlyTrendsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <AreaChart data={activeChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorRingan" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#10B981" stopOpacity={0.7} />
@@ -932,7 +1067,12 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                    <XAxis dataKey="bulan" tick={{ fontSize: 11, fill: '#64748B' }} stroke="#CBD5E1" />
+                    <XAxis 
+                      dataKey="label" 
+                      tick={{ fontSize: 10, fill: '#64748B' }} 
+                      stroke="#CBD5E1" 
+                      interval={trendTimeframe === '30days' ? 3 : 0}
+                    />
                     <YAxis tick={{ fontSize: 11, fill: '#64748B' }} stroke="#CBD5E1" allowDecimals={false} />
                     <Tooltip 
                       contentStyle={{ 
@@ -955,9 +1095,14 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                     <Area type="monotone" dataKey="Berat" stroke="#EF4444" strokeWidth={2.5} fillOpacity={1} fill="url(#colorBerat)" />
                   </AreaChart>
                 ) : chartVizType === 'bar' ? (
-                  <BarChart data={monthlyTrendsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <BarChart data={activeChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                    <XAxis dataKey="bulan" tick={{ fontSize: 11, fill: '#64748B' }} stroke="#CBD5E1" />
+                    <XAxis 
+                      dataKey="label" 
+                      tick={{ fontSize: 10, fill: '#64748B' }} 
+                      stroke="#CBD5E1" 
+                      interval={trendTimeframe === '30days' ? 3 : 0}
+                    />
                     <YAxis tick={{ fontSize: 11, fill: '#64748B' }} stroke="#CBD5E1" allowDecimals={false} />
                     <Tooltip 
                       contentStyle={{ 
@@ -976,9 +1121,14 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                     <Bar dataKey="Berat" fill="#EF4444" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 ) : (
-                  <LineChart data={monthlyTrendsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <LineChart data={activeChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                    <XAxis dataKey="bulan" tick={{ fontSize: 11, fill: '#64748B' }} stroke="#CBD5E1" />
+                    <XAxis 
+                      dataKey="label" 
+                      tick={{ fontSize: 10, fill: '#64748B' }} 
+                      stroke="#CBD5E1" 
+                      interval={trendTimeframe === '30days' ? 3 : 0}
+                    />
                     <YAxis tick={{ fontSize: 11, fill: '#64748B' }} stroke="#CBD5E1" allowDecimals={false} />
                     <Tooltip 
                       contentStyle={{ 
@@ -992,9 +1142,9 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                       labelStyle={{ color: '#83C532', fontWeight: 'bold', fontSize: '12px' }}
                     />
                     <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
-                    <Line type="monotone" dataKey="Ringan" stroke="#10B981" strokeWidth={3} dot={{ r: 4, fill: '#10B981' }} activeDot={{ r: 6 }} />
-                    <Line type="monotone" dataKey="Sedang" stroke="#F59E0B" strokeWidth={3} dot={{ r: 4, fill: '#F59E0B' }} activeDot={{ r: 6 }} />
-                    <Line type="monotone" dataKey="Berat" stroke="#EF4444" strokeWidth={3} dot={{ r: 4, fill: '#EF4444' }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="Ringan" stroke="#10B981" strokeWidth={3} dot={{ r: 3, fill: '#10B981' }} activeDot={{ r: 5 }} />
+                    <Line type="monotone" dataKey="Sedang" stroke="#F59E0B" strokeWidth={3} dot={{ r: 3, fill: '#F59E0B' }} activeDot={{ r: 5 }} />
+                    <Line type="monotone" dataKey="Berat" stroke="#EF4444" strokeWidth={3} dot={{ r: 3, fill: '#EF4444' }} activeDot={{ r: 5 }} />
                     <Line type="monotone" dataKey="Total" stroke="#0B231E" strokeWidth={2} strokeDasharray="4 4" dot={false} />
                   </LineChart>
                 )}

@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Student roster and violation status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nisn": { "type": "string" },
+        "nama": { "type": "string" },
+        "kelas": { "type": "string" },
+        "jenjang": { "type": "number" },
+        "gender": { "type": "string" },
+        "noHpSiswa": { "type": "string" },
+        "namaOrtu": { "type": "string" },
+        "noWaOrtu": { "type": "string" },
+        "alamat": { "type": "string" },
+        "statusKehadiran": { "type": "string" },
+        "keteranganKehadiran": { "type": "string" },
+        "totalPelanggaranRingan": { "type": "number" },
+        "totalPelanggaranSedang": { "type": "number" },
+        "totalPelanggaranBerat": { "type": "number" },
+        "totalPoinPelanggaran": { "type": "number" }
+      },
+      "required": ["id", "nama", "kelas"]
+    },
+    "ViolationRecord": {
+      "title": "ViolationRecord",
+      "description": "Student discipline and violation log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "kelas": { "type": "string" },
+        "category": { "type": "string" },
+        "ruleId": { "type": "string" },
+        "ruleDescription": { "type": "string" },
+        "points": { "type": "number" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "location": { "type": "string" },
+        "reportedBy": { "type": "string" },
+        "actionTaken": { "type": "string" },
+        "followUpStatus": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "studentId", "points", "date"]
+    },
+    "WhatsAppMessageLog": {
+      "title": "WhatsAppMessageLog",
+      "description": "Sent notification logs to parents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "recipientPhone": { "type": "string" },
+        "recipientName": { "type": "string" },
+        "studentName": { "type": "string" },
+        "message": { "type": "string" },
+        "sentAt": { "type": "string" },
+        "status": { "type": "string" },
+        "category": { "type": "string" }
+      },
+      "required": ["id", "recipientPhone", "message", "sentAt"]
+    },
+    "AttendanceSheet": {
+      "title": "AttendanceSheet",
+      "description": "Daily attendance sheet for a class",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "kelas": { "type": "string" },
+        "recordedBy": { "type": "string" },
+        "recordedByNip": { "type": "string" },
+        "recordedAt": { "type": "string" }
+      },
+      "required": ["id", "date", "kelas"]
+    },
+    "SchoolProfile": {
+      "title": "SchoolProfile",
+      "description": "School settings, letterhead, and official signatories",
+      "type": "object",
+      "properties": {
+        "schoolName": { "type": "string" },
+        "npsn": { "type": "string" },
+        "alamat": { "type": "string" },
+        "kepsekName": { "type": "string" },
+        "kepsekNip": { "type": "string" }
+      },
+      "required": ["schoolName"]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Collection of student records"
+    },
+    "/violations/{violationId}": {
+      "schema": "ViolationRecord",
+      "description": "Discipline violation records"
+    },
+    "/wa_logs/{logId}": {
+      "schema": "WhatsAppMessageLog",
+      "description": "WhatsApp dispatch logs"
+    },
+    "/attendance_sheets/{sheetId}": {
+      "schema": "AttendanceSheet",
+      "description": "Class daily attendance sheets"
+    },
+    "/school_config/{configId}": {
+      "schema": "SchoolProfile",
+      "description": "School profile and operational configurations"
+    }
+  }
+}

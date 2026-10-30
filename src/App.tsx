@@ -12,6 +12,21 @@ import {
   saveSchoolConfig,
   resetToDefaultData 
 } from './services/storage';
+import { 
+  subscribeToStudents,
+  subscribeToViolations,
+  subscribeToWaLogs,
+  subscribeToSchoolConfig,
+  syncStudentToFirestore,
+  deleteStudentFromFirestore,
+  syncViolationToFirestore,
+  deleteViolationFromFirestore,
+  syncWaLogToFirestore,
+  deleteWaLogFromFirestore,
+  syncSchoolConfigToFirestore,
+  bulkImportStudentsToFirestore,
+  clearAllFirestoreData,
+} from './services/firebase';
 import { getCurrentUser, isGuestMode } from './services/authService';
 import { logAudit } from './services/auditLogger';
 import { Sidebar } from './components/layout/Sidebar';
@@ -62,6 +77,32 @@ export default function App() {
   // Sharpened Individual Student Slip Detail Modal
   const [detailedSlipStudent, setDetailedSlipStudent] = useState<Student | null>(null);
 
+  // Real-time synchronization across accounts & devices via Firestore onSnapshot
+  useEffect(() => {
+    const unsubStudents = subscribeToStudents((remoteStudents) => {
+      setStudents(remoteStudents);
+    });
+
+    const unsubViolations = subscribeToViolations((remoteViolations) => {
+      setViolations(remoteViolations);
+    });
+
+    const unsubWaLogs = subscribeToWaLogs((remoteLogs) => {
+      setWaLogs(remoteLogs);
+    });
+
+    const unsubConfig = subscribeToSchoolConfig((remoteConfig) => {
+      setSchoolConfig((prev) => ({ ...prev, ...remoteConfig }));
+    });
+
+    return () => {
+      unsubStudents();
+      unsubViolations();
+      unsubWaLogs();
+      unsubConfig();
+    };
+  }, []);
+
   // Sync to local storage
   useEffect(() => {
     saveStudents(students);
@@ -94,6 +135,8 @@ export default function App() {
     }
 
     setStudents((prev) => [newStudent, ...prev]);
+    // Real-time sync to Firestore across all accounts and devices
+    syncStudentToFirestore(newStudent).catch(console.error);
 
     logAudit({
       actionType: 'CREATE',
@@ -119,6 +162,8 @@ export default function App() {
     setStudents((prev) =>
       prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s))
     );
+    // Real-time sync to Firestore
+    syncStudentToFirestore(updatedStudent).catch(console.error);
 
     logAudit({
       actionType: 'UPDATE',
@@ -143,6 +188,8 @@ export default function App() {
 
     const target = students.find((s) => s.id === studentId);
     setStudents((prev) => prev.filter((s) => s.id !== studentId));
+    // Real-time delete from Firestore
+    deleteStudentFromFirestore(studentId).catch(console.error);
 
     logAudit({
       actionType: 'DELETE',
@@ -166,6 +213,8 @@ export default function App() {
     }
 
     setStudents((prev) => [...newStudents, ...prev]);
+    // Real-time bulk sync to Firestore
+    bulkImportStudentsToFirestore(newStudents).catch(console.error);
 
     logAudit({
       actionType: 'CREATE',
@@ -190,6 +239,10 @@ export default function App() {
     }
 
     setViolations((prev) => [newViolation, ...prev]);
+    // Real-time sync violation to Firestore
+    syncViolationToFirestore(newViolation).catch(console.error);
+
+    let updatedTargetStudent: Student | null = null;
 
     setStudents((prev) =>
       prev.map((s) => {
@@ -198,17 +251,23 @@ export default function App() {
           const isSedang = newViolation.tingkat === 'Sedang' ? 1 : 0;
           const isBerat = newViolation.tingkat === 'Berat' ? 1 : 0;
 
-          return {
+          const updated = {
             ...s,
             totalPoinPelanggaran: (s.totalPoinPelanggaran || 0) + (newViolation.poin || 0),
             totalPelanggaranRingan: (s.totalPelanggaranRingan || 0) + isRingan,
             totalPelanggaranSedang: (s.totalPelanggaranSedang || 0) + isSedang,
             totalPelanggaranBerat: (s.totalPelanggaranBerat || 0) + isBerat,
           };
+          updatedTargetStudent = updated;
+          return updated;
         }
         return s;
       })
     );
+
+    if (updatedTargetStudent) {
+      syncStudentToFirestore(updatedTargetStudent).catch(console.error);
+    }
 
     logAudit({
       actionType: 'CREATE',
@@ -241,11 +300,16 @@ export default function App() {
       return;
     }
 
+    const targetV = violations.find((v) => v.id === violationId);
+    if (targetV) {
+      const updated = { ...targetV, statusSurat: newStatus };
+      syncViolationToFirestore(updated).catch(console.error);
+    }
+
     setViolations((prev) =>
       prev.map((v) => (v.id === violationId ? { ...v, statusSurat: newStatus } : v))
     );
 
-    const targetV = violations.find((v) => v.id === violationId);
     logAudit({
       actionType: 'UPDATE',
       module: 'Pelanggaran',
@@ -263,14 +327,104 @@ export default function App() {
     }
   };
 
+  // Delete individual violation manually
+  const handleDeleteViolation = (violationId: string) => {
+    if (isGuestMode()) {
+      setResetErrorToast('Akses Ditolak: Anda sedang dalam Mode Tamu. Hanya akun petugas resmi yang berwenang menghapus catatan pelanggaran.');
+      setTimeout(() => setResetErrorToast(null), 5000);
+      setIsAccountSwitchOpen(true);
+      return;
+    }
+
+    const targetV = violations.find((v) => v.id === violationId);
+    if (!targetV) return;
+
+    setViolations((prev) => prev.filter((v) => v.id !== violationId));
+    // Real-time delete violation from Firestore
+    deleteViolationFromFirestore(violationId).catch(console.error);
+
+    // Deduct student's violation points and counts
+    let updatedTargetStudent: Student | null = null;
+    setStudents((prev) =>
+      prev.map((s) => {
+        if (s.id === targetV.studentId) {
+          const isRingan = targetV.tingkat === 'Ringan' ? 1 : 0;
+          const isSedang = targetV.tingkat === 'Sedang' ? 1 : 0;
+          const isBerat = targetV.tingkat === 'Berat' ? 1 : 0;
+
+          const updated = {
+            ...s,
+            totalPoinPelanggaran: Math.max(0, (s.totalPoinPelanggaran || 0) - (targetV.poin || 0)),
+            totalPelanggaranRingan: Math.max(0, (s.totalPelanggaranRingan || 0) - isRingan),
+            totalPelanggaranSedang: Math.max(0, (s.totalPelanggaranSedang || 0) - isSedang),
+            totalPelanggaranBerat: Math.max(0, (s.totalPelanggaranBerat || 0) - isBerat),
+          };
+          updatedTargetStudent = updated;
+          return updated;
+        }
+        return s;
+      })
+    );
+
+    if (updatedTargetStudent) {
+      syncStudentToFirestore(updatedTargetStudent).catch(console.error);
+    }
+
+    logAudit({
+      actionType: 'DELETE',
+      module: 'Pelanggaran',
+      description: `Menghapus pelanggaran ${targetV.tingkat}: ${targetV.studentName} (Kelas ${targetV.kelas}) - ${targetV.kodePasal}`,
+      status: 'SUCCESS',
+    });
+
+    setResetSuccessToast(`Catatan pelanggaran ${targetV.studentName} berhasil dihapus.`);
+    setTimeout(() => setResetSuccessToast(null), 4000);
+  };
+
+  // Clear all violations manually
+  const handleClearAllViolations = () => {
+    if (isGuestMode()) {
+      setResetErrorToast('Akses Ditolak: Anda sedang dalam Mode Tamu. Hanya akun petugas resmi yang berwenang mengosongkan data.');
+      setTimeout(() => setResetErrorToast(null), 5000);
+      setIsAccountSwitchOpen(true);
+      return;
+    }
+
+    setViolations([]);
+    violations.forEach((v) => deleteViolationFromFirestore(v.id).catch(console.error));
+
+    const cleanedStudents = students.map((s) => ({
+      ...s,
+      totalPelanggaranRingan: 0,
+      totalPelanggaranSedang: 0,
+      totalPelanggaranBerat: 0,
+      totalPoinPelanggaran: 0,
+    }));
+    setStudents(cleanedStudents);
+    bulkImportStudentsToFirestore(cleanedStudents).catch(console.error);
+
+    logAudit({
+      actionType: 'DELETE',
+      module: 'Pelanggaran',
+      description: 'Mengosongkan seluruh buku catatan pelanggaran secara manual.',
+      status: 'SUCCESS',
+    });
+
+    setResetSuccessToast('Seluruh buku catatan pelanggaran berhasil dikosongkan!');
+    setTimeout(() => setResetSuccessToast(null), 4000);
+  };
+
   // Add WhatsApp Log
   const handleAddWaLog = (newLog: WhatsAppMessageLog) => {
     if (isGuestMode()) {
-      alert('Akses Ditolak: Mode Tamu tidak berhak mencatat riwayat WhatsApp.');
+      setResetErrorToast('Akses Ditolak: Mode Tamu tidak berhak mencatat riwayat WhatsApp.');
+      setTimeout(() => setResetErrorToast(null), 4000);
       return;
     }
 
     setWaLogs((prev) => [newLog, ...prev]);
+    // Real-time sync to Firestore
+    syncWaLogToFirestore(newLog).catch(console.error);
 
     logAudit({
       actionType: 'CREATE',
@@ -280,10 +434,37 @@ export default function App() {
     });
   };
 
+  // Delete individual WhatsApp Log
+  const handleDeleteWaLog = (logId: string) => {
+    if (isGuestMode()) {
+      setResetErrorToast('Akses Ditolak: Mode Tamu tidak berhak menghapus riwayat pesan.');
+      setTimeout(() => setResetErrorToast(null), 4000);
+      return;
+    }
+    setWaLogs((prev) => prev.filter((l) => l.id !== logId));
+    deleteWaLogFromFirestore(logId).catch(console.error);
+    setResetSuccessToast('Riwayat pesan WhatsApp berhasil dihapus.');
+    setTimeout(() => setResetSuccessToast(null), 3000);
+  };
+
+  // Clear all WhatsApp Logs
+  const handleClearAllWaLogs = () => {
+    if (isGuestMode()) {
+      setResetErrorToast('Akses Ditolak: Mode Tamu tidak berhak mengosongkan riwayat pesan.');
+      setTimeout(() => setResetErrorToast(null), 4000);
+      return;
+    }
+    waLogs.forEach((l) => deleteWaLogFromFirestore(l.id).catch(console.error));
+    setWaLogs([]);
+    setResetSuccessToast('Seluruh riwayat pesan WhatsApp berhasil dibersihkan.');
+    setTimeout(() => setResetSuccessToast(null), 3000);
+  };
+
   // Quick Violation modal trigger
   const handleTriggerQuickViolation = (studentId?: string) => {
     if (isGuestMode()) {
-      alert('Akses Ditolak: Anda saat ini berada dalam Mode Tamu (Guest - View Only). Mode Tamu hanya berhak membuka dan melihat menu. Silakan login ke salah satu dari 55 akun petugas untuk mencatat pelanggaran.');
+      setResetErrorToast('Akses Ditolak: Anda saat ini berada dalam Mode Tamu (Guest - View Only). Mode Tamu hanya berhak membuka dan melihat menu. Silakan login ke salah satu dari 55 akun petugas untuk mencatat pelanggaran.');
+      setTimeout(() => setResetErrorToast(null), 6000);
       logAudit({
         actionType: 'BLOCKED',
         module: 'Pelanggaran',
@@ -300,6 +481,7 @@ export default function App() {
   // Settings update
   const handleUpdateSchoolConfig = (newConfig: SchoolProfile) => {
     setSchoolConfig(newConfig);
+    syncSchoolConfigToFirestore(newConfig).catch(console.error);
   };
 
   // Trigger Reset Data with In-App Confirmation Modal (no window.confirm / alert)
@@ -314,7 +496,7 @@ export default function App() {
   };
 
   // Perform full database reset
-  const handleConfirmResetData = () => {
+  const handleConfirmResetData = async () => {
     try {
       const reset = resetToDefaultData();
       localStorage.removeItem('bsan_grisaka_attendance_sheets_v1');
@@ -324,15 +506,18 @@ export default function App() {
       setWaLogs(reset.logs);
       setSchoolConfig(reset.config);
 
+      // Wipe Firestore so all other devices and accounts are updated cleanly in real time
+      await clearAllFirestoreData();
+
       logAudit({
         actionType: 'RESET',
         module: 'Sistem',
-        description: 'Mereset database: Seluruh 24 rombel dibersihkan secara tuntas (0 kasus pelanggaran, status Hadir) dan riwayat pelanggaran dikosongkan.',
+        description: 'Mereset database & data contoh: Seluruh data contoh siswa, presensi, pelanggaran, dan riwayat dibersihkan total secara tuntas (0 siswa, 0 kasus, presensi bersih).',
         status: 'SUCCESS',
       });
 
       setIsResetConfirmModalOpen(false);
-      setResetSuccessToast('Database berhasil dibersihkan & di-reset! Seluruh 24 rombel kini berada dalam kondisi bersih (0 kasus pelanggaran, status Hadir).');
+      setResetSuccessToast('Data contoh berhasil dibersihkan total! Presensi kini bersih tanpa nama siswa, dan seluruh perangkat telah tersinkronisasi realtime.');
       setTimeout(() => setResetSuccessToast(null), 5000);
     } catch (err) {
       console.error('Reset error:', err);
@@ -389,7 +574,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+      <div className="flex-1 flex flex-col min-w-0 w-full min-h-screen overflow-x-hidden">
         {/* Top Header with Mobile Hamburger, Account Switcher & Mode Tamu Indicator */}
         <Header
           currentView={currentView}
@@ -402,8 +587,8 @@ export default function App() {
           onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
         />
 
-        {/* Viewport Content */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
+        {/* Viewport Content with clean mobile padding & responsive spacing */}
+        <main className="flex-1 px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 max-w-7xl w-full mx-auto space-y-4 sm:space-y-6">
           {currentView === 'dashboard' && (
             <ExecutiveDashboard
               students={students}
@@ -433,7 +618,10 @@ export default function App() {
             <AttendanceManagerView
               students={students}
               schoolConfig={schoolConfig}
-              onUpdateStudentsAttendance={(updated) => setStudents(updated)}
+              onUpdateStudentsAttendance={(updated) => {
+                setStudents(updated);
+                bulkImportStudentsToFirestore(updated).catch(console.error);
+              }}
               onOpenAccountSwitchModal={() => setIsAccountSwitchOpen(true)}
             />
           )}
@@ -446,6 +634,8 @@ export default function App() {
               onOpenRecordModal={() => handleTriggerQuickViolation()}
               onOpenSuratModal={handleOpenSuratModal}
               onUpdateViolationStatus={handleUpdateViolationStatus}
+              onDeleteViolation={handleDeleteViolation}
+              onClearAllViolations={handleClearAllViolations}
             />
           )}
 
@@ -463,8 +653,11 @@ export default function App() {
               waLogs={waLogs}
               schoolConfig={schoolConfig}
               onAddLog={handleAddWaLog}
+              onDeleteLog={handleDeleteWaLog}
+              onClearAllLogs={handleClearAllWaLogs}
             />
           )}
+
 
           {currentView === 'reports' && (
             <ComprehensiveReports
