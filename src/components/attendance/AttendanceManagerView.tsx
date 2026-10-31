@@ -22,6 +22,7 @@ import { isGuestMode, getCurrentUser } from '../../services/authService';
 import { logAudit } from '../../services/auditLogger';
 import { exportAttendanceToWord, exportAttendanceToExcel, getPeriodLabel } from '../../utils/exportAttendance';
 import { exportElementToPDF } from '../../utils/exportDocs';
+import { sortByName, sortByClassAndName } from '../../utils/sortUtils';
 import { 
   CalendarCheck, 
   CheckCircle2, 
@@ -86,9 +87,10 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Filter students belonging to the currently selected class
+  // Filter students belonging to the currently selected class, sorted alphabetically (urut absen A-Z)
   const classStudents = useMemo(() => {
-    return students.filter((s) => s.kelas === selectedKelas);
+    const filtered = students.filter((s) => s.kelas === selectedKelas);
+    return sortByName(filtered);
   }, [students, selectedKelas]);
 
   // Load or initialize attendance entries when selectedKelas or selectedDate changes
@@ -96,9 +98,11 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
     const existingSheet = getAttendanceByClassAndDate(selectedKelas, selectedDate);
     
     if (existingSheet && existingSheet.entries.length > 0) {
-      setEntries(existingSheet.entries);
+      // Ensure loaded entries are sorted alphabetically by student name (urut absen A-Z)
+      const sortedEntries = sortByName(existingSheet.entries);
+      setEntries(sortedEntries);
     } else {
-      // Initialize from current students database
+      // Initialize from current students database (already sorted by name)
       const newEntries: AttendanceStudentEntry[] = classStudents.map((std) => ({
         studentId: std.id,
         nisn: std.nisn,

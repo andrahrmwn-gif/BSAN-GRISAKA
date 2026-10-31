@@ -1,5 +1,6 @@
 import { AttendanceRecapRow, SchoolProfile, AttendancePeriod } from '../types';
 import { exportElementToPDF } from './exportDocs';
+import { sortByClassAndName } from './sortUtils';
 
 export const getPeriodLabel = (period: AttendancePeriod, targetDate: string): string => {
   const d = new Date(targetDate);
@@ -43,13 +44,16 @@ export const exportAttendanceToWord = (
   const periodLabel = getPeriodLabel(period, targetDate);
   const scopeLabel = kelas === 'all' ? 'Seluruh Kelas (24 Rombel)' : `Kelas ${kelas}`;
   
-  const totalSiswa = recapRows.length;
-  const totalHadir = recapRows.reduce((acc, r) => acc + r.totalHadir, 0);
-  const totalSakit = recapRows.reduce((acc, r) => acc + r.totalSakit, 0);
-  const totalIzin = recapRows.reduce((acc, r) => acc + r.totalIzin, 0);
-  const totalAlfa = recapRows.reduce((acc, r) => acc + r.totalAlfa, 0);
+  // Sort from smallest to largest class (7A -> 9H) and by student name alphabetically (urut absen A-Z)
+  const sortedRecapRows = sortByClassAndName(recapRows);
+
+  const totalSiswa = sortedRecapRows.length;
+  const totalHadir = sortedRecapRows.reduce((acc, r) => acc + r.totalHadir, 0);
+  const totalSakit = sortedRecapRows.reduce((acc, r) => acc + r.totalSakit, 0);
+  const totalIzin = sortedRecapRows.reduce((acc, r) => acc + r.totalIzin, 0);
+  const totalAlfa = sortedRecapRows.reduce((acc, r) => acc + r.totalAlfa, 0);
   const avgKehadiran = totalSiswa > 0 
-    ? Math.round(recapRows.reduce((acc, r) => acc + r.persentaseHadir, 0) / totalSiswa)
+    ? Math.round(sortedRecapRows.reduce((acc, r) => acc + r.persentaseHadir, 0) / totalSiswa)
     : 100;
 
   const todayStr = new Intl.DateTimeFormat('id-ID', {
@@ -58,7 +62,7 @@ export const exportAttendanceToWord = (
     year: 'numeric'
   }).format(new Date());
 
-  const rowsHtml = recapRows.map((r, i) => `
+  const rowsHtml = sortedRecapRows.map((r, i) => `
     <tr>
       <td style="text-align: center; padding: 6px; border: 1px solid #000;">${i + 1}</td>
       <td style="text-align: center; padding: 6px; border: 1px solid #000; font-family: monospace;">${r.nisn}</td>
@@ -226,6 +230,9 @@ export const exportAttendanceToExcel = (
   const periodLabel = getPeriodLabel(period, targetDate);
   const scopeLabel = kelas === 'all' ? 'Seluruh Kelas (24 Rombel)' : `Kelas ${kelas}`;
 
+  // Sort from smallest to largest class (7A -> 9H) and by student name alphabetically (A-Z)
+  const sortedRecapRows = sortByClassAndName(recapRows);
+
   const headerMeta = [
     `PEMERINTAH KABUPATEN TEMANGGUNG - DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA`,
     `${schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'}`,
@@ -249,7 +256,7 @@ export const exportAttendanceToExcel = (
     'Keterangan'
   ];
 
-  const dataRows = recapRows.map((r, i) => [
+  const dataRows = sortedRecapRows.map((r, i) => [
     i + 1,
     `'${r.nisn}`,
     `"${r.nama.replace(/"/g, '""')}"`,

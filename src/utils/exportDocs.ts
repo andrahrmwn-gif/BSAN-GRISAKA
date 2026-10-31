@@ -2,6 +2,7 @@ import { Student, ViolationRecord, SchoolProfile } from '../types';
 import { SCHOOL_CONFIG } from '../data/schoolConfig';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { sortByClassAndName } from './sortUtils';
 
 /**
  * Export student data or violations to clean CSV that opens directly in Excel
@@ -1373,6 +1374,9 @@ export function exportAttendanceToCSV(
 ): void {
   const headers = ['No', 'NISN', 'Nama Siswa', 'L/P', 'Kelas', 'Hadir (H)', 'Sakit (S)', 'Izin (I)', 'Alfa (A)', '% Kehadiran', 'Keterangan'];
   
+  // Sort from smallest to largest class and student name alphabetically (urut absen A-Z)
+  const sortedRows = sortByClassAndName(rows);
+
   const csvRows = [
     `"PEMERINTAH KABUPATEN TEMANGGUNG"`,
     `"DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA"`,
@@ -1382,8 +1386,8 @@ export function exportAttendanceToCSV(
     `"Ringkasan: Total Siswa=${summary.totalStudents}, Hadir=${summary.hadir}, Sakit=${summary.sakit}, Izin=${summary.izin}, Alfa=${summary.alfa}, Rata-rata Kehadiran=${summary.percentHadir}"`,
     '',
     headers.map(h => `"${h}"`).join(','),
-    ...rows.map(r => [
-      r.no,
+    ...sortedRows.map((r, i) => [
+      i + 1,
       `="${r.nisn}"`,
       `"${r.nama.replace(/"/g, '""')}"`,
       `"${r.gender}"`,
@@ -1421,9 +1425,12 @@ export function exportAttendanceToWord(
     year: 'numeric'
   }).format(new Date());
 
-  const tableRows = rows.map(r => `
+  // Sort from smallest to largest class and student name alphabetically (urut absen A-Z)
+  const sortedRows = sortByClassAndName(rows);
+
+  const tableRows = sortedRows.map((r, i) => `
     <tr>
-      <td style="border:1px solid #333; padding:5px; text-align:center;">${r.no}</td>
+      <td style="border:1px solid #333; padding:5px; text-align:center;">${i + 1}</td>
       <td style="border:1px solid #333; padding:5px; text-align:center; font-family:Courier New, monospace;">${r.nisn}</td>
       <td style="border:1px solid #333; padding:5px; font-weight:500;">${r.nama}</td>
       <td style="border:1px solid #333; padding:5px; text-align:center;">${r.gender}</td>

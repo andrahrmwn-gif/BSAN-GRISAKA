@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Student, ViolationRecord, ViewMode, SchoolProfile } from '../../types';
+import { Student, ViolationRecord, ViewMode, SchoolProfile, AttendanceStatus } from '../../types';
 import { KELAS_LIST } from '../../data/schoolConfig';
+import { sortByClassAndName } from '../../utils/sortUtils';
+import { exportToCSV } from '../../utils/exportDocs';
+import { getWhatsAppUrl, generateAttendanceMessage } from '../../utils/whatsapp';
 import { 
   Users, 
   CheckCircle, 
@@ -32,7 +35,9 @@ import {
   ChevronDown,
   RotateCcw,
   Search,
-  ExternalLink
+  ExternalLink,
+  FileSpreadsheet,
+  X
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -75,6 +80,11 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   
   // Recharts timeframe: '30days' (default) | '7days' | 'monthly'
   const [trendTimeframe, setTrendTimeframe] = useState<'30days' | '7days' | 'monthly'>('30days');
+
+  // Attendance KPI Click Interaction Modal State
+  const [selectedKpiStatus, setSelectedKpiStatus] = useState<AttendanceStatus | null>(null);
+  const [statusSearchQuery, setStatusSearchQuery] = useState('');
+  const [statusClassFilter, setStatusClassFilter] = useState<string>('all');
 
   // Real-time large clock state for home executive dashboard KPI
   const [timeState, setTimeState] = useState({
@@ -241,6 +251,53 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
     return { total, hadir, sakit, izin, alfa, percentHadir };
   }, [filteredStudents]);
+
+  // Filtered and sorted students for the clicked attendance KPI modal
+  const selectedStatusStudents = useMemo(() => {
+    if (!selectedKpiStatus) return [];
+
+    let list = students.filter((s) => {
+      const status = s.statusKehadiran || 'Hadir';
+      return status === selectedKpiStatus;
+    });
+
+    if (statusClassFilter !== 'all') {
+      list = list.filter((s) => s.kelas === statusClassFilter);
+    }
+
+    if (statusSearchQuery.trim()) {
+      const q = statusSearchQuery.toLowerCase().trim();
+      list = list.filter((s) =>
+        s.nama.toLowerCase().includes(q) ||
+        s.nisn.toLowerCase().includes(q) ||
+        s.kelas.toLowerCase().includes(q) ||
+        (s.keteranganKehadiran && s.keteranganKehadiran.toLowerCase().includes(q))
+      );
+    }
+
+    // Always sort from smallest class to largest class (7A - 9H) and alphabetically / urut absen (A-Z)
+    return sortByClassAndName(list);
+  }, [students, selectedKpiStatus, statusClassFilter, statusSearchQuery]);
+
+  const handleExportStatusListToExcel = () => {
+    if (!selectedKpiStatus || selectedStatusStudents.length === 0) return;
+
+    const exportData = selectedStatusStudents.map((s, idx) => ({
+      No: idx + 1,
+      NISN: s.nisn,
+      'Nama Siswa': s.nama,
+      Kelas: s.kelas,
+      'L/P': s.gender,
+      'Status Kehadiran': s.statusKehadiran || 'Hadir',
+      Keterangan: s.keteranganKehadiran || '-',
+      'Nama Orang Tua': s.namaOrtu || '-',
+      'No WA Ortu': s.noWaOrtu || '-'
+    }));
+
+    const statusLabel = selectedKpiStatus === 'Alfa' ? 'Alpa' : selectedKpiStatus;
+    const filename = `Daftar_Siswa_${statusLabel}_${schoolConfig.shortName || 'GRISAKA'}_${new Date().toISOString().split('T')[0]}`;
+    exportToCSV(exportData, filename);
+  };
 
   // 30 Days Trend Aggregator for Student Violations (Recharts)
   // Strictly calculated day-by-day from actual filtered violations for the last 30 days
@@ -1192,39 +1249,95 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
               </span>
             </div>
 
-            {/* Quick 4-Status Counter Grid */}
+            {/* Quick 4-Status Counter Grid (Clickable to view detailed list of students) */}
             <div className="grid grid-cols-2 gap-2 mt-4">
-              <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-200">
-                <span className="text-[10px] uppercase font-bold text-emerald-800">Hadir (H)</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedKpiStatus('Hadir');
+                  setStatusClassFilter('all');
+                  setStatusSearchQuery('');
+                }}
+                className="p-2.5 rounded-2xl bg-emerald-50/70 hover:bg-emerald-100/90 border border-emerald-200 hover:border-emerald-300 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs active:scale-98"
+                title="Klik untuk melihat daftar seluruh siswa yang Hadir hari ini"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold text-emerald-800">Hadir (H)</span>
+                  <span className="text-[9px] font-semibold text-emerald-600 group-hover:underline flex items-center gap-0.5">
+                    Lihat <ArrowUpRight className="w-2.5 h-2.5" />
+                  </span>
+                </div>
                 <div className="text-xl font-black font-mono text-emerald-700 mt-0.5">
                   {todayAttendanceMetrics.hadir}
                 </div>
                 <span className="text-[10px] text-emerald-600">Siswa Masuk</span>
-              </div>
+              </button>
 
-              <div className="p-2.5 rounded-2xl bg-amber-50/70 border border-amber-200">
-                <span className="text-[10px] uppercase font-bold text-amber-800">Sakit (S)</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedKpiStatus('Sakit');
+                  setStatusClassFilter('all');
+                  setStatusSearchQuery('');
+                }}
+                className="p-2.5 rounded-2xl bg-amber-50/70 hover:bg-amber-100/90 border border-amber-200 hover:border-amber-300 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs active:scale-98"
+                title="Klik untuk melihat daftar siswa yang Sakit hari ini"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold text-amber-800">Sakit (S)</span>
+                  <span className="text-[9px] font-semibold text-amber-600 group-hover:underline flex items-center gap-0.5">
+                    Lihat <ArrowUpRight className="w-2.5 h-2.5" />
+                  </span>
+                </div>
                 <div className="text-xl font-black font-mono text-amber-700 mt-0.5">
                   {todayAttendanceMetrics.sakit}
                 </div>
                 <span className="text-[10px] text-amber-600">Izin Sakit</span>
-              </div>
+              </button>
 
-              <div className="p-2.5 rounded-2xl bg-blue-50/70 border border-blue-200">
-                <span className="text-[10px] uppercase font-bold text-blue-800">Izin (I)</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedKpiStatus('Izin');
+                  setStatusClassFilter('all');
+                  setStatusSearchQuery('');
+                }}
+                className="p-2.5 rounded-2xl bg-blue-50/70 hover:bg-blue-100/90 border border-blue-200 hover:border-blue-300 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs active:scale-98"
+                title="Klik untuk melihat daftar siswa yang Izin hari ini"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold text-blue-800">Izin (I)</span>
+                  <span className="text-[9px] font-semibold text-blue-600 group-hover:underline flex items-center gap-0.5">
+                    Lihat <ArrowUpRight className="w-2.5 h-2.5" />
+                  </span>
+                </div>
                 <div className="text-xl font-black font-mono text-blue-700 mt-0.5">
                   {todayAttendanceMetrics.izin}
                 </div>
                 <span className="text-[10px] text-blue-600">Izin Resmi</span>
-              </div>
+              </button>
 
-              <div className="p-2.5 rounded-2xl bg-rose-50/70 border border-rose-200">
-                <span className="text-[10px] uppercase font-bold text-rose-800">Alpa (A)</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedKpiStatus('Alfa');
+                  setStatusClassFilter('all');
+                  setStatusSearchQuery('');
+                }}
+                className="p-2.5 rounded-2xl bg-rose-50/70 hover:bg-rose-100/90 border border-rose-200 hover:border-rose-300 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs active:scale-98"
+                title="Klik untuk melihat daftar siswa yang Alpa (Tanpa Keterangan) hari ini"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold text-rose-800">Alpa (A)</span>
+                  <span className="text-[9px] font-semibold text-rose-600 group-hover:underline flex items-center gap-0.5">
+                    Lihat <ArrowUpRight className="w-2.5 h-2.5" />
+                  </span>
+                </div>
                 <div className="text-xl font-black font-mono text-rose-700 mt-0.5">
                   {todayAttendanceMetrics.alfa}
                 </div>
                 <span className="text-[10px] text-rose-600">Tanpa Ket.</span>
-              </div>
+              </button>
             </div>
 
             {/* Jenjang 7, 8, 9 Summary Bars */}
@@ -1385,6 +1498,253 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </div>
         )}
       </div>
+
+      {/* Interactive Modal: Detail Siswa per-KPI Kehadiran (Hadir / Sakit / Izin / Alpa) */}
+      {selectedKpiStatus && (
+        <div 
+          className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedKpiStatus(null);
+          }}
+        >
+          <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className={`p-5 sm:p-6 text-white flex items-center justify-between gap-4 shrink-0 ${
+              selectedKpiStatus === 'Hadir' ? 'bg-gradient-to-r from-emerald-800 to-emerald-950' :
+              selectedKpiStatus === 'Sakit' ? 'bg-gradient-to-r from-amber-700 to-amber-950' :
+              selectedKpiStatus === 'Izin' ? 'bg-gradient-to-r from-blue-800 to-blue-950' :
+              'bg-gradient-to-r from-rose-800 to-rose-950'
+            }`}>
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-xs flex items-center justify-center font-black text-2xl border border-white/20 shadow-inner">
+                  {selectedKpiStatus === 'Hadir' ? 'H' : selectedKpiStatus === 'Sakit' ? 'S' : selectedKpiStatus === 'Izin' ? 'I' : 'A'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono tracking-widest uppercase px-2.5 py-0.5 rounded-full bg-white/20 font-bold">
+                      INFORMASI KEHADIRAN SISWA
+                    </span>
+                    <span className="text-xs text-white/60">·</span>
+                    <span className="text-xs text-white/90 font-medium">
+                      {timeState.day || 'Hari Ini'}, {timeState.date}
+                    </span>
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-black text-white mt-0.5">
+                    Daftar Siswa {selectedKpiStatus === 'Alfa' ? 'Alpa (Tanpa Keterangan)' : selectedKpiStatus}
+                  </h3>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedKpiStatus(null)}
+                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                  title="Tutup Modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Toolbar: Filter Rombel, Pencarian, & Unduh */}
+            <div className="p-4 sm:p-5 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shrink-0">
+              <div className="flex flex-wrap items-center gap-2.5 flex-1">
+                {/* Class Selector Filter */}
+                <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-2xs">
+                  <Filter className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-xs font-semibold text-slate-600">Rombel:</span>
+                  <select
+                    value={statusClassFilter}
+                    onChange={(e) => setStatusClassFilter(e.target.value)}
+                    className="text-xs font-bold text-slate-800 bg-transparent focus:outline-none cursor-pointer"
+                  >
+                    <option value="all">Semua Kelas (24 Rombel)</option>
+                    {KELAS_LIST.map((cls) => (
+                      <option key={cls} value={cls}>Kelas {cls}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Search input */}
+                <div className="relative flex-1 min-w-[200px] max-w-md">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama siswa, NISN, atau keterangan..."
+                    value={statusSearchQuery}
+                    onChange={(e) => setStatusSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-8 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+                  />
+                  {statusSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setStatusSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleExportStatusListToExcel}
+                  disabled={selectedStatusStudents.length === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-xs shadow-xs transition-colors cursor-pointer"
+                  title="Unduh daftar ini ke format Excel / CSV (urut kelas 7A-9H & abjad A-Z)"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Unduh Excel</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedKpiStatus(null);
+                    onNavigate('attendance');
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0B231E] hover:bg-[#143d34] text-white font-semibold text-xs shadow-xs transition-colors cursor-pointer"
+                  title="Buka Menu Manajemen Presensi Lengkap"
+                >
+                  <CalendarCheck className="w-3.5 h-3.5 text-[#83C532]" />
+                  <span>Kelola Presensi</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Content Table */}
+            <div className="flex-1 overflow-auto p-4 sm:p-5">
+              {selectedStatusStudents.length === 0 ? (
+                <div className="text-center py-12 px-4">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400 mb-3">
+                    <CheckCircle2 className="w-7 h-7" />
+                  </div>
+                  <h4 className="font-bold text-slate-800 text-sm">Tidak Ada Siswa Terdaftar</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                    {statusSearchQuery || statusClassFilter !== 'all'
+                      ? 'Tidak ditemukan siswa yang cocok dengan filter rombel atau pencarian Anda.'
+                      : `Tidak ada siswa dengan status ${selectedKpiStatus === 'Alfa' ? 'Alpa' : selectedKpiStatus} pada data presensi hari ini.`}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50/90 text-slate-600 uppercase font-mono tracking-wider border-b border-slate-200 text-[10px]">
+                        <th className="py-2.5 px-3 text-center w-12">No</th>
+                        <th className="py-2.5 px-3">NISN</th>
+                        <th className="py-2.5 px-4">Nama Siswa</th>
+                        <th className="py-2.5 px-3 text-center">Kelas</th>
+                        <th className="py-2.5 px-2 text-center">L/P</th>
+                        <th className="py-2.5 px-3">Status & Keterangan</th>
+                        <th className="py-2.5 px-4">Kontak Orang Tua</th>
+                        <th className="py-2.5 px-3 text-center">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {selectedStatusStudents.map((student, idx) => {
+                        const waMsg = generateAttendanceMessage(student);
+                        const waUrl = getWhatsAppUrl(student.noWaOrtu, waMsg);
+
+                        return (
+                          <tr key={student.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-2.5 px-3 text-center font-mono text-slate-500 font-semibold">
+                              {idx + 1}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-slate-600">
+                              {student.nisn}
+                            </td>
+                            <td className="py-2.5 px-4 font-bold text-slate-900">
+                              {student.nama}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <span className="font-mono font-bold px-2 py-0.5 rounded-lg bg-[#0B231E] text-white text-[11px]">
+                                {student.kelas}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-2 text-center font-mono font-bold text-slate-600">
+                              {student.gender}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
+                                  selectedKpiStatus === 'Hadir' ? 'bg-emerald-100 text-emerald-800' :
+                                  selectedKpiStatus === 'Sakit' ? 'bg-amber-100 text-amber-800' :
+                                  selectedKpiStatus === 'Izin' ? 'bg-blue-100 text-blue-800' :
+                                  'bg-rose-100 text-rose-800'
+                                }`}>
+                                  {selectedKpiStatus === 'Alfa' ? 'Alpa' : selectedKpiStatus}
+                                </span>
+                                {student.keteranganKehadiran && (
+                                  <span className="text-[11px] text-slate-600 italic">
+                                    "{student.keteranganKehadiran}"
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-4">
+                              <div className="flex items-center justify-between gap-2">
+                                <div>
+                                  <div className="font-medium text-slate-800">{student.namaOrtu || '-'}</div>
+                                  <div className="text-[10px] text-slate-500 font-mono">{student.noWaOrtu || '-'}</div>
+                                </div>
+                                {student.noWaOrtu && student.noWaOrtu !== '-' && (
+                                  <a
+                                    href={waUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-[10px] border border-emerald-200 transition-colors shrink-0"
+                                    title="Kirim pesan WhatsApp ke Orang Tua"
+                                  >
+                                    <span>WA</span>
+                                    <ExternalLink className="w-2.5 h-2.5" />
+                                  </a>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedKpiStatus(null);
+                                  onSelectStudentProfile(student);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#0B231E] hover:bg-[#143d34] text-white font-semibold text-[11px] transition-transform active:scale-95 cursor-pointer shadow-2xs"
+                                title="Buka Slip Catatan Pelanggaran Siswa"
+                              >
+                                <FileText className="w-3 h-3 text-[#83C532]" />
+                                <span>Slip</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
+              <span className="font-medium">
+                Total: <strong className="text-slate-800">{selectedStatusStudents.length}</strong> siswa ditampilkan (Urut Rombel 7A - 9H & Abjad Absen A - Z)
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedKpiStatus(null)}
+                className="px-4 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import { AttendanceSheet, AttendanceStatus, Student, AttendanceRecapRow, AttendancePeriod } from '../types';
 import { KELAS_LIST } from '../data/schoolConfig';
 import { INITIAL_STUDENTS } from '../data/initialStudents';
+import { sortByClassAndName } from '../utils/sortUtils';
 
 const STORAGE_KEYS = {
   ATTENDANCE: 'bsan_grisaka_attendance_sheets_v1',
@@ -191,9 +192,11 @@ export const calculateStudentRecap = (
   filteredSheets: AttendanceSheet[],
   kelasFilter: string
 ): AttendanceRecapRow[] => {
-  const relevantStudents = kelasFilter === 'all' 
+  const rawStudents = kelasFilter === 'all' 
     ? students 
     : students.filter(s => s.kelas === kelasFilter);
+
+  const relevantStudents = sortByClassAndName(rawStudents);
 
   return relevantStudents.map((std) => {
     let totalHadir = 0;
