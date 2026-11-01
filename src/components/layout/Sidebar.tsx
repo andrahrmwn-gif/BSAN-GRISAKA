@@ -9,9 +9,11 @@ import {
   FileSpreadsheet, 
   BookOpen, 
   Award,
-  Sparkles,
   Settings,
-  X
+  X,
+  ChevronRight,
+  LogOut,
+  Quote
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -22,6 +24,7 @@ interface SidebarProps {
   schoolConfig: SchoolProfile;
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
+  onOpenAccountSwitch?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -32,58 +35,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   schoolConfig,
   isOpenMobile = false,
   onCloseMobile,
+  onOpenAccountSwitch,
 }) => {
-  const navItems: { id: ViewMode; label: string; icon: React.ReactNode; badge?: number | string }[] = [
-    {
-      id: 'dashboard',
-      label: 'Dashboard Eksekutif',
-      icon: <LayoutDashboard className="w-5 h-5" />,
-    },
-    {
-      id: 'students',
-      label: 'Database Siswa (Hub)',
-      icon: <Users className="w-5 h-5" />,
-    },
-    {
-      id: 'attendance',
-      label: 'Presensi 24 Rombel',
-      icon: <CalendarCheck className="w-5 h-5" />,
-    },
-    {
-      id: 'violations',
-      label: 'Buku Pelanggaran',
-      icon: <ShieldAlert className="w-5 h-5" />,
-      badge: activeViolationsCount > 0 ? activeViolationsCount : undefined,
-    },
-    {
-      id: 'tatatertib',
-      label: 'Pusat Tata Tertib',
-      icon: <BookOpen className="w-5 h-5" />,
-    },
-    {
-      id: 'whatsapp',
-      label: 'WhatsApp Gateway',
-      icon: <MessageSquare className="w-5 h-5" />,
-      badge: pendingWaCount > 0 ? pendingWaCount : undefined,
-    },
-    {
-      id: 'reports',
-      label: 'Laporan & Ekspor',
-      icon: <FileSpreadsheet className="w-5 h-5" />,
-    },
-    {
-      id: 'settings',
-      label: 'Pengaturan Sistem',
-      icon: <Settings className="w-5 h-5" />,
-    },
-  ];
-
   const handleSelect = (view: ViewMode) => {
     onSelectView(view);
     if (onCloseMobile) {
       onCloseMobile();
     }
   };
+
+  const isDashboardActive = currentView === 'dashboard';
 
   return (
     <>
@@ -96,22 +57,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
         aria-hidden="true"
       />
 
-      {/* Sidebar Container: True Overlay Drawer on mobile, Sticky Sidebar on desktop */}
+      {/* Sidebar Container: Gambar 1 Royal Indigo Blue Tone (#3B5BDB / #3451B2) & Gambar 2 Layout */}
       <aside 
         aria-hidden={!isOpenMobile}
         className={`
-          fixed inset-y-0 left-0 z-50 w-[280px] sm:w-72 max-w-[85vw] bg-[#0B231E] text-white flex flex-col shrink-0 border-r border-[#163830] select-none h-screen transition-transform duration-300 ease-in-out shadow-2xl
+          fixed inset-y-0 left-0 z-50 w-[280px] sm:w-72 max-w-[85vw] bg-gradient-to-b from-[#3451B2] via-[#3858D6] to-[#2F4CB7] text-white flex flex-col shrink-0 border-r border-[#4365E8]/40 select-none h-screen transition-transform duration-300 ease-in-out shadow-2xl
           ${isOpenMobile ? 'translate-x-0 pointer-events-auto' : '-translate-x-full pointer-events-none'}
           lg:static lg:translate-x-0 lg:pointer-events-auto lg:sticky lg:top-0 lg:z-30 lg:shadow-none lg:w-72
         `}
       >
 
         {/* Brand Header */}
-        <div className="p-6 border-b border-[#183d34]">
+        <div className="p-5 border-b border-white/10">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-3 min-w-0">
               {schoolConfig.logoUrl ? (
-                <div className="w-12 h-12 rounded-2xl bg-white p-1 flex items-center justify-center overflow-hidden shadow-lg shadow-[#83C532]/20 border border-[#83C532]/40 shrink-0">
+                <div className="w-11 h-11 rounded-2xl bg-white p-1 flex items-center justify-center overflow-hidden shadow-md shadow-black/10 shrink-0">
                   <img
                     src={schoolConfig.logoUrl}
                     alt="Logo Sekolah"
@@ -119,83 +80,208 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   />
                 </div>
               ) : (
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#83C532] to-[#4ade80] flex items-center justify-center text-[#0B231E] font-black shadow-lg shadow-[#83C532]/20 shrink-0">
-                  <Award className="w-7 h-7 stroke-[2.5]" />
+                <div className="w-11 h-11 rounded-2xl bg-white text-[#3B5BDB] flex items-center justify-center font-black shadow-md shadow-black/10 shrink-0">
+                  <Award className="w-6 h-6 stroke-[2.5]" />
                 </div>
               )}
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-extrabold text-lg tracking-tight text-white">BSAN</span>
-                  <span className="text-[10px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded bg-[#83C532]/20 text-[#83C532]">{schoolConfig.shortName || 'GRISAKA'}</span>
+                <div className="font-black text-sm tracking-tight text-white uppercase leading-tight truncate">
+                  {schoolConfig.name || 'SMPN 1 KANDANGAN'}
                 </div>
-                <div className="text-xs text-slate-300 font-medium truncate max-w-[150px]">{schoolConfig.name || 'SMPN 1 Kandangan'}</div>
+                <div className="text-[11px] text-blue-100/90 font-medium truncate mt-0.5">
+                  Budaya Sekolah Aman & Nyaman
+                </div>
               </div>
             </div>
 
             {/* Mobile Close Button */}
             <button
               onClick={onCloseMobile}
-              className="lg:hidden w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
+              className="lg:hidden w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-blue-100 hover:text-white transition-colors cursor-pointer shrink-0"
               title="Tutup Menu"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
-
-          <div className="mt-4 pt-3 border-t border-[#163830] flex items-center justify-between text-[11px] text-slate-400">
-            <span>NPSN: {schoolConfig.npsn}</span>
-            <span className="text-emerald-400 font-semibold">{schoolConfig.city}</span>
-          </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto no-scrollbar">
-          <div className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-emerald-400/70">
-            Navigasi Utama
+        <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto no-scrollbar">
+          {/* Main Dashboard Link (Gambar 2 Top Item) */}
+          <button
+            onClick={() => handleSelect('dashboard')}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 cursor-pointer ${
+              isDashboardActive
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10'
+                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <LayoutDashboard className={`w-5 h-5 ${isDashboardActive ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <span>Dashboard</span>
+            </div>
+            {isDashboardActive && (
+              <span className="w-1.5 h-1.5 rounded-full bg-[#3B5BDB]"></span>
+            )}
+          </button>
+
+          {/* Section: DATA UTAMA (Matching Gambar 2) */}
+          <div className="pt-4 pb-1 px-3 text-[11px] font-bold uppercase tracking-wider text-blue-200/80">
+            DATA UTAMA
           </div>
 
-          {navItems.map((item) => {
-            const isActive = currentView === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleSelect(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
-                  isActive
-                    ? 'bg-[#153e35] text-white shadow-sm font-semibold'
-                    : 'text-slate-300 hover:text-white hover:bg-[#12332c]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className={isActive ? 'text-[#83C532]' : 'text-slate-400'}>
-                    {item.icon}
-                  </span>
-                  <span className="truncate">{item.label}</span>
-                </div>
+          {/* Database Siswa */}
+          <button
+            onClick={() => handleSelect('students')}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
+              currentView === 'students'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
+                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <Users className={`w-5 h-5 shrink-0 ${currentView === 'students' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <span className="truncate">Database Siswa</span>
+            </div>
+            <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'students' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+          </button>
 
-                {item.badge !== undefined && (
-                  <span
-                    className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                      item.id === 'violations'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    }`}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          {/* Jenis Pelanggaran (Tata Tertib) */}
+          <button
+            onClick={() => handleSelect('tatatertib')}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
+              currentView === 'tatatertib'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
+                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <BookOpen className={`w-5 h-5 shrink-0 ${currentView === 'tatatertib' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <span className="truncate">Jenis Pelanggaran</span>
+            </div>
+            <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'tatatertib' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+          </button>
+
+          {/* Kehadiran (Presensi) */}
+          <button
+            onClick={() => handleSelect('attendance')}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
+              currentView === 'attendance'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
+                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <CalendarCheck className={`w-5 h-5 shrink-0 ${currentView === 'attendance' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <span className="truncate">Kehadiran</span>
+            </div>
+            <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'attendance' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+          </button>
+
+          {/* Pelanggaran Siswa */}
+          <button
+            onClick={() => handleSelect('violations')}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
+              currentView === 'violations'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
+                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <ShieldAlert className={`w-5 h-5 shrink-0 ${currentView === 'violations' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <span className="truncate">Pelanggaran Siswa</span>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {activeViolationsCount > 0 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500 text-white">
+                  {activeViolationsCount}
+                </span>
+              )}
+              <ChevronRight className={`w-4 h-4 transition-transform ${currentView === 'violations' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+            </div>
+          </button>
+
+          {/* WhatsApp Gateway */}
+          <button
+            onClick={() => handleSelect('whatsapp')}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
+              currentView === 'whatsapp'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
+                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <MessageSquare className={`w-5 h-5 shrink-0 ${currentView === 'whatsapp' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <span className="truncate">WhatsApp Gateway</span>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {pendingWaCount > 0 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-900">
+                  {pendingWaCount}
+                </span>
+              )}
+              <ChevronRight className={`w-4 h-4 transition-transform ${currentView === 'whatsapp' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+            </div>
+          </button>
+
+          {/* Rekap & Laporan */}
+          <button
+            onClick={() => handleSelect('reports')}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
+              currentView === 'reports'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
+                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <FileSpreadsheet className={`w-5 h-5 shrink-0 ${currentView === 'reports' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <span className="truncate">Rekap & Laporan</span>
+            </div>
+            <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'reports' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+          </button>
+
+          {/* Pengaturan */}
+          <button
+            onClick={() => handleSelect('settings')}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
+              currentView === 'settings'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
+                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <Settings className={`w-5 h-5 shrink-0 ${currentView === 'settings' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <span className="truncate">Pengaturan</span>
+            </div>
+            <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'settings' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+          </button>
+
+          {/* Quote Callout Box on Sidebar Bottom (Gambar 2 Exact Quote) */}
+          <div className="pt-3">
+            <div className="p-3.5 rounded-2xl bg-white/10 border border-white/15 text-white shadow-inner">
+              <div className="text-xl font-serif text-blue-200 leading-none">“</div>
+              <p className="text-xs text-blue-50 font-medium leading-relaxed mt-0.5">
+                Disiplin hari ini,<br />
+                Prestasi esok hari,<br />
+                Karakter selamanya.
+              </p>
+              <div className="text-[10px] text-blue-200 font-semibold mt-2 text-right">
+                — {schoolConfig.shortName || 'SMPN 1 Kandangan'}
+              </div>
+            </div>
+          </div>
         </nav>
 
-        {/* Footer info */}
-        <div className="p-4 border-t border-[#183d34] bg-[#081a16] text-[11px] text-slate-400 flex items-center justify-between">
-          <div>
-            <div className="font-semibold text-white">Sistem BSAN v2.2</div>
-            <div>Kabupaten Temanggung</div>
-          </div>
-          <div className="w-2.5 h-2.5 rounded-full bg-[#83C532] shadow-sm shadow-[#83C532]"></div>
+        {/* Bottom Logout Button (Gambar 2 Exact Bottom Item) */}
+        <div className="p-3 border-t border-white/15 bg-black/10">
+          <button
+            onClick={onOpenAccountSwitch}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-blue-100 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            title="Keluar / Beralih Akun Petugas"
+          >
+            <LogOut className="w-5 h-5 text-blue-200" />
+            <span>Keluar</span>
+          </button>
         </div>
       </aside>
     </>

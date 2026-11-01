@@ -228,7 +228,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
       <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#83C532]"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#3B5BDB]"></span>
             <h2 className="text-base font-bold text-slate-900">
               Database Siswa Terpusat (Central Data Hub)
             </h2>
@@ -277,9 +277,9 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
               setFormData(initialForm);
               setIsAddModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[#0B231E] hover:bg-[#143d34] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#3B5BDB] hover:bg-[#2563EB] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
           >
-            <Plus className="w-4 h-4 text-[#83C532]" />
+            <Plus className="w-4 h-4 text-white" />
             <span>Tambah Siswa Manual</span>
           </button>
         </div>
@@ -291,7 +291,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
           {/* Main Dropdown 7A - 9H */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-[#0B231E] text-[#83C532] flex items-center justify-center font-bold shadow-xs">
+              <div className="w-10 h-10 rounded-2xl bg-[#3B5BDB] text-white flex items-center justify-center font-bold shadow-xs">
                 <School className="w-5 h-5" />
               </div>
               <div>
@@ -308,7 +308,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
                         setJenjangFilter('all');
                       }
                     }}
-                    className="font-bold text-sm bg-slate-50 border-2 border-slate-300 hover:border-[#83C532] rounded-xl px-3 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-[#83C532] text-slate-800 transition-all cursor-pointer shadow-xs min-w-[200px]"
+                    className="font-bold text-sm bg-slate-50 border-2 border-slate-300 hover:border-[#3B5BDB] rounded-xl px-3 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB] text-slate-800 transition-all cursor-pointer shadow-xs min-w-[200px]"
                   >
                     <option value="all">Semua Rombel (7A - 9H)</option>
                     <optgroup label="── JENJANG 7 (7A - 7H) ──">
@@ -359,7 +359,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
                   }}
                   className={`px-2.5 py-1 text-xs rounded-lg font-semibold transition-all ${
                     jenjangFilter === j && kelasFilter === 'all'
-                      ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+                      ? 'bg-[#3B5BDB] text-white shadow-xs'
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
                   }`}
                 >
@@ -378,7 +378,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Cari nama, NISN, atau wali..."
-                className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-[#83C532]/40"
+                className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40"
               />
             </div>
 
@@ -401,7 +401,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
               <span className="font-bold text-slate-800">
                 {kelasFilter !== 'all' ? `Tracking Rombel ${kelasFilter}:` : 'Tracking Keseluruhan Siswa:'}
               </span>
-              <span className="font-mono font-bold bg-[#0B231E] text-white px-2.5 py-0.5 rounded-lg text-xs">
+              <span className="font-mono font-bold bg-[#3B5BDB] text-white px-2.5 py-0.5 rounded-lg text-xs">
                 {filteredStudents.length} Siswa
               </span>
             </div>
@@ -493,7 +493,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
                         <div className="text-[10px] text-slate-600 font-mono">NISN: {student.nisn}</div>
                       </td>
                       <td className="py-3 px-3">
-                        <span className="font-mono font-bold text-[#0B231E] bg-[#0B231E]/10 px-2 py-0.5 rounded">
+                        <span className="font-mono font-bold text-[#3B5BDB] bg-blue-50 px-2 py-0.5 rounded">
                           {student.kelas}
                         </span>
                       </td>
@@ -604,7 +604,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
       {(isAddModalOpen || editingStudent) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8">
-            <div className="bg-[#0B231E] px-6 py-4 flex items-center justify-between text-white">
+            <div className="bg-gradient-to-r from-[#1E3A8A] to-[#3B5BDB] px-6 py-4 flex items-center justify-between text-white">
               <h3 className="font-bold text-sm">
                 {editingStudent ? 'Edit Informasi Siswa' : 'Tambah Siswa Baru ke Database'}
               </h3>
@@ -768,7 +768,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#0B231E] hover:bg-[#143d34] text-white text-xs font-semibold rounded-xl shadow-xs"
+                  className="px-5 py-2 bg-[#3B5BDB] hover:bg-[#2563EB] text-white text-xs font-semibold rounded-xl shadow-xs"
                 >
                   {editingStudent ? 'Simpan Perubahan' : 'Tambahkan Siswa'}
                 </button>
@@ -816,9 +816,9 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
       {profileStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="bg-[#0B231E] px-6 py-4 flex items-center justify-between text-white">
+            <div className="bg-gradient-to-r from-[#1E3A8A] to-[#3B5BDB] px-6 py-4 flex items-center justify-between text-white">
               <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-[#83C532]" />
+                <Users className="w-5 h-5 text-blue-200" />
                 <h3 className="font-bold text-sm">Profil Siswa & Riwayat Kedisiplinan</h3>
               </div>
               <button

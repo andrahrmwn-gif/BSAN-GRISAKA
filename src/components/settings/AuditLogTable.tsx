@@ -94,15 +94,15 @@ export const AuditLogTable: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top Banner & Audit Log Identity */}
-      <div className="bg-gradient-to-r from-[#0B231E] to-[#164136] text-white p-6 rounded-3xl border border-[#1e5445] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-[#1E3A8A] via-[#3451B2] to-[#3B5BDB] text-white p-6 rounded-3xl border border-white/20 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-[#83C532]" />
+            <ShieldCheck className="w-5 h-5 text-white" />
             <h3 className="font-extrabold text-base tracking-tight text-white">
               System Audit Log & Jejak Keamanan 20 Akun Petugas
             </h3>
           </div>
-          <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+          <p className="text-xs text-blue-100 max-w-2xl leading-relaxed">
             Merekam seluruh riwayat aktivitas secara real-time (input pelanggaran, pembaruan data siswa, penghapusan, reset data, dan pergantian sesi login) untuk menjamin akuntabilitas serta integritas data sekolah.
           </p>
         </div>
@@ -114,17 +114,17 @@ export const AuditLogTable: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl border border-white/20 transition-all cursor-pointer"
             title="Segarkan Log"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-[#83C532]" />
+            <RefreshCw className="w-3.5 h-3.5 text-white" />
             <span>Segarkan</span>
           </button>
 
           <button
             onClick={handleExport}
             disabled={isExporting || filteredLogs.length === 0}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#83C532] hover:bg-[#94db3a] text-[#0B231E] text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-blue-50 text-[#3B5BDB] text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-50"
             title="Ekspor seluruh rekaman audit log ke format Excel (.csv)"
           >
-            <FileSpreadsheet className="w-4 h-4 text-[#0B231E]" />
+            <FileSpreadsheet className="w-4 h-4 text-[#3B5BDB]" />
             <span>{isExporting ? 'Mengekspor...' : 'Ekspor Log (Excel)'}</span>
           </button>
 
@@ -144,7 +144,7 @@ export const AuditLogTable: React.FC = () => {
         <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
             <span>Total Catatan Audit</span>
-            <Activity className="w-4 h-4 text-[#0B231E]" />
+            <Activity className="w-4 h-4 text-[#3B5BDB]" />
           </div>
           <div className="text-2xl font-black text-slate-900 font-mono mt-1">
             {logs.length}
@@ -197,7 +197,7 @@ export const AuditLogTable: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Cari deskripsi, nama petugas..."
-              className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B231E]"
+              className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3B5BDB]"
             />
           </div>
 
@@ -206,7 +206,7 @@ export const AuditLogTable: React.FC = () => {
             <select
               value={selectedUserFilter}
               onChange={(e) => setSelectedUserFilter(e.target.value)}
-              className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B231E] font-medium"
+              className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3B5BDB] font-medium"
             >
               <option value="all">-- Semua Akun Petugas ({accounts.length}) --</option>
               <option value="guest">👁️ Mode Tamu (Guest View-Only)</option>
@@ -223,7 +223,7 @@ export const AuditLogTable: React.FC = () => {
             <select
               value={selectedActionFilter}
               onChange={(e) => setSelectedActionFilter(e.target.value)}
-              className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B231E] font-medium"
+              className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3B5BDB] font-medium"
             >
               <option value="all">-- Semua Jenis Aksi --</option>
               <option value="CREATE">INPUT / CREATE</option>
@@ -241,7 +241,7 @@ export const AuditLogTable: React.FC = () => {
             <select
               value={selectedModuleFilter}
               onChange={(e) => setSelectedModuleFilter(e.target.value)}
-              className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B231E] font-medium"
+              className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#3B5BDB] font-medium"
             >
               <option value="all">-- Semua Modul --</option>
               <option value="Pelanggaran">Buku Pelanggaran</option>

@@ -96,7 +96,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
       canEdit: true,
       canDelete: newRole === 'Kepala Sekolah' || newRole === 'Wakasek Kesiswaan' || newRole === 'Tata Usaha (Admin)',
       canManageSettings: newRole === 'Kepala Sekolah' || newRole === 'Tata Usaha (Admin)',
-      avatarColor: '#0B231E'
+      avatarColor: '#3B5BDB'
     });
 
     if (res.success) {
@@ -181,15 +181,15 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
   return (
     <div className="space-y-6">
       {/* Header & Quota Status */}
-      <div className="bg-gradient-to-r from-[#0B231E] via-[#0f352b] to-[#124235] text-white p-6 rounded-3xl border border-[#1a4f40] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-[#172554] via-[#1E3A8A] to-[#2563EB] text-white p-6 rounded-3xl border border-blue-900/40 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-[#83C532]" />
+            <Shield className="w-5 h-5 text-blue-200" />
             <h3 className="font-extrabold text-base tracking-tight text-white">
               Manajemen Hak Akses & Kontrol 55 Akun Petugas
             </h3>
           </div>
-          <p className="text-xs text-slate-300 mt-1 max-w-xl">
+          <p className="text-xs text-slate-200 mt-1 max-w-xl">
             Sistem dibatasi secara ketat maksimal <strong>{MAX_ACCOUNTS} akun resmi</strong> yang dapat login dan melakukan input/perubahan data. Tiap akun dapat dirubah Nama, NIP, dan Passwordnya. Mode tamu otomatis aktif untuk pengguna baru dengan hak view-only.
           </p>
         </div>
@@ -197,7 +197,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
         {/* Quota Counter Badge & Add Button */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="px-4 py-2 rounded-2xl bg-black/40 border border-white/20 text-center">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-emerald-300">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-blue-200">
               Kuota Terdaftar
             </div>
             <div className="text-xl font-black font-mono text-white">
@@ -208,7 +208,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
           <button
             onClick={() => setIsAddModalOpen(true)}
             disabled={accounts.length >= MAX_ACCOUNTS}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#83C532] hover:bg-[#94db3a] disabled:opacity-40 disabled:hover:bg-[#83C532] text-[#0B231E] font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-blue-50 disabled:opacity-40 text-[#3B5BDB] font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
             title={accounts.length >= MAX_ACCOUNTS ? 'Kuota 55 akun penuh' : 'Tambah Akun Petugas Baru'}
           >
             <UserPlus className="w-4 h-4 stroke-[2.5]" />
@@ -271,7 +271,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
               key={acc.id}
               className={`p-5 rounded-3xl border transition-all flex flex-col justify-between ${
                 isCurrent
-                  ? 'bg-emerald-50/70 border-[#83C532] shadow-sm ring-2 ring-[#83C532]/40'
+                  ? 'bg-blue-50/70 border-[#3B5BDB] shadow-sm ring-2 ring-[#3B5BDB]/40'
                   : 'bg-white border-slate-200/90 shadow-xs hover:border-slate-300'
               }`}
             >
@@ -280,7 +280,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                   <div className="flex items-center gap-3">
                     <div 
                       className="w-11 h-11 rounded-2xl flex items-center justify-center text-white font-bold text-sm shadow-xs shrink-0"
-                      style={{ backgroundColor: acc.avatarColor || '#0B231E' }}
+                      style={{ backgroundColor: acc.avatarColor || '#3B5BDB' }}
                     >
                       {acc.name.charAt(0)}
                     </div>
@@ -290,13 +290,13 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                           {acc.name}
                         </h4>
                         {isCurrent && (
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-[#83C532] text-[#0B231E] uppercase tracking-wider">
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-[#3B5BDB] text-white uppercase tracking-wider">
                             Akun Aktif
                           </span>
                         )}
                       </div>
                       <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                        <span className="font-semibold text-emerald-800">{acc.role}</span>
+                        <span className="font-semibold text-[#3B5BDB]">{acc.role}</span>
                         <span>·</span>
                         <span className="font-mono text-[10px]">Slot #{index + 1}</span>
                       </div>
@@ -345,16 +345,16 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                 </div>
 
                 {isCurrent ? (
-                  <span className="text-xs font-bold text-emerald-800 flex items-center gap-1">
-                    <UserCheck className="w-4 h-4 text-emerald-600" />
+                  <span className="text-xs font-bold text-[#3B5BDB] flex items-center gap-1">
+                    <UserCheck className="w-4 h-4 text-[#3B5BDB]" />
                     <span>Sesi Berjalan</span>
                   </span>
                 ) : (
                   <button
                     onClick={() => handleSwitchAccount(acc.id)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0B231E] hover:bg-[#143d34] text-white text-xs font-semibold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3B5BDB] hover:bg-[#2563EB] text-white text-xs font-semibold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
                   >
-                    <LogIn className="w-3.5 h-3.5 text-[#83C532]" />
+                    <LogIn className="w-3.5 h-3.5 text-white" />
                     <span>Login Akun Ini</span>
                   </button>
                 )}
@@ -370,7 +370,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-[#0B231E] text-[#83C532] flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-[#3B5BDB] text-white flex items-center justify-center">
                   <UserPlus className="w-4 h-4" />
                 </div>
                 <div>
@@ -397,7 +397,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder="Contoh: Sri Wahyuni, S.Pd., M.Si."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0B231E] focus:outline-none"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none"
                 />
               </div>
 
@@ -410,7 +410,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value.toLowerCase().replace(/\s+/g, '.'))}
                     placeholder="nama.user"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0B231E] focus:outline-none font-mono"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none font-mono"
                   />
                 </div>
                 <div>
@@ -421,7 +421,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                     value={newPin}
                     onChange={(e) => setNewPin(e.target.value)}
                     placeholder="1234"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0B231E] focus:outline-none font-mono"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none font-mono"
                   />
                 </div>
               </div>
@@ -432,7 +432,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                   <select
                     value={newRole}
                     onChange={(e) => setNewRole(e.target.value as UserRole)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0B231E] focus:outline-none"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none"
                   >
                     {rolesList.map((r) => (
                       <option key={r} value={r}>{r}</option>
@@ -446,7 +446,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                     value={newNip}
                     onChange={(e) => setNewNip(e.target.value)}
                     placeholder="1980... atau '-'"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0B231E] focus:outline-none font-mono"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none font-mono"
                   />
                 </div>
               </div>
@@ -461,7 +461,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#0B231E] hover:bg-[#143d34] text-white rounded-xl font-bold shadow-xs cursor-pointer"
+                  className="px-4 py-2 bg-[#3B5BDB] hover:bg-[#2563EB] text-white rounded-xl font-bold shadow-xs cursor-pointer"
                 >
                   Simpan & Daftarkan Akun
                 </button>
@@ -503,7 +503,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                   required
                   value={editingAccount.name}
                   onChange={(e) => setEditingAccount({ ...editingAccount, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0B231E] focus:outline-none"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none"
                 />
               </div>
 
@@ -513,7 +513,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                   <select
                     value={editingAccount.role}
                     onChange={(e) => setEditingAccount({ ...editingAccount, role: e.target.value as UserRole })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0B231E] focus:outline-none"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none"
                   >
                     {rolesList.map((r) => (
                       <option key={r} value={r}>{r}</option>
@@ -526,7 +526,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                     type="text"
                     value={editingAccount.nip}
                     onChange={(e) => setEditingAccount({ ...editingAccount, nip: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0B231E] focus:outline-none font-mono"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none font-mono"
                   />
                 </div>
               </div>
@@ -537,7 +537,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                   type="password"
                   value={editingAccount.pin}
                   onChange={(e) => setEditingAccount({ ...editingAccount, pin: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#0B231E] focus:outline-none font-mono"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none font-mono"
                 />
               </div>
 
@@ -548,7 +548,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                     type="checkbox"
                     checked={editingAccount.canEdit}
                     onChange={(e) => setEditingAccount({ ...editingAccount, canEdit: e.target.checked })}
-                    className="rounded text-[#0B231E] focus:ring-[#0B231E]"
+                    className="rounded text-[#3B5BDB] focus:ring-[#3B5BDB]"
                   />
                   <span>Dapat menginput / mengedit catatan pelanggaran & siswa</span>
                 </label>
@@ -557,7 +557,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                     type="checkbox"
                     checked={editingAccount.canDelete}
                     onChange={(e) => setEditingAccount({ ...editingAccount, canDelete: e.target.checked })}
-                    className="rounded text-[#0B231E] focus:ring-[#0B231E]"
+                    className="rounded text-[#3B5BDB] focus:ring-[#3B5BDB]"
                   />
                   <span>Dapat menghapus catatan pelanggaran</span>
                 </label>

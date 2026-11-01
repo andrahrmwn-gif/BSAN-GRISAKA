@@ -120,7 +120,7 @@ export const ComprehensiveReports: React.FC<ComprehensiveReportsProps> = ({
       <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#83C532]"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#3B5BDB]"></span>
             <h2 className="text-base font-bold text-slate-900">
               Modul Pelaporan & Ekspor Data Komprehensif
             </h2>
@@ -135,10 +135,10 @@ export const ComprehensiveReports: React.FC<ComprehensiveReportsProps> = ({
           {/* Format 1: PDF Siap Cetak */}
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0B231E] hover:bg-[#143d34] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#3B5BDB] hover:bg-[#2563EB] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
             title="Cetak Laporan / Simpan PDF dengan Kop Resmi"
           >
-            <Printer className="w-4 h-4 text-[#83C532]" />
+            <Printer className="w-4 h-4 text-white" />
             <span>1. Cetak / Simpan PDF</span>
           </button>
 
@@ -204,7 +204,7 @@ export const ComprehensiveReports: React.FC<ComprehensiveReportsProps> = ({
               onClick={() => setActiveTab('analytics')}
               className={`px-3 py-1 rounded-lg font-medium transition-all ${
                 activeTab === 'analytics'
-                  ? 'bg-[#0B231E] text-white font-bold'
+                  ? 'bg-[#3B5BDB] text-white font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -214,7 +214,7 @@ export const ComprehensiveReports: React.FC<ComprehensiveReportsProps> = ({
               onClick={() => setActiveTab('preview')}
               className={`px-3 py-1 rounded-lg font-medium transition-all ${
                 activeTab === 'preview'
-                  ? 'bg-[#0B231E] text-white font-bold'
+                  ? 'bg-[#3B5BDB] text-white font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -269,7 +269,7 @@ export const ComprehensiveReports: React.FC<ComprehensiveReportsProps> = ({
               <span className="text-[11px] font-semibold uppercase text-slate-500">
                 Tingkat Efektivitas Pembinaan
               </span>
-              <div className="text-2xl font-bold font-mono mt-2 text-[#0B231E]">
+              <div className="text-2xl font-bold font-mono mt-2 text-[#3B5BDB]">
                 {filteredViolations.length > 0
                   ? Math.round((filteredViolations.filter((v) => v.statusSurat === 'Selesai').length / filteredViolations.length) * 100)
                   : 100}%

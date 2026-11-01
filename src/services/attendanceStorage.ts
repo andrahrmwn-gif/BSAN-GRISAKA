@@ -241,3 +241,115 @@ export const calculateStudentRecap = (
     };
   });
 };
+
+export interface DateAttendanceSummary {
+  date: string;
+  totalStudents: number;
+  hadirCount: number;
+  sakitCount: number;
+  izinCount: number;
+  alfaCount: number;
+  tidakHadirCount: number;
+  percentHadir: number;
+  classData: Array<{
+    kelas: string;
+    total: number;
+    hadir: number;
+    tidakHadir: number;
+    sakit: number;
+    izin: number;
+    alfa: number;
+    hadirPct: number;
+    tidakHadirPct: number;
+  }>;
+  studentRecords: Array<{
+    student: Student;
+    status: AttendanceStatus;
+    keterangan?: string;
+  }>;
+}
+
+/**
+ * Get unified attendance statistics, class breakdown, and individual records for ANY date
+ * (today or any historical past date).
+ */
+export const getDateAttendanceSummary = (targetDate: string, students: Student[]): DateAttendanceSummary => {
+  const allSheets = getStoredAttendanceSheets();
+  const dateSheets = allSheets.filter(s => s.date === targetDate);
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const studentRecords = students.map(student => {
+    // 1. Check if an attendance sheet exists for this student's class on targetDate
+    const classSheet = dateSheets.find(s => s.kelas === student.kelas);
+    if (classSheet) {
+      const entry = classSheet.entries.find(e => e.studentId === student.id || e.nisn === student.nisn);
+      if (entry) {
+        return {
+          student,
+          status: entry.status,
+          keterangan: entry.keterangan
+        };
+      }
+    }
+    // 2. If it's today and no sheet entry found, fallback to student's current status
+    if (targetDate === todayStr) {
+      return {
+        student,
+        status: (student.statusKehadiran || 'Hadir') as AttendanceStatus,
+        keterangan: student.keteranganKehadiran
+      };
+    }
+    // 3. For other dates with no explicit sheet entry, default to Hadir
+    return {
+      student,
+      status: 'Hadir' as AttendanceStatus,
+      keterangan: undefined
+    };
+  });
+
+  const totalStudents = studentRecords.length;
+  const hadirCount = studentRecords.filter(r => r.status === 'Hadir').length;
+  const sakitCount = studentRecords.filter(r => r.status === 'Sakit').length;
+  const izinCount = studentRecords.filter(r => r.status === 'Izin').length;
+  const alfaCount = studentRecords.filter(r => r.status === 'Alfa').length;
+  const tidakHadirCount = sakitCount + izinCount + alfaCount;
+  const percentHadir = totalStudents > 0 ? (hadirCount / totalStudents) * 100 : 100;
+
+  const classData = KELAS_LIST.map(cls => {
+    const classRecords = studentRecords.filter(r => r.student.kelas === cls);
+    const total = classRecords.length || 1;
+    const hadir = classRecords.filter(r => r.status === 'Hadir').length;
+    const sakit = classRecords.filter(r => r.status === 'Sakit').length;
+    const izin = classRecords.filter(r => r.status === 'Izin').length;
+    const alfa = classRecords.filter(r => r.status === 'Alfa').length;
+    const tidakHadir = sakit + izin + alfa;
+    const hadirPct = Math.round((hadir / total) * 100);
+    const tidakHadirPct = 100 - hadirPct;
+
+    return {
+      kelas: cls,
+      total,
+      hadir,
+      tidakHadir,
+      sakit,
+      izin,
+      alfa,
+      hadirPct,
+      tidakHadirPct,
+    };
+  });
+
+  return {
+    date: targetDate,
+    totalStudents,
+    hadirCount,
+    sakitCount,
+    izinCount,
+    alfaCount,
+    tidakHadirCount,
+    percentHadir,
+    classData,
+    studentRecords
+  };
+};
+

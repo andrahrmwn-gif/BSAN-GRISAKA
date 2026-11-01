@@ -353,7 +353,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
             onClick={() => setActiveTab('absensi')}
             className={`px-3.5 py-1.5 rounded-xl font-medium transition-all ${
               activeTab === 'absensi'
-                ? 'bg-[#0B231E] text-white shadow-xs font-semibold'
+                ? 'bg-[#3B5BDB] text-white shadow-xs font-semibold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -363,7 +363,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
             onClick={() => setActiveTab('pelanggaran')}
             className={`px-3.5 py-1.5 rounded-xl font-medium transition-all ${
               activeTab === 'pelanggaran'
-                ? 'bg-[#0B231E] text-white shadow-xs font-semibold'
+                ? 'bg-[#3B5BDB] text-white shadow-xs font-semibold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -373,7 +373,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
             onClick={() => setActiveTab('templates')}
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium transition-all ${
               activeTab === 'templates'
-                ? 'bg-[#83C532] text-[#0B231E] shadow-xs font-bold'
+                ? 'bg-[#3B5BDB] text-white shadow-xs font-bold'
                 : 'text-slate-700 hover:text-slate-900 bg-white/70'
             }`}
           >
@@ -384,7 +384,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
             onClick={() => setActiveTab('logs')}
             className={`px-3.5 py-1.5 rounded-xl font-medium transition-all ${
               activeTab === 'logs'
-                ? 'bg-[#0B231E] text-white shadow-xs font-semibold'
+                ? 'bg-[#3B5BDB] text-white shadow-xs font-semibold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -403,7 +403,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Cari siswa, kelas, atau wali murid..."
-              className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-[#83C532]/40"
+              className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40"
             />
           </div>
 
@@ -672,9 +672,9 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
 
                         <button
                           onClick={() => handleDispatchWa(student, 'Panggilan Ortu', currentText, v.noWaOrtu)}
-                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#0B231E] hover:bg-[#143d34] text-white font-semibold text-xs shadow-xs transition-transform active:scale-95"
+                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#3B5BDB] hover:bg-[#2563EB] text-white font-semibold text-xs shadow-xs transition-transform active:scale-95"
                         >
-                          <Send className="w-3.5 h-3.5 text-[#83C532]" />
+                          <Send className="w-3.5 h-3.5 text-white" />
                           <span>Kirim via WA</span>
                         </button>
                       </div>
@@ -695,7 +695,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
             <div>
               <div className="flex items-center gap-2">
-                <Settings className="w-5 h-5 text-[#83C532]" />
+                <Settings className="w-5 h-5 text-[#3B5BDB]" />
                 <h3 className="font-bold text-base text-slate-900">
                   Kustomisasi Kalimat WhatsApp Berdasarkan Keadaan
                 </h3>
@@ -717,9 +717,9 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
 
               <button
                 onClick={handleSaveTemplates}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[#0B231E] hover:bg-[#153e34] text-white text-xs font-bold rounded-xl shadow-xs transition-transform active:scale-95"
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#3B5BDB] hover:bg-[#2563EB] text-white text-xs font-bold rounded-xl shadow-xs transition-transform active:scale-95"
               >
-                <Save className="w-4 h-4 text-[#83C532]" />
+                <Save className="w-4 h-4 text-white" />
                 <span>Simpan Perubahan Kalimat</span>
               </button>
             </div>
@@ -744,7 +744,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                   onClick={() => setActiveTemplateCondition(item.id)}
                   className={`p-3 rounded-2xl text-left border-2 transition-all flex items-center justify-between ${
                     activeTemplateCondition === item.id
-                      ? 'border-[#0B231E] bg-[#0B231E] text-white shadow-md'
+                      ? 'border-[#3B5BDB] bg-[#3B5BDB] text-white shadow-md'
                       : 'border-slate-200 bg-slate-50 hover:bg-white text-slate-700'
                   }`}
                 >
@@ -780,7 +780,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                     }))
                   }
                   rows={13}
-                  className="w-full text-xs font-mono p-4 rounded-2xl border-2 border-slate-300 focus:outline-hidden focus:border-[#83C532] focus:ring-2 focus:ring-[#83C532]/30 leading-relaxed bg-slate-50"
+                  className="w-full text-xs font-mono p-4 rounded-2xl border-2 border-slate-300 focus:outline-hidden focus:border-[#3B5BDB] focus:ring-2 focus:ring-[#3B5BDB]/30 leading-relaxed bg-slate-50"
                   placeholder="Ketik kalimat template di sini..."
                 />
               </div>
@@ -788,7 +788,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
               {/* Clickable Variable Tags */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                  <Sparkles className="w-3.5 h-3.5 text-[#83C532]" />
+                  <Sparkles className="w-3.5 h-3.5 text-[#3B5BDB]" />
                   <span>Klik Variabel untuk Menyisipkan ke Kalimat:</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -797,7 +797,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                       key={v.key}
                       type="button"
                       onClick={() => handleInsertVariable(v.key)}
-                      className="px-2.5 py-1 bg-white hover:bg-[#83C532] hover:text-[#0B231E] border border-slate-200 hover:border-[#83C532] rounded-lg text-xs font-mono font-medium text-slate-700 transition-all active:scale-95 shadow-2xs"
+                      className="px-2.5 py-1 bg-white hover:bg-[#3B5BDB] hover:text-white border border-slate-200 hover:border-[#3B5BDB] rounded-lg text-xs font-mono font-medium text-slate-700 transition-all active:scale-95 shadow-2xs"
                       title={`Sisipkan {${v.key}}`}
                     >
                       +{'{' + v.key + '}'} <span className="text-[10px] text-slate-400 font-sans">({v.label})</span>

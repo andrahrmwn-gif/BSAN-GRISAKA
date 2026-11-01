@@ -20,7 +20,7 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
     canEdit: true,
     canDelete: true,
     canManageSettings: true,
-    avatarColor: '#0B231E',
+    avatarColor: '#3B5BDB',
   },
   {
     id: 'usr-002',

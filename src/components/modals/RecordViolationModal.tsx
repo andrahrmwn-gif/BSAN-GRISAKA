@@ -118,21 +118,21 @@ export const RecordViolationModal: React.FC<RecordViolationModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
       <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-100 overflow-hidden my-8 max-h-[90vh] flex flex-col">
         {/* Modal Header */}
-        <div className="bg-[#0B231E] px-6 py-4 flex items-center justify-between text-white shrink-0">
+        <div className="bg-gradient-to-r from-[#1E3A8A] via-[#3451B2] to-[#3B5BDB] px-6 py-4 flex items-center justify-between text-white shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#83C532] text-[#0B231E] flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner">
               <ShieldAlert className="w-5 h-5 stroke-[2.5]" />
             </div>
             <div>
               <h3 className="font-bold text-base">Input Pencatatan Pelanggaran Tata Tertib</h3>
-              <p className="text-xs text-slate-300">
+              <p className="text-xs text-blue-100">
                 Pedoman Resmi Tata Tertib SMPN 1 Kandangan (Kec. Kandangan, Kab. Temanggung)
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors text-slate-300 hover:text-white"
+            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors text-blue-100 hover:text-white"
           >
             <X className="w-5 h-5" />
           </button>
@@ -160,7 +160,7 @@ export const RecordViolationModal: React.FC<RecordViolationModalProps> = ({
                     value={searchStudent}
                     onChange={(e) => setSearchStudent(e.target.value)}
                     placeholder="Cari nama, NISN, atau kelas..."
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-[#83C532]/40"
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40"
                   />
                   <div className="mt-1 max-h-32 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50 p-1 divide-y divide-slate-100">
                     {filteredStudents.slice(0, 8).map((s) => (
@@ -169,7 +169,7 @@ export const RecordViolationModal: React.FC<RecordViolationModalProps> = ({
                         onClick={() => setSelectedStudentId(s.id)}
                         className={`p-2 text-xs rounded-lg cursor-pointer flex items-center justify-between transition-colors ${
                           selectedStudentId === s.id
-                            ? 'bg-[#0B231E] text-white font-medium'
+                            ? 'bg-[#3B5BDB] text-white font-medium shadow-xs'
                             : 'hover:bg-slate-200/60 text-slate-700'
                         }`}
                       >
@@ -239,7 +239,7 @@ export const RecordViolationModal: React.FC<RecordViolationModalProps> = ({
                 value={searchRule}
                 onChange={(e) => setSearchRule(e.target.value)}
                 placeholder="Cari kata kunci tata tertib..."
-                className="px-3 py-1 text-xs rounded-lg border border-slate-200 max-w-xs focus:ring-1 focus:ring-[#83C532]"
+                className="px-3 py-1 text-xs rounded-lg border border-slate-200 max-w-xs focus:ring-1 focus:ring-[#3B5BDB]"
               />
             </div>
 
@@ -260,7 +260,7 @@ export const RecordViolationModal: React.FC<RecordViolationModalProps> = ({
                     onClick={() => setActivePasalTab(p.num)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
                       activePasalTab === p.num
-                        ? 'bg-[#0B231E] text-white shadow-xs font-semibold'
+                        ? 'bg-[#3B5BDB] text-white shadow-xs font-semibold'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
                     }`}
                   >
@@ -281,7 +281,7 @@ export const RecordViolationModal: React.FC<RecordViolationModalProps> = ({
                     onClick={() => setSelectedRuleId(rule.id)}
                     className={`p-3 rounded-xl border text-xs cursor-pointer transition-all ${
                       isSelected
-                        ? 'border-[#0B231E] bg-white ring-2 ring-[#0B231E]/20 shadow-xs'
+                        ? 'border-[#3B5BDB] bg-blue-50/30 ring-2 ring-[#3B5BDB]/20 shadow-xs'
                         : 'border-slate-200 bg-white hover:border-slate-300'
                     }`}
                   >
@@ -378,16 +378,16 @@ export const RecordViolationModal: React.FC<RecordViolationModalProps> = ({
           </div>
 
           {/* Section 5: Prediksi Penjenjangan Otomatis */}
-          <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-xs flex items-start gap-3">
-            <Sparkles className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+          <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs flex items-start gap-3">
+            <Sparkles className="w-5 h-5 text-[#3B5BDB] shrink-0 mt-0.5" />
             <div>
-              <div className="font-bold text-emerald-900">
+              <div className="font-bold text-slate-900">
                 Otomasi Penjenjangan Pembinaan Berdasarkan Klasifikasi:
               </div>
-              <div className="text-emerald-800 font-semibold mt-0.5 text-sm">
+              <div className="text-[#3B5BDB] font-semibold mt-0.5 text-sm">
                 {predictedStage}
               </div>
-              <div className="text-emerald-700/90 text-[11px] mt-1">
+              <div className="text-slate-600 text-[11px] mt-1">
                 Sistem secara otomatis menetapkan jenjang penanggung jawab (Piket ➔ Wali Kelas ➔ BK ➔ Wakasek Kesiswaan ➔ Kepala Sekolah) berdasarkan riwayat dan tingkat pelanggaran resmi.
               </div>
             </div>
@@ -407,11 +407,11 @@ export const RecordViolationModal: React.FC<RecordViolationModalProps> = ({
               disabled={!currentStudent}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all ${
                 currentStudent
-                  ? 'bg-[#0B231E] hover:bg-[#143d34] text-white active:scale-95'
+                  ? 'bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white active:scale-95'
                   : 'bg-slate-300 text-slate-500 cursor-not-allowed'
               }`}
             >
-              <CheckCircle2 className="w-4 h-4 text-[#83C532]" />
+              <CheckCircle2 className="w-4 h-4 text-white" />
               <span>Simpan & Terbitkan Pelanggaran</span>
             </button>
           </div>

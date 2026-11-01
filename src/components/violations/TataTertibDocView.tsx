@@ -44,7 +44,7 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
       klasifikasi: 'Ringan & Sedang',
       pic: 'Tim Ketertiban & Piket',
       targetKepatuhan: '100% Kerapian Busana',
-      gradien: 'from-emerald-950 via-[#0B231E] to-[#124237]'
+      gradien: 'from-[#1E3A8A] via-[#3451B2] to-[#3B5BDB]'
     },
     {
       num: 2,
@@ -55,7 +55,7 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
       klasifikasi: 'Ringan & Sedang',
       pic: 'Wali Kelas & Guru BK',
       targetKepatuhan: '100% Standar Pola Bros',
-      gradien: 'from-slate-900 via-[#102722] to-[#173e35]'
+      gradien: 'from-[#1E3A8A] via-[#2F4CB7] to-[#2563EB]'
     },
     {
       num: 3,
@@ -66,7 +66,7 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
       klasifikasi: 'Ringan & Sedang',
       pic: 'Guru Piket & Kesiswaan',
       targetKepatuhan: '> 98% Tingkat Hadir',
-      gradien: 'from-teal-950 via-[#0B231E] to-[#0f3a30]'
+      gradien: 'from-[#1E3A8A] via-[#3B5BDB] to-[#1D4ED8]'
     },
     {
       num: 4,
@@ -77,7 +77,7 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
       klasifikasi: 'Tingkat Ringan',
       pic: 'Guru Agama & Mapel',
       targetKepatuhan: '100% Keterlibatan Ibadah',
-      gradien: 'from-cyan-950 via-[#0a2723] to-[#113a34]'
+      gradien: 'from-[#1E3A8A] via-[#3451B2] to-[#2563EB]'
     },
     {
       num: 5,
@@ -88,7 +88,7 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
       klasifikasi: 'Tingkat Berat',
       pic: 'Kepala Sekolah & Tim Khusus',
       targetKepatuhan: '0 Insiden Kriminalitas',
-      gradien: 'from-rose-950 via-[#260f14] to-[#1a0b10]'
+      gradien: 'from-rose-950 via-rose-900 to-red-800'
     },
     {
       num: 6,
@@ -99,7 +99,7 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
       klasifikasi: 'Ringan & Sedang',
       pic: 'Tim Sarpras & Kebersihan',
       targetKepatuhan: '100% Bebas Sampah Plastik',
-      gradien: 'from-emerald-950 via-[#0f2e27] to-[#173e35]'
+      gradien: 'from-[#1E3A8A] via-[#3858D6] to-[#3B5BDB]'
     },
   ];
 
@@ -120,34 +120,34 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner Header */}
-      <div className="bg-[#0B231E] text-white p-6 lg:p-8 rounded-3xl border border-[#1b5042] shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-r from-[#1E3A8A] via-[#3451B2] to-[#3B5BDB] text-white p-6 lg:p-8 rounded-3xl border border-white/20 shadow-xl relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono tracking-widest uppercase px-2.5 py-0.5 rounded-full bg-[#83C532]/25 text-[#83C532] font-bold">
+              <span className="text-[10px] font-mono tracking-widest uppercase px-2.5 py-0.5 rounded-full bg-white/20 text-white font-bold">
                 KODIFIKASI HUKUM & TATA TERTIB SEKOLAH
               </span>
-              <span className="text-xs text-slate-400">·</span>
-              <span className="text-xs text-slate-300">SK Kepala {schoolConfig.name || 'SMPN 1 Kandangan'}</span>
+              <span className="text-xs text-blue-200">·</span>
+              <span className="text-xs text-blue-100">SK Kepala {schoolConfig.name || 'SMPN 1 Kandangan'}</span>
             </div>
 
             <h1 className="text-xl lg:text-2xl font-black tracking-tight text-white">
               Pusat Dokumen Tata Tertib & Pedoman BSAN
             </h1>
-            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+            <p className="text-xs text-blue-100 max-w-2xl leading-relaxed">
               Kompilasi pasal regulasi, target kepatuhan indikator kedisiplinan, serta penjenjangan sanksi resmi berbasis Budaya Sekolah Aman dan Nyaman (BSAN) Grisaka Temanggung.
             </p>
           </div>
 
           {/* Quick Search */}
           <div className="relative w-full md:w-80">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+            <Search className="w-4 h-4 text-blue-200 absolute left-3.5 top-3" />
             <input
               type="text"
               value={searchWord}
               onChange={(e) => setSearchWord(e.target.value)}
               placeholder="Cari indikator, kode aturan, sanksi..."
-              className="w-full pl-10 pr-4 py-2.5 text-xs rounded-2xl border border-white/20 bg-black/20 text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-[#83C532]/60"
+              className="w-full pl-10 pr-4 py-2.5 text-xs rounded-2xl border border-white/20 bg-white/10 text-white placeholder-blue-200 focus:outline-hidden focus:ring-2 focus:ring-white/50"
             />
           </div>
         </div>
@@ -157,7 +157,7 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
       <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Gavel className="w-4 h-4 text-[#0B231E]" />
+            <Gavel className="w-4 h-4 text-[#3B5BDB]" />
             <h3 className="font-bold text-xs uppercase tracking-wider text-slate-900">
               Alur Hierarki Penjenjangan Sanksi & Pembinaan Kedisiplinan:
             </h3>
@@ -266,18 +266,18 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
               }}
               className={`p-3 rounded-2xl text-left border transition-all ${
                 isActive
-                  ? 'bg-[#0B231E] border-[#0B231E] text-white shadow-md'
+                  ? 'bg-[#3B5BDB] border-[#3B5BDB] text-white shadow-md'
                   : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                  isActive ? 'bg-[#83C532] text-[#0B231E]' : 'bg-slate-100 text-slate-700'
+                  isActive ? 'bg-white text-[#3B5BDB]' : 'bg-slate-100 text-slate-700'
                 }`}>
                   PASAL {pasal.num}
                 </span>
                 <span className={`text-[10px] font-bold ${
-                  pasal.num === 5 ? 'text-red-500' : isActive ? 'text-emerald-300' : 'text-slate-500'
+                  pasal.num === 5 ? 'text-red-500' : isActive ? 'text-blue-200' : 'text-slate-500'
                 }`}>
                   {pasal.totalIndikator} Aturan
                 </span>
@@ -295,14 +295,14 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
         <div className={`p-6 lg:p-7 rounded-3xl bg-gradient-to-r ${currentKPI.gradien} text-white shadow-lg space-y-4`}>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-white/10 text-[#83C532] font-mono font-bold text-[10px] uppercase tracking-wider mb-2">
-                <Sparkles className="w-3 h-3 text-[#83C532]" />
+              <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-white/20 text-white font-mono font-bold text-[10px] uppercase tracking-wider mb-2">
+                <Sparkles className="w-3 h-3 text-white" />
                 <span>KPI PROTOKOL KEPATUHAN SISWA</span>
               </div>
               <h2 className="text-lg lg:text-xl font-black text-white tracking-tight">
                 {currentKPI.title}
               </h2>
-              <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
+              <p className="text-xs text-blue-100 mt-1 max-w-3xl leading-relaxed">
                 {currentKPI.subtitle}
               </p>
             </div>
@@ -312,46 +312,46 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
             {/* KPI 1 */}
             <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/10">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-slate-300">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-blue-100">
                 Total Indikator Aturan
               </div>
-              <div className="text-xl font-black font-mono text-[#83C532] mt-0.5">
+              <div className="text-xl font-black font-mono text-white mt-0.5">
                 {currentKPI.totalIndikator} Butir
               </div>
-              <div className="text-[10px] text-slate-300 mt-0.5">Standar Peraturan Sekolah</div>
+              <div className="text-[10px] text-blue-100 mt-0.5">Standar Peraturan Sekolah</div>
             </div>
 
             {/* KPI 2 */}
             <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/10">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-slate-300">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-blue-100">
                 Klasifikasi Pelanggaran
               </div>
               <div className="text-xl font-black text-white mt-0.5">
                 {currentKPI.klasifikasi}
               </div>
-              <div className="text-[10px] text-slate-300 mt-0.5">Tingkat Penindakan Sanksi</div>
+              <div className="text-[10px] text-blue-100 mt-0.5">Tingkat Penindakan Sanksi</div>
             </div>
 
             {/* KPI 3 */}
             <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/10">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-slate-300">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-blue-100">
                 Penanggung Jawab Utama
               </div>
               <div className="text-xl font-black text-white mt-0.5 truncate">
                 {currentKPI.pic}
               </div>
-              <div className="text-[10px] text-slate-300 mt-0.5">Aparatur Pembinaan Grisaka</div>
+              <div className="text-[10px] text-blue-100 mt-0.5">Aparatur Pembinaan Grisaka</div>
             </div>
 
             {/* KPI 4 */}
             <div className="bg-white/10 backdrop-blur-xs p-3.5 rounded-2xl border border-white/10">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-slate-300">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-blue-100">
                 Target Kepatuhan BSAN
               </div>
-              <div className="text-xl font-black text-[#83C532] mt-0.5">
+              <div className="text-xl font-black text-white mt-0.5">
                 {currentKPI.targetKepatuhan}
               </div>
-              <div className="text-[10px] text-slate-300 mt-0.5">Sasaran Mutu Karakter</div>
+              <div className="text-[10px] text-blue-100 mt-0.5">Sasaran Mutu Karakter</div>
             </div>
           </div>
         </div>
@@ -360,7 +360,7 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
       {/* Filter and Count Summary */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="text-xs font-bold text-slate-800 flex items-center gap-2">
-          <BookOpen className="w-4 h-4 text-[#0B231E]" />
+          <BookOpen className="w-4 h-4 text-[#3B5BDB]" />
           <span>Rincian Indikator Pelanggaran & Sanksi Prosedural:</span>
           <span className="font-mono text-slate-500 font-normal">({filteredItems.length} indikator)</span>
         </div>
@@ -395,13 +395,13 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
             return (
               <div
                 key={item.id}
-                className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs hover:border-[#0B231E]/40 transition-all group"
+                className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs hover:border-[#3B5BDB]/50 transition-all group"
               >
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                   {/* Left Column: Code, Pasal, & Text */}
                   <div className="space-y-2 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono font-bold text-xs px-2.5 py-0.5 rounded-lg bg-[#0B231E] text-white">
+                      <span className="font-mono font-bold text-xs px-2.5 py-0.5 rounded-lg bg-[#3B5BDB] text-white">
                         {item.kode}
                       </span>
                       <span className="text-xs font-semibold text-slate-700">
@@ -441,10 +441,10 @@ export const TataTertibDocView: React.FC<TataTertibDocViewProps> = ({
                     <div className="shrink-0 self-end md:self-center">
                       <button
                         onClick={() => onSelectRuleForStudent(item.id)}
-                        className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0B231E] hover:bg-[#143d34] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
                       >
                         <span>Pilih Indikator Ini</span>
-                        <ChevronRight className="w-3.5 h-3.5 text-[#83C532]" />
+                        <ChevronRight className="w-3.5 h-3.5 text-white" />
                       </button>
                     </div>
                   )}

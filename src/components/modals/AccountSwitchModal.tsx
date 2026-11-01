@@ -138,23 +138,23 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
       <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-6">
         
         {/* Top Header */}
-        <div className="bg-[#0B231E] px-6 py-4 flex items-center justify-between text-white">
+        <div className="bg-gradient-to-r from-[#1E3A8A] via-[#3451B2] to-[#3B5BDB] px-6 py-4 flex items-center justify-between text-white">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#83C532] text-[#0B231E] flex items-center justify-center font-bold">
+            <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center font-bold shadow-inner">
               <Users className="w-5 h-5 stroke-[2.5]" />
             </div>
             <div>
               <h3 className="font-bold text-base tracking-tight">
                 Pilih Akun Petugas BSAN ({accounts.length} / {MAX_ACCOUNTS} Terdaftar)
               </h3>
-              <p className="text-xs text-slate-300">
+              <p className="text-xs text-blue-100">
                 Tiap akun dapat dirubah Nama, NIP, dan Passwordnya. Mode Tamu berstatus view-only.
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-blue-100 hover:text-white transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -232,7 +232,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                   required
                   value={editingAcc.name}
                   onChange={(e) => setEditingAcc({ ...editingAcc, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#0B231E] focus:outline-none"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none"
                 />
               </div>
 
@@ -243,7 +243,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                     type="text"
                     value={editingAcc.nip}
                     onChange={(e) => setEditingAcc({ ...editingAcc, nip: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#0B231E] focus:outline-none font-mono"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none font-mono"
                   />
                 </div>
                 <div>
@@ -253,7 +253,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                     required
                     value={editingAcc.pin}
                     onChange={(e) => setEditingAcc({ ...editingAcc, pin: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#0B231E] focus:outline-none font-mono"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none font-mono"
                   />
                 </div>
               </div>
@@ -268,7 +268,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#0B231E] hover:bg-[#143d34] text-white rounded-xl font-bold shadow-xs cursor-pointer"
+                  className="px-5 py-2 bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white rounded-xl font-bold shadow-xs cursor-pointer"
                 >
                   Simpan Perubahan
                 </button>
@@ -280,14 +280,14 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
             <div className="text-center space-y-1">
               <div 
                 className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center text-white text-xl font-black shadow-md"
-                style={{ backgroundColor: selectedAccount.avatarColor || '#0B231E' }}
+                style={{ backgroundColor: selectedAccount.avatarColor || '#3B5BDB' }}
               >
                 {selectedAccount.name.charAt(0)}
               </div>
               <h4 className="font-extrabold text-base text-slate-900 pt-2">
                 {selectedAccount.name}
               </h4>
-              <p className="text-xs text-emerald-800 font-semibold">
+              <p className="text-xs text-blue-700 font-semibold">
                 {selectedAccount.role} · {selectedAccount.username}
               </p>
               <p className="text-[11px] text-slate-400 font-mono">
@@ -312,7 +312,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                       setPinError(null);
                     }}
                     placeholder="••••"
-                    className="w-full text-center pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono text-base tracking-widest focus:ring-2 focus:ring-[#0B231E] focus:outline-none"
+                    className="w-full text-center pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono text-base tracking-widest focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none"
                   />
                 </div>
                 {pinError && (
@@ -332,7 +332,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 rounded-xl text-xs font-bold bg-[#0B231E] hover:bg-[#143d34] text-white shadow-xs transition-all active:scale-95 cursor-pointer"
+                  className="flex-1 py-2 rounded-xl text-xs font-bold bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white shadow-xs transition-all active:scale-95 cursor-pointer"
                 >
                   Konfirmasi Login
                 </button>
@@ -361,7 +361,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                   placeholder="Cari dari 55 akun (Nama, NIP, Peran, Rombel)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#0B231E] focus:outline-none"
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none"
                 />
               </div>
 
@@ -379,7 +379,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                     onClick={() => setRoleFilter(f.id)}
                     className={`px-2.5 py-1 rounded-lg font-bold transition-colors cursor-pointer ${
                       roleFilter === f.id
-                        ? 'bg-[#0B231E] text-[#83C532]'
+                        ? 'bg-[#3B5BDB] text-white shadow-xs'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
@@ -400,7 +400,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                       key={acc.id}
                       className={`p-2.5 rounded-2xl border transition-all flex items-center justify-between gap-2.5 ${
                         isCurrent
-                          ? 'bg-emerald-50/90 border-[#83C532] ring-1 ring-[#83C532]'
+                          ? 'bg-blue-50/90 border-[#3B5BDB] ring-1 ring-[#3B5BDB]'
                           : 'bg-white hover:bg-slate-50 border-slate-200'
                       }`}
                     >
@@ -410,7 +410,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                       >
                         <div 
                           className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
-                          style={{ backgroundColor: acc.avatarColor || '#0B231E' }}
+                          style={{ backgroundColor: acc.avatarColor || '#3B5BDB' }}
                         >
                           {acc.name.charAt(0)}
                         </div>
@@ -419,7 +419,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                             {acc.name}
                           </div>
                           <div className="text-[10px] text-slate-500 truncate flex items-center gap-1">
-                            <span className="font-semibold text-emerald-800">{acc.role}</span>
+                            <span className="font-semibold text-blue-700">{acc.role}</span>
                             <span>·</span>
                             <span className="font-mono text-slate-400">NIP: {acc.nip.split(' ')[0] || '-'}</span>
                           </div>
@@ -444,7 +444,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                           onClick={() => handleSelectAccountToLogin(acc)}
                           className={`text-[10px] font-bold px-2 py-1 rounded-lg cursor-pointer ${
                             isCurrent
-                              ? 'bg-[#83C532] text-[#0B231E] font-black'
+                              ? 'bg-[#3B5BDB] text-white font-black'
                               : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                           }`}
                         >

@@ -527,17 +527,17 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#F4F6F8] text-slate-800 relative">
+    <div className="min-h-screen flex bg-[#EEF2F8] text-slate-800 relative">
       {/* Toast Notifications */}
       {resetSuccessToast && (
-        <div className="fixed top-5 right-5 z-[999] max-w-md bg-emerald-600 text-white px-5 py-4 rounded-xl shadow-2xl flex items-start gap-3 border border-emerald-400/30 animate-in fade-in slide-in-from-top-4">
-          <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-emerald-100" />
+        <div className="fixed top-5 right-5 z-[999] max-w-md bg-[#3B5BDB] text-white px-5 py-4 rounded-xl shadow-2xl flex items-start gap-3 border border-blue-400/30 animate-in fade-in slide-in-from-top-4">
+          <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-blue-100" />
           <div className="flex-1 text-sm font-medium leading-relaxed">
             {resetSuccessToast}
           </div>
           <button 
             onClick={() => setResetSuccessToast(null)} 
-            className="text-emerald-200 hover:text-white p-1 rounded transition-colors"
+            className="text-blue-200 hover:text-white p-1 rounded transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -559,7 +559,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Sidebar Navigation (with Mobile Drawer support) */}
+      {/* Sidebar Navigation (with Mobile Drawer support & Royal Blue Theme) */}
       <Sidebar
         currentView={currentView}
         onSelectView={(view) => {
@@ -571,6 +571,7 @@ export default function App() {
         schoolConfig={schoolConfig}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        onOpenAccountSwitch={() => setIsAccountSwitchOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -694,25 +695,23 @@ export default function App() {
           )}
         </main>
 
-        {/* Bottom Quiet Footer */}
-        <footer className="no-print mt-auto py-4 px-6 lg:px-8 border-t border-slate-200/80 bg-white text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-3">
+        {/* Footer Matching Gambar 2 */}
+        <footer className="no-print mt-auto py-3.5 px-6 lg:px-8 border-t border-slate-200/90 bg-white text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-center sm:text-left">
-            <span className="font-semibold text-slate-800">{schoolConfig.name} ({schoolConfig.shortName})</span>
-            <span>·</span>
-            <span>Budaya Sekolah Aman dan Nyaman (BSAN)</span>
-          </div>
-
-          <div className="flex items-center gap-4 text-[11px] flex-wrap justify-center">
-            <span>Kepala Sekolah: <strong>{schoolConfig.principalName}</strong></span>
+            <span>© 2025-2026 {schoolConfig.name || 'SMPN 1 Kandangan'}. All rights reserved.</span>
             <span>·</span>
             <button
               onClick={handleTriggerResetData}
-              className="text-slate-500 hover:text-rose-600 flex items-center gap-1.5 transition-colors cursor-pointer font-medium"
+              className="text-slate-400 hover:text-rose-600 flex items-center gap-1 transition-colors cursor-pointer text-[11px]"
               title="Kembalikan data contoh awal ke kondisi clean dan bersih"
             >
-              <RotateCcw className="w-3.5 h-3.5 text-rose-500" />
-              <span>Reset Data Contoh (Clean & Bersih)</span>
+              <RotateCcw className="w-3 h-3 text-rose-500" />
+              <span>Reset Data</span>
             </button>
+          </div>
+
+          <div className="text-[11px] font-mono text-slate-500">
+            Versi 1.0.0
           </div>
         </footer>
       </div>

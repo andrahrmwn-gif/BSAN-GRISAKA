@@ -74,14 +74,14 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
       <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden my-6 max-h-[95vh] flex flex-col">
         {/* Modal Controls Bar (Hidden on Print) */}
-        <div className="no-print bg-[#0B231E] px-6 py-4 flex flex-wrap items-center justify-between gap-3 text-white">
+        <div className="no-print bg-gradient-to-r from-[#1E3A8A] via-[#3451B2] to-[#3B5BDB] px-6 py-4 flex flex-wrap items-center justify-between gap-3 text-white">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#83C532] text-[#0B231E] flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner">
               <FileText className="w-5 h-5 stroke-[2.5]" />
             </div>
             <div>
               <h3 className="font-bold text-sm">Dokumen Administrasi Kesiswaan & Tata Tertib</h3>
-              <p className="text-[11px] text-slate-300">
+              <p className="text-[11px] text-blue-100">
                 Penerbitan Surat Resmi SMP Negeri 1 Kandangan (Kabupaten Temanggung)
               </p>
             </div>
@@ -93,8 +93,8 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
               onClick={() => setDocType('surat_pernyataan')}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 docType === 'surat_pernyataan'
-                  ? 'bg-[#83C532] text-[#0B231E] font-bold shadow-xs'
-                  : 'text-white hover:bg-white/10'
+                  ? 'bg-white text-[#3B5BDB] font-bold shadow-xs'
+                  : 'text-blue-100 hover:text-white'
               }`}
             >
               Surat Pernyataan
@@ -103,8 +103,8 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
               onClick={() => setDocType('panggilan_ortu')}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 docType === 'panggilan_ortu'
-                  ? 'bg-[#83C532] text-[#0B231E] font-bold shadow-xs'
-                  : 'text-white hover:bg-white/10'
+                  ? 'bg-white text-[#3B5BDB] font-bold shadow-xs'
+                  : 'text-blue-100 hover:text-white'
               }`}
             >
               Surat Panggilan Ortu
@@ -113,8 +113,8 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
               onClick={() => setDocType('slip_pelanggaran')}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 docType === 'slip_pelanggaran'
-                  ? 'bg-[#83C532] text-[#0B231E] font-bold shadow-xs'
-                  : 'text-white hover:bg-white/10'
+                  ? 'bg-white text-[#3B5BDB] font-bold shadow-xs'
+                  : 'text-blue-100 hover:text-white'
               }`}
             >
               Slip Bukti Kontrol
@@ -195,7 +195,7 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
                 download={`${docType}_${student.nama.replace(/\s+/g, '_')}_${violation.id}.pdf`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#0B231E] hover:bg-[#153e33] text-[#83C532] font-bold rounded-lg text-[11px] transition-transform active:scale-95"
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-blue-50 text-[#3B5BDB] font-bold rounded-lg text-[11px] transition-transform active:scale-95 shadow-xs"
               >
                 <span>Buka / Unduh PDF</span>
                 <ExternalLink className="w-3 h-3" />

@@ -67,7 +67,7 @@ export function exportToWordDocument(
         .kop-table { width: 100%; border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 16px; }
         .kop-table td { text-align: center; }
         .kop-instansi { font-size: 13pt; font-weight: bold; text-transform: uppercase; }
-        .kop-sekolah { font-size: 16pt; font-weight: bold; letter-spacing: 1px; color: #0B231E; }
+        .kop-sekolah { font-size: 16pt; font-weight: bold; letter-spacing: 1px; color: #1E3A8A; }
         .kop-alamat { font-size: 9.5pt; font-style: italic; }
         h1 { font-size: 14pt; text-align: center; text-transform: uppercase; margin: 16px 0 4px 0; }
         .sub-header { text-align: center; font-size: 11pt; margin-bottom: 20px; font-weight: bold; }
@@ -227,7 +227,7 @@ export function exportViolationsToWord(
         body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.3; color: #000; }
         .kop-table { width: 100%; border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 16px; text-align: center; }
         .kop-instansi { font-size: 12pt; font-weight: bold; text-transform: uppercase; }
-        .kop-sekolah { font-size: 15pt; font-weight: bold; letter-spacing: 1px; color: #0B231E; }
+        .kop-sekolah { font-size: 15pt; font-weight: bold; letter-spacing: 1px; color: #1E3A8A; }
         .kop-alamat { font-size: 9pt; }
         h1 { font-size: 13pt; text-align: center; text-transform: uppercase; margin: 16px 0 4px 0; }
         table.data-table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 24px; font-size: 9.5pt; }
@@ -350,7 +350,7 @@ export function exportViolationsToPrintPDF(
         body { font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.3; color: #111; margin: 0; padding: 12px; }
         .kop-table { width: 100%; border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 14px; text-align: center; }
         .kop-instansi { font-size: 11pt; font-weight: bold; text-transform: uppercase; }
-        .kop-sekolah { font-size: 15pt; font-weight: bold; color: #0B231E; letter-spacing: 0.5px; }
+        .kop-sekolah { font-size: 15pt; font-weight: bold; color: #1E3A8A; letter-spacing: 0.5px; }
         .kop-alamat { font-size: 8.5pt; font-style: italic; }
         h1 { font-size: 12.5pt; text-align: center; text-transform: uppercase; margin: 10px 0 2px 0; font-weight: bold; }
         .sub { text-align: center; font-size: 8.5pt; margin-bottom: 14px; color: #333; }
@@ -494,7 +494,7 @@ export function exportStudentSlipToWord(
         body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.3; color: #000; margin: 15mm; }
         .kop-table { width: 100%; border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 16px; text-align: center; }
         .kop-instansi { font-size: 11pt; font-weight: bold; text-transform: uppercase; margin: 0; }
-        .kop-sekolah { font-size: 15pt; font-weight: bold; letter-spacing: 0.5px; color: #0B231E; margin: 2px 0; }
+        .kop-sekolah { font-size: 15pt; font-weight: bold; letter-spacing: 0.5px; color: #1E3A8A; margin: 2px 0; }
         .kop-sub { font-size: 9pt; margin: 1px 0; color: #222; }
         h1 { font-size: 13pt; text-align: center; text-transform: uppercase; margin: 14px 0 2px 0; font-weight: bold; }
         .doc-no { text-align: center; font-size: 9.5pt; margin-bottom: 16px; color: #333; }
@@ -610,17 +610,17 @@ export function exportStudentSlipToWord(
           </td>
           <td>
             Mengetahui,<br>
-            <strong>Wali Kelas ${student.kelas}</strong>
-            <div class="ttd-space"></div>
-            <u><strong>( Wali Kelas ${student.kelas} )</strong></u><br>
-            <span style="font-size: 8.5pt;">NIP. ........................................</span>
-          </td>
-          <td>
-            Mengetahui,<br>
-            <strong>${schoolConfig.bkTitle || 'Guru Bimbingan Konseling'}</strong>
+            <strong>${schoolConfig.bkTitle || 'Guru BK / Konselor'}</strong>
             <div class="ttd-space"></div>
             <u><strong>( ${schoolConfig.bkName || 'Sri Wahyuni, S.Pd., M.Si.'} )</strong></u><br>
             <span style="font-size: 8.5pt;">NIP. ${schoolConfig.bkNip || '19780824 200501 2 008'}</span>
+          </td>
+          <td>
+            Mengetahui,<br>
+            <strong>${schoolConfig.timKesiswaanTitle || 'Tim Kesiswaan'}</strong>
+            <div class="ttd-space"></div>
+            <u><strong>( ${schoolConfig.timKesiswaanName || schoolConfig.wakasekName || 'Drs. Subagyo, M.Pd.'} )</strong></u><br>
+            <span style="font-size: 8.5pt;">NIP. ${schoolConfig.timKesiswaanNip || schoolConfig.wakasekNip || '19700315 199601 1 002'}</span>
           </td>
           <td>
             Kandangan, ${dateStr}<br>
@@ -714,9 +714,10 @@ export function exportStudentSlipToExcel(
   csvRows.push(
     [''],
     [`Kandangan, ${dateStr}`],
-    [`Kepala Sekolah: ${schoolConfig.principalName || 'Kepala Sekolah'} (NIP: ${schoolConfig.principalNip || '-'})`],
-    [`Guru BK: ${schoolConfig.bkName || 'Guru BK'} (NIP: ${schoolConfig.bkNip || '-'})`],
-    [`Tim Kesiswaan: ${schoolConfig.timKesiswaanName || 'Tim Kesiswaan'} (NIP: ${schoolConfig.timKesiswaanNip || '-'})`]
+    [`1. Orang Tua / Wali: ${student.namaOrtu}`],
+    [`2. Guru BK / Konselor: ${schoolConfig.bkName || 'Sri Wahyuni, S.Pd., M.Si.'} (NIP: ${schoolConfig.bkNip || '19780824 200501 2 008'})`],
+    [`3. Tim Kesiswaan: ${schoolConfig.timKesiswaanName || schoolConfig.wakasekName || 'Drs. Subagyo, M.Pd.'} (NIP: ${schoolConfig.timKesiswaanNip || schoolConfig.wakasekNip || '19700315 199601 1 002'})`],
+    [`4. Kepala Sekolah: ${schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'} (NIP: ${schoolConfig.principalNip || '19740512 199802 2 003'})`]
   );
 
   const csvContent = '\uFEFF' + csvRows.map(row =>
@@ -808,7 +809,7 @@ export async function exportStudentSlipToPDF(
     <div style="border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 14px; text-align: center;">
       <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">PEMERINTAH KABUPATEN TEMANGGUNG</div>
       <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
-      <div style="font-size: 15pt; font-weight: bold; color: #0B231E; margin: 2px 0;">${schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'} (${schoolConfig.shortName || 'GRISAKA'})</div>
+      <div style="font-size: 15pt; font-weight: bold; color: #1E3A8A; margin: 2px 0;">${schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'} (${schoolConfig.shortName || 'GRISAKA'})</div>
       <div style="font-size: 9pt;">NPSN: ${schoolConfig.npsn || '20321456'} · Status Akreditasi: ${schoolConfig.accreditation || 'A'}</div>
       <div style="font-size: 9pt;">${schoolConfig.address || 'Jl. Raya Kandangan'}, ${schoolConfig.city || 'Kabupaten Temanggung'} · Jawa Tengah 56281</div>
       <div style="font-size: 8.5pt;">Telp: ${schoolConfig.phone || '-'} · Email: ${schoolConfig.email || '-'} · Website: ${schoolConfig.website || '-'}</div>
@@ -1124,7 +1125,7 @@ export function exportSingleSuratToWord(
         .kop-table { width: 100%; border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 16px; }
         .kop-table td { text-align: center; }
         .kop-instansi { font-size: 11pt; font-weight: bold; text-transform: uppercase; }
-        .kop-sekolah { font-size: 15pt; font-weight: bold; letter-spacing: 0.5px; color: #0B231E; }
+        .kop-sekolah { font-size: 15pt; font-weight: bold; letter-spacing: 0.5px; color: #1E3A8A; }
         .kop-alamat { font-size: 9pt; font-style: italic; }
       </style>
     </head>
@@ -1231,46 +1232,79 @@ export async function exportElementToPDF(
 ): Promise<{ success: boolean; blobUrl?: string }> {
   const cleanFilename = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
 
-  // Create isolated offscreen container to avoid viewport clipping and scrollbar constraints
+  // Wait for web fonts to load
+  try {
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // Create isolated offscreen container with exact A4 dimensions
   const offscreen = document.createElement('div');
+  offscreen.id = 'pdf-render-canvas-holder';
   offscreen.style.position = 'fixed';
-  offscreen.style.top = '-99999px';
   offscreen.style.left = '0';
-  offscreen.style.width = '794px'; // Standard A4 width at 96 DPI
-  offscreen.style.padding = '0';
-  offscreen.style.margin = '0';
+  offscreen.style.top = '0';
+  offscreen.style.width = '794px'; // Standard A4 width @ 96 DPI
   offscreen.style.backgroundColor = '#ffffff';
   offscreen.style.color = '#000000';
   offscreen.style.zIndex = '-99999';
+  offscreen.style.opacity = '1';
+  offscreen.style.pointerEvents = 'none';
 
   const clone = element.cloneNode(true) as HTMLElement;
   clone.style.width = '794px';
   clone.style.maxWidth = '794px';
+  clone.style.minWidth = '794px';
   clone.style.minHeight = 'auto';
   clone.style.height = 'auto';
   clone.style.overflow = 'visible';
   clone.style.transform = 'none';
   clone.style.boxShadow = 'none';
+  clone.style.borderRadius = '0';
   clone.style.border = 'none';
   clone.style.margin = '0';
+  clone.style.padding = '32px';
   clone.style.backgroundColor = '#ffffff';
   clone.style.color = '#000000';
+  clone.style.display = 'block';
+  clone.style.visibility = 'visible';
+
+  // Remove any interactive or no-print buttons
+  const noPrintItems = clone.querySelectorAll('.no-print, .exclude-pdf, button');
+  noPrintItems.forEach((btn) => {
+    // keep non-button items, but remove any UI action buttons
+    if (btn.classList.contains('no-print') || btn.tagName === 'BUTTON') {
+      btn.remove();
+    }
+  });
 
   // Sanitize any modern CSS color functions (like oklch) that crash html2canvas
   const allElements = clone.querySelectorAll('*');
   allElements.forEach((node) => {
     const el = node as HTMLElement;
     if (el.style) {
-      // Force safe fallback colors if modern color strings exist
-      const computed = window.getComputedStyle(el);
-      if (computed.color && computed.color.includes('oklch')) {
-        el.style.color = '#111827';
+      // Prevent background-clip: text crashes in html2canvas
+      if (el.style.backgroundClip === 'text' || (el.style as any).webkitBackgroundClip === 'text') {
+        el.style.backgroundClip = 'border-box';
+        (el.style as any).webkitBackgroundClip = 'border-box';
+        el.style.color = '#1e3a8a';
       }
-      if (computed.backgroundColor && computed.backgroundColor.includes('oklch')) {
-        el.style.backgroundColor = '#ffffff';
-      }
-      if (computed.borderColor && computed.borderColor.includes('oklch')) {
-        el.style.borderColor = '#000000';
+      try {
+        const computed = window.getComputedStyle(el);
+        if (computed.color && computed.color.includes('oklch')) {
+          el.style.color = '#111827';
+        }
+        if (computed.backgroundColor && computed.backgroundColor.includes('oklch')) {
+          el.style.backgroundColor = '#ffffff';
+        }
+        if (computed.borderColor && computed.borderColor.includes('oklch')) {
+          el.style.borderColor = '#000000';
+        }
+      } catch (e) {
+        // ignore style read errors
       }
     }
   });
@@ -1278,8 +1312,11 @@ export async function exportElementToPDF(
   offscreen.appendChild(clone);
   document.body.appendChild(offscreen);
 
+  // Short delay for DOM repaint
+  await new Promise((r) => setTimeout(r, 60));
+
   try {
-    const totalHeight = Math.max(clone.scrollHeight, clone.offsetHeight, 1000);
+    const totalHeight = Math.max(clone.scrollHeight, clone.offsetHeight, 1050);
 
     const canvas = await html2canvas(clone, {
       scale: options?.scale || 2,
@@ -1293,10 +1330,11 @@ export async function exportElementToPDF(
       height: totalHeight,
       windowWidth: 794,
       windowHeight: totalHeight,
-      ignoreElements: (el) => el.classList?.contains('no-print') || el.classList?.contains('exclude-pdf')
     });
 
-    document.body.removeChild(offscreen);
+    if (document.body.contains(offscreen)) {
+      document.body.removeChild(offscreen);
+    }
 
     const imgData = canvas.toDataURL('image/jpeg', 0.98);
     const orientation = options?.landscape ? 'landscape' : 'portrait';
@@ -1453,7 +1491,7 @@ export function exportAttendanceToWord(
         body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.25; color: #000; margin: 20px; }
         .kop-table { width: 100%; border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 16px; text-align: center; }
         .kop-instansi { font-size: 13pt; font-weight: bold; text-transform: uppercase; margin: 0; }
-        .kop-sekolah { font-size: 16pt; font-weight: bold; letter-spacing: 0.5px; color: #0B231E; margin: 2px 0; }
+        .kop-sekolah { font-size: 16pt; font-weight: bold; letter-spacing: 0.5px; color: #1E3A8A; margin: 2px 0; }
         .kop-sub { font-size: 9pt; margin: 1px 0; color: #333; }
         h2 { font-size: 13pt; text-align: center; text-transform: uppercase; margin: 16px 0 4px 0; font-weight: bold; }
         .sub-header { text-align: center; font-size: 10.5pt; margin-bottom: 16px; }

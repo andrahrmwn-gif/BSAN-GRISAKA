@@ -133,7 +133,7 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
   const handleDownloadPdf = async () => {
     setIsExportingPdf(true);
     try {
-      const printArea = activeTab === 'document' ? document.getElementById('student-slip-printable-area') : null;
+      const printArea = document.getElementById('student-slip-printable-area');
       const res = await exportStudentSlipToPDF(student, violations, schoolConfig, printArea);
       if (res?.blobUrl) {
         setPdfDownloadUrl(res.blobUrl);
@@ -161,9 +161,9 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
       <div className="bg-white rounded-3xl max-w-5xl w-full shadow-2xl border border-slate-200 overflow-hidden my-4 max-h-[94vh] flex flex-col">
         {/* Modal Top Header Bar */}
-        <div className="no-print bg-[#0B231E] px-6 py-4 flex flex-wrap items-center justify-between gap-4 text-white shrink-0">
+        <div className="no-print bg-gradient-to-r from-[#1E3A8A] via-[#3451B2] to-[#3B5BDB] px-6 py-4 flex flex-wrap items-center justify-between gap-4 text-white shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-[#83C532] text-[#0B231E] flex items-center justify-center font-bold shadow-md shadow-[#83C532]/20">
+            <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center font-bold shadow-inner">
               <User className="w-6 h-6 stroke-[2.5]" />
             </div>
             <div>
@@ -171,11 +171,11 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                 <h3 className="font-bold text-base tracking-tight">
                   Slip Kedisiplinan & Rapor Pelanggaran Siswa
                 </h3>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded-lg bg-white/10 text-emerald-300 font-bold">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-lg bg-white/20 text-white font-bold">
                   {student.kelas} · {student.nisn}
                 </span>
               </div>
-              <p className="text-xs text-slate-300">
+              <p className="text-xs text-blue-100">
                 Sistem Terpadu Budaya Sekolah Aman dan Nyaman {schoolConfig.shortName || 'GRISAKA'} (Kab. Temanggung)
               </p>
             </div>
@@ -188,8 +188,8 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                 onClick={() => setActiveTab('timeline')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all ${
                   activeTab === 'timeline'
-                    ? 'bg-[#83C532] text-[#0B231E] font-bold shadow-xs'
-                    : 'text-slate-300 hover:text-white'
+                    ? 'bg-white text-[#3B5BDB] font-bold shadow-xs'
+                    : 'text-blue-100 hover:text-white'
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
@@ -200,8 +200,8 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                 onClick={() => setActiveTab('document')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all ${
                   activeTab === 'document'
-                    ? 'bg-[#83C532] text-[#0B231E] font-bold shadow-xs'
-                    : 'text-slate-300 hover:text-white'
+                    ? 'bg-white text-[#3B5BDB] font-bold shadow-xs'
+                    : 'text-blue-100 hover:text-white'
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
@@ -258,10 +258,10 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
 
         {/* Automatic PDF Download Notification Banner */}
         {pdfDownloadUrl && (
-          <div className="bg-[#0B231E] border-b border-[#1b4e41] text-white px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="bg-[#1E3A8A] border-b border-blue-800 text-white px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#83C532] animate-ping"></span>
-              <span className="font-semibold text-emerald-300">
+              <span className="w-2 h-2 rounded-full bg-blue-300 animate-ping"></span>
+              <span className="font-semibold text-blue-100">
                 File PDF resmi telah diproses dan diunduh secara otomatis.
               </span>
             </div>
@@ -270,7 +270,7 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
               download={`Rapor_Disiplin_${student.nama.replace(/\s+/g, '_')}_${student.kelas}.pdf`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#83C532] text-[#0B231E] hover:bg-[#96e03a] font-bold rounded-lg transition-transform active:scale-95 text-[11px]"
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-white text-[#3B5BDB] hover:bg-blue-50 font-bold rounded-lg transition-transform active:scale-95 text-[11px] shadow-xs"
             >
               <span>Buka / Unduh Ulang PDF</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -280,13 +280,13 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
 
         {/* Modal Scrollable Viewport */}
         <div className="flex-1 overflow-y-auto p-6 lg:p-8 space-y-6 bg-slate-50/60">
-          {activeTab === 'timeline' ? (
+          {activeTab === 'timeline' && (
             /* TAB 1: INTERACTIVE DOSSIER & PELANGGARAN HISTORY TIMELINE */
             <div className="space-y-6">
               {/* Student Identity Card */}
               <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0B231E] to-[#15463a] text-[#83C532] flex items-center justify-center text-2xl font-black shadow-md shrink-0">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1E3A8A] to-[#3B5BDB] text-white flex items-center justify-center text-2xl font-black shadow-md shrink-0">
                     {student.nama.charAt(0)}
                   </div>
                   <div>
@@ -294,7 +294,7 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                       <h2 className="text-xl font-black text-slate-900 tracking-tight">
                         {student.nama}
                       </h2>
-                      <span className="font-mono font-bold text-xs px-2.5 py-0.5 rounded-md bg-[#0B231E] text-white">
+                      <span className="font-mono font-bold text-xs px-2.5 py-0.5 rounded-md bg-[#3B5BDB] text-white">
                         Kelas {student.kelas}
                       </span>
                     </div>
@@ -405,18 +405,18 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
               </div>
 
               {/* Multi-Format Export Quick Action Banner */}
-              <div className="bg-gradient-to-r from-[#0B231E] via-[#133830] to-slate-900 p-5 rounded-3xl text-white shadow-md flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border border-[#83C532]/20">
+              <div className="bg-gradient-to-r from-[#1E3A8A] via-[#3451B2] to-[#3B5BDB] p-5 rounded-3xl text-white shadow-md flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border border-white/20">
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#83C532] animate-pulse"></span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-300 animate-pulse"></span>
                     <h4 className="font-bold text-sm tracking-tight text-white">
                       Unduh Berkas & Slip Kedisiplinan Siswa
                     </h4>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white/10 text-emerald-300 font-bold">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white/20 text-white font-bold">
                       Format Resmi Temanggung
                     </span>
                   </div>
-                  <p className="text-xs text-slate-300 leading-relaxed max-w-xl">
+                  <p className="text-xs text-blue-100 leading-relaxed max-w-xl">
                     Dilengkapi Kop Surat resmi (Pemerintah Kab. Temanggung), data identitas, rekapitulasi status BSAN, tabel riwayat kasus, dan lembar pengesahan tanda tangan.
                   </p>
                 </div>
@@ -452,10 +452,10 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
 
                   <button
                     onClick={() => setActiveTab('document')}
-                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-medium text-xs rounded-xl transition-colors cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white/20 hover:bg-white/30 text-white font-medium text-xs rounded-xl transition-colors cursor-pointer"
                     title="Buka Pratinjau Lembar Rapor Resmi"
                   >
-                    <Printer className="w-4 h-4 text-[#83C532]" />
+                    <Printer className="w-4 h-4 text-blue-200" />
                     <span>Lihat Lembar</span>
                   </button>
                 </div>
@@ -603,9 +603,9 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                                     onClose();
                                     onOpenSurat(v);
                                   }}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#0B231E] hover:bg-[#143d34] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
                                 >
-                                  <FileText className="w-3.5 h-3.5 text-[#83C532]" />
+                                  <FileText className="w-3.5 h-3.5 text-white" />
                                   <span>Buka Surat Resmi</span>
                                 </button>
                               </div>
@@ -618,11 +618,18 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                 )}
               </div>
             </div>
-          ) : (
-            /* TAB 2: PRATINJAU LEMBAR RAPOR RESMI (PRINT-READY PREVIEW) */
-            <div className="flex flex-col items-center space-y-4">
-              {/* Document View Top Action Bar */}
-              <div className="no-print bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-xs max-w-[210mm] w-full flex flex-wrap items-center justify-between gap-3">
+          )}
+
+          {/* TAB 2: PRATINJAU LEMBAR RAPOR RESMI (PRINT-READY PREVIEW) - Always mounted in DOM for 100% identical PDF & Word export */}
+          <div
+            className={
+              activeTab === 'document'
+                ? 'flex flex-col items-center space-y-4'
+                : 'fixed -left-[9999px] top-0 opacity-0 pointer-events-none w-[794px]'
+            }
+          >
+            {/* Document View Top Action Bar */}
+            <div className="no-print bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-xs max-w-[210mm] w-full flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
                     <FileText className="w-4 h-4" />
@@ -690,7 +697,7 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                       />
                     ) : (
                       <div className="w-14 h-14 rounded-full border-2 border-slate-900 flex flex-col items-center justify-center font-serif font-black text-slate-900 bg-slate-50 text-[10px] leading-tight">
-                        <span className="font-sans font-extrabold text-[9px] text-[#0B231E]">KAB</span>
+                        <span className="font-sans font-extrabold text-[9px] text-[#1E3A8A]">KAB</span>
                         <span>TMG</span>
                       </div>
                     )}
@@ -715,7 +722,7 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
 
                   <div className="w-16 h-16 shrink-0 flex items-center justify-center">
                     <div className="w-14 h-14 rounded-full border-2 border-slate-900 flex flex-col items-center justify-center font-serif font-black text-slate-900 bg-slate-50 text-[9px] leading-tight text-center">
-                      <span className="font-sans text-[8px] text-[#0B231E] font-bold">BSAN</span>
+                      <span className="font-sans text-[8px] text-[#1E3A8A] font-bold">BSAN</span>
                       <span className="text-[10px]">GRISAKA</span>
                     </div>
                   </div>
@@ -896,9 +903,8 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                 </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
-    </div>
   );
 };

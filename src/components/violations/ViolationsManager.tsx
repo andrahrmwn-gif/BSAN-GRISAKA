@@ -168,9 +168,9 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
 
           <button
             onClick={onOpenRecordModal}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#0B231E] hover:bg-[#143d34] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
           >
-            <Plus className="w-4 h-4 text-[#83C532]" />
+            <Plus className="w-4 h-4 text-white" />
             <span>Input Pelanggaran Baru</span>
           </button>
 
@@ -180,18 +180,18 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
       {/* Disciplinary Level Guide Card (Purely Ringan, Sedang, Berat - No Points) */}
       <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
         <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <BookOpen className="w-4 h-4 text-[#0B231E]" />
+          <BookOpen className="w-4 h-4 text-[#3B5BDB]" />
           <span>Alur Penjenjangan Pembinaan Tata Tertib Grisaka:</span>
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
           <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
             <div className="font-bold text-slate-900 text-[11px]">1. Pelanggaran Ringan (1x)</div>
-            <div className="text-emerald-800 font-semibold text-[11px] mt-0.5">Guru Mapel / Piket</div>
+            <div className="text-blue-700 font-semibold text-[11px] mt-0.5">Guru Mapel / Piket</div>
             <p className="text-[10px] text-slate-500 mt-1">Teguran lisan, pengarahan karakter, catatan buku piket harian.</p>
           </div>
-          <div className="p-3 rounded-2xl bg-emerald-50/50 border border-emerald-200">
-            <div className="font-bold text-emerald-950 text-[11px]">2. Ringan Berulang (2-3x)</div>
-            <div className="text-emerald-800 font-semibold text-[11px] mt-0.5">Wali Kelas</div>
+          <div className="p-3 rounded-2xl bg-blue-50/50 border border-blue-200">
+            <div className="font-bold text-blue-950 text-[11px]">2. Ringan Berulang (2-3x)</div>
+            <div className="text-blue-700 font-semibold text-[11px] mt-0.5">Wali Kelas</div>
             <p className="text-[10px] text-slate-600 mt-1">Pembinaan personal, WA orang tua, penandatanganan Surat Pernyataan.</p>
           </div>
           <div className="p-3 rounded-2xl bg-amber-50/60 border border-amber-200">
@@ -221,7 +221,7 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Cari siswa, uraian pasal, petugas..."
-            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-[#83C532]/40"
+            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40"
           />
         </div>
 
@@ -317,7 +317,7 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
                       <td className="py-3 px-4">
                         <div className="font-bold text-slate-900">{v.studentName}</div>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="font-mono font-bold text-[#0B231E] bg-[#0B231E]/10 px-1.5 py-0.2 rounded text-[10px]">
+                          <span className="font-mono font-bold text-[#3B5BDB] bg-blue-50 px-1.5 py-0.2 rounded text-[10px]">
                             {v.kelas}
                           </span>
                           <span className="text-[10px] text-slate-600">Pencatat: {v.guruPencatat}</span>
@@ -377,10 +377,10 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
                           {/* Print & Generate Surat Pernyataan / Slip Button */}
                           <button
                             onClick={() => onOpenSuratModal(v)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#0B231E] hover:bg-[#143d34] text-white text-[11px] font-semibold transition-colors"
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white text-[11px] font-semibold transition-colors"
                             title="Cetak Surat Pernyataan Siswa atau Surat Panggilan"
                           >
-                            <Printer className="w-3.5 h-3.5 text-[#83C532]" />
+                            <Printer className="w-3.5 h-3.5 text-white" />
                             <span>Surat & Slip</span>
                           </button>
 
@@ -422,14 +422,14 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-5xl w-full shadow-2xl border border-slate-200 overflow-hidden my-6 max-h-[95vh] flex flex-col">
             {/* Modal Controls Bar (Hidden during Print) */}
-            <div className="no-print bg-[#0B231E] px-6 py-4 flex flex-wrap items-center justify-between gap-3 text-white">
+            <div className="no-print bg-gradient-to-r from-[#1E3A8A] via-[#3451B2] to-[#3B5BDB] px-6 py-4 flex flex-wrap items-center justify-between gap-3 text-white">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-rose-500 text-white flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner">
                   <Printer className="w-5 h-5 stroke-[2.5]" />
                 </div>
                 <div>
                   <h3 className="font-bold text-sm">Pratinjau Dokumen Resmi PDF Pelanggaran</h3>
-                  <p className="text-[11px] text-slate-300">
+                  <p className="text-[11px] text-blue-100">
                     Buku Register & Rekapitulasi Catatan Pelanggaran Siswa {schoolConfig.name || 'SMPN 1 Kandangan'}
                   </p>
                 </div>
@@ -439,10 +439,10 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
                 <button
                   onClick={handleDirectDownloadPDF}
                   disabled={isExportingPdf}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-[#83C532] hover:bg-[#94db3a] disabled:opacity-50 text-[#0B231E] font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-white text-[#3B5BDB] hover:bg-blue-50 disabled:opacity-50 font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
                   title="Unduh langsung file PDF"
                 >
-                  <Printer className="w-4 h-4 text-[#0B231E]" />
+                  <Printer className="w-4 h-4 text-[#3B5BDB]" />
                   <span>{isExportingPdf ? 'Mengunduh...' : 'Unduh Langsung PDF'}</span>
                 </button>
 
@@ -458,13 +458,13 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
                   onClick={handleDownloadWord}
                   className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-medium text-xs rounded-xl transition-colors cursor-pointer"
                 >
-                  <FileText className="w-4 h-4 text-blue-300" />
+                  <FileText className="w-4 h-4 text-blue-200" />
                   <span>Unduh Word</span>
                 </button>
 
                 <button
                   onClick={() => setIsPdfModalOpen(false)}
-                  className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-blue-100 hover:text-white transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -482,7 +482,7 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
                   <div className="text-sm font-bold uppercase tracking-wider">
                     DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA
                   </div>
-                  <div className="text-xl font-black text-[#0B231E] tracking-tight uppercase mt-0.5">
+                  <div className="text-xl font-black text-[#1E3A8A] tracking-tight uppercase mt-0.5">
                     {schoolConfig.name} ({schoolConfig.shortName || 'GRISAKA'})
                   </div>
                   <div className="text-[11px] text-slate-700 font-sans mt-0.5">

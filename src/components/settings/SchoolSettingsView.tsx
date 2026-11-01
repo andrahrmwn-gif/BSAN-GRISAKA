@@ -284,7 +284,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
       <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#83C532]"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#3B5BDB]"></span>
             <h2 className="text-base font-bold text-slate-900">
               Pengaturan Sistem & Database Google Sheets / Drive
             </h2>
@@ -308,7 +308,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
           onClick={() => setActiveSettingsTab('profile_db')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeSettingsTab === 'profile_db'
-              ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+              ? 'bg-[#3B5BDB] text-white shadow-xs'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
@@ -320,7 +320,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
           onClick={() => setActiveSettingsTab('accounts')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeSettingsTab === 'accounts'
-              ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+              ? 'bg-[#3B5BDB] text-white shadow-xs'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
@@ -332,7 +332,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
           onClick={() => setActiveSettingsTab('audit_log')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeSettingsTab === 'audit_log'
-              ? 'bg-[#0B231E] text-[#83C532] shadow-xs'
+              ? 'bg-[#3B5BDB] text-white shadow-xs'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
@@ -516,7 +516,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                   disabled={isSyncing}
                   className="w-full mt-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                 >
-                  <UploadCloud className="w-4 h-4 text-[#83C532]" />
+                  <UploadCloud className="w-4 h-4 text-white" />
                   <span>{isSyncing ? 'Sedang Menyinkronkan...' : 'Sinkronkan Database Sekarang'}</span>
                 </button>
               </div>
@@ -594,7 +594,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
         {/* Section 1: Upload Logo Sekolah */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
           <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-            <ImageIcon className="w-5 h-5 text-[#0B231E]" />
+            <ImageIcon className="w-5 h-5 text-[#3B5BDB]" />
             <h3 className="font-bold text-sm text-slate-900">Logo Resmi Sekolah</h3>
           </div>
 
@@ -609,7 +609,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                     className="w-full h-full object-contain"
                   />
                 ) : (
-                  <div className="w-full h-full rounded-2xl bg-gradient-to-br from-[#0B231E] to-[#17483c] flex flex-col items-center justify-center text-[#83C532]">
+                  <div className="w-full h-full rounded-2xl bg-gradient-to-br from-[#1E3A8A] via-[#3451B2] to-[#3B5BDB] flex flex-col items-center justify-center text-white shadow-inner">
                     <Award className="w-10 h-10 stroke-[2.5]" />
                     <span className="text-[10px] font-black mt-1 text-white">GRISAKA</span>
                   </div>
@@ -627,8 +627,8 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
               </p>
 
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-2">
-                <label className="flex items-center gap-1.5 px-4 py-2 bg-[#0B231E] hover:bg-[#153e34] text-white text-xs font-semibold rounded-xl cursor-pointer transition-colors shadow-xs">
-                  <Upload className="w-3.5 h-3.5 text-[#83C532]" />
+                <label className="flex items-center gap-1.5 px-4 py-2 bg-[#3B5BDB] hover:bg-[#2563EB] text-white text-xs font-semibold rounded-xl cursor-pointer transition-colors shadow-xs">
+                  <Upload className="w-3.5 h-3.5 text-white" />
                   <span>Pilih Berkas Logo</span>
                   <input
                     type="file"
@@ -656,7 +656,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
         {/* Section 2: Data Pejabat & Penandatangan Dokumen Resmi */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
           <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-            <UserCheck className="w-5 h-5 text-[#0B231E]" />
+            <UserCheck className="w-5 h-5 text-[#3B5BDB]" />
             <h3 className="font-bold text-sm text-slate-900">
               Data Pejabat & Penandatangan Resmi Dokumen
             </h3>
@@ -665,9 +665,9 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* 1. Kepala Sekolah */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="font-bold text-xs text-[#0B231E] flex items-center justify-between">
+              <div className="font-bold text-xs text-[#3B5BDB] flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-[#83C532]" />
+                  <Sparkles className="w-3.5 h-3.5 text-[#3B5BDB]" />
                   <span>Kepala Sekolah</span>
                 </div>
                 <span className="text-[10px] text-slate-500 font-bold bg-slate-200/60 px-2 py-0.5 rounded-md">
@@ -685,7 +685,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                   value={formData.principalName}
                   onChange={(e) => setFormData({ ...formData, principalName: e.target.value })}
                   placeholder="Contoh: Yuliana Dewi Marithawati, S.Pd., M.Pd."
-                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:ring-2 focus:ring-[#83C532]/40 font-semibold text-slate-900"
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 font-semibold text-slate-900"
                 />
               </div>
 
@@ -699,7 +699,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                   value={formData.principalNip}
                   onChange={(e) => setFormData({ ...formData, principalNip: e.target.value })}
                   placeholder="Contoh: 19740512 199802 2 003"
-                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white font-mono focus:outline-hidden focus:ring-2 focus:ring-[#83C532]/40 text-slate-900"
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white font-mono focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 text-slate-900"
                 />
               </div>
             </div>
@@ -732,7 +732,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                     })
                   }
                   placeholder="Contoh: Drs. Subagyo, M.Pd."
-                  className="w-full text-xs p-2.5 rounded-xl border border-emerald-300 bg-white focus:outline-hidden focus:ring-2 focus:ring-[#83C532]/40 font-semibold text-slate-900"
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 font-semibold text-slate-900"
                 />
               </div>
 
@@ -752,7 +752,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                     })
                   }
                   placeholder="Contoh: 19700315 199601 1 002"
-                  className="w-full text-xs p-2.5 rounded-xl border border-emerald-300 bg-white font-mono focus:outline-hidden focus:ring-2 focus:ring-[#83C532]/40 text-slate-900"
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white font-mono focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 text-slate-900"
                 />
               </div>
 
@@ -765,7 +765,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                   value={formData.timKesiswaanTitle || 'Wakasek Urusan Kesiswaan & Ketertiban'}
                   onChange={(e) => setFormData({ ...formData, timKesiswaanTitle: e.target.value })}
                   placeholder="Contoh: Wakasek Urusan Kesiswaan & Ketertiban"
-                  className="w-full text-xs p-2.5 rounded-xl border border-emerald-300 bg-white focus:outline-hidden focus:ring-2 focus:ring-[#83C532]/40 text-slate-900"
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 text-slate-900"
                 />
               </div>
             </div>
@@ -829,7 +829,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
         {/* Section 3: Informasi Lembaga & Kop Surat */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
           <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-            <School className="w-5 h-5 text-[#0B231E]" />
+            <School className="w-5 h-5 text-[#3B5BDB]" />
             <h3 className="font-bold text-sm text-slate-900">
               Identitas Instansi & Alamat Sekolah
             </h3>
@@ -943,9 +943,9 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
         <div className="flex items-center justify-end gap-3 pt-2">
           <button
             type="submit"
-            className="flex items-center gap-2 px-6 py-3 bg-[#0B231E] hover:bg-[#143d34] text-white rounded-2xl text-xs font-bold shadow-md transition-transform active:scale-95 cursor-pointer"
+            className="flex items-center gap-2 px-6 py-3 bg-[#3B5BDB] hover:bg-[#2563EB] text-white rounded-2xl text-xs font-bold shadow-md transition-transform active:scale-95 cursor-pointer"
           >
-            <Save className="w-4 h-4 text-[#83C532]" />
+            <Save className="w-4 h-4 text-white" />
             <span>Simpan Semua Perubahan</span>
           </button>
         </div>
