@@ -30,9 +30,24 @@ import {
   AlertCircle,
   HelpCircle,
   TrendingUp,
-  Award
+  Award,
+  Plus,
+  Trash2,
+  Edit3,
+  Volume2,
+  Bell,
+  Play
 } from 'lucide-react';
 import { getDateAttendanceSummary } from '../../services/attendanceStorage';
+import { 
+  getStoredActivities, 
+  addActivity, 
+  updateActivity, 
+  deleteActivity, 
+  getActivityNotificationStatus, 
+  SchoolActivity 
+} from '../../services/announcementService';
+import { playSchoolChimeSound } from '../../utils/soundNotification';
 import {
   ResponsiveContainer,
   BarChart,
@@ -85,6 +100,36 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     time: '',
     seconds: '',
   });
+
+  // School Activities / Announcements state & sound notifications (H-5 s/d Hari H)
+  const [activities, setActivities] = useState<SchoolActivity[]>(() => getStoredActivities());
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<SchoolActivity | null>(null);
+  const [activityForm, setActivityForm] = useState({
+    title: '',
+    date: todayStr,
+    time: '07.00 WITA',
+    location: 'SMPN 1 Kandangan',
+    description: '',
+  });
+  const [isChimePlaying, setIsChimePlaying] = useState(false);
+
+  // Play sound on mount if any activity is active (H-5 s/d Hari H)
+  useEffect(() => {
+    const list = getStoredActivities();
+    setActivities(list);
+    const hasActiveEvent = list.some((a) => {
+      const st = getActivityNotificationStatus(a);
+      return st.shouldNotify;
+    });
+
+    if (hasActiveEvent) {
+      const timer = setTimeout(() => {
+        playSchoolChimeSound();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   useEffect(() => {
     const updateTime = () => {
@@ -268,6 +313,70 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     exportToCSV(exportData, filename);
   };
 
+  // Activity Management Handlers
+  const handleOpenAddActivity = () => {
+    setEditingActivity(null);
+    setActivityForm({
+      title: '',
+      date: todayStr,
+      time: '07.00 WITA',
+      location: 'SMPN 1 Kandangan',
+      description: '',
+    });
+    setIsActivityModalOpen(true);
+  };
+
+  const handleOpenEditActivity = (act: SchoolActivity) => {
+    setEditingActivity(act);
+    setActivityForm({
+      title: act.title,
+      date: act.startDate || act.date || todayStr,
+      time: act.time || '',
+      location: act.location || '',
+      description: act.description || '',
+    });
+    setIsActivityModalOpen(true);
+  };
+
+  const handleSaveActivity = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activityForm.title.trim() || !activityForm.date) return;
+
+    if (editingActivity) {
+      const updated = updateActivity(editingActivity.id, {
+        title: activityForm.title.trim(),
+        date: activityForm.date,
+        time: activityForm.time.trim(),
+        location: activityForm.location.trim(),
+        description: activityForm.description.trim(),
+      });
+      setActivities(updated);
+    } else {
+      const updated = addActivity({
+        title: activityForm.title.trim(),
+        date: activityForm.date,
+        time: activityForm.time.trim(),
+        location: activityForm.location.trim(),
+        description: activityForm.description.trim(),
+      });
+      setActivities(updated);
+    }
+    setIsActivityModalOpen(false);
+  };
+
+  const handleDeleteActivity = (id: string, title: string) => {
+    if (window.confirm(`Yakin ingin menghapus agenda kegiatan "${title}"?`)) {
+      const updated = deleteActivity(id);
+      setActivities(updated);
+    }
+  };
+
+  const handleTriggerChime = () => {
+    setIsChimePlaying(true);
+    playSchoolChimeSound();
+    setTimeout(() => setIsChimePlaying(false), 2000);
+  };
+
   return (
     <div className="space-y-5">
       {/* =========================================================================
@@ -359,24 +468,25 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
       </div>
 
       {/* =========================================================================
-          ROW 2: TOP 5 KPI METRIC CARDS (Exact Layout from Gambar 2)
+          ROW 2: 7 VIBRANT SOLID & GRADIENT KPI METRIC CARDS WITH SHARP CONTRAST
+          (Including 2 New Action Cards: Catat Pelanggaran & Catat Kehadiran)
       ========================================================================= */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-3.5">
         {/* KPI 1: Total Siswa */}
         <div 
           onClick={() => onNavigate('students')}
-          className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all cursor-pointer group flex items-center gap-3.5"
+          className="bg-gradient-to-br from-[#1E3A8A] via-[#2563EB] to-[#3B82F6] text-white p-4 sm:p-4.5 rounded-2xl border border-white/20 shadow-md shadow-blue-900/20 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3"
           title="Buka Database Siswa Terpusat"
         >
-          <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0 group-hover:scale-105 transition-transform">
-            <Users className="w-6 h-6" />
+          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-105 transition-transform">
+            <Users className="w-6 h-6 stroke-[2.2]" />
           </div>
           <div className="min-w-0">
-            <span className="text-xs font-semibold text-slate-500 block truncate">Total Siswa</span>
-            <div className="text-2xl font-black text-slate-900 leading-tight">
+            <span className="text-[11px] font-bold text-blue-100 uppercase tracking-wider block truncate">Total Siswa</span>
+            <div className="text-2xl font-black text-white leading-tight">
               {totalStudents}
             </div>
-            <span className="text-[11px] font-medium text-blue-600 block truncate">Siswa Aktif</span>
+            <span className="text-[11px] font-bold text-blue-200 block truncate">Siswa Aktif</span>
           </div>
         </div>
 
@@ -388,18 +498,18 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             setStatusClassFilter('all');
             setStatusSearchQuery('');
           }}
-          className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all cursor-pointer group flex items-center gap-3.5 text-left active:scale-98"
+          className="bg-gradient-to-br from-[#065F46] via-[#059669] to-[#10B981] text-white p-4 sm:p-4.5 rounded-2xl border border-white/20 shadow-md shadow-emerald-900/20 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3 text-left active:scale-98"
           title="Klik untuk melihat daftar seluruh siswa yang Hadir hari ini"
         >
-          <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0 group-hover:scale-105 transition-transform">
-            <CheckCircle2 className="w-6 h-6" />
+          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-105 transition-transform">
+            <CheckCircle2 className="w-6 h-6 stroke-[2.2]" />
           </div>
           <div className="min-w-0">
-            <span className="text-xs font-semibold text-slate-500 block truncate">Hadir Hari Ini</span>
-            <div className="text-2xl font-black text-slate-900 leading-tight">
+            <span className="text-[11px] font-bold text-emerald-100 uppercase tracking-wider block truncate">Hadir Hari Ini</span>
+            <div className="text-2xl font-black text-white leading-tight">
               {hadirCount}
             </div>
-            <span className="text-[11px] font-bold text-emerald-600 block truncate">
+            <span className="text-[11px] font-black text-emerald-100 block truncate">
               {percentHadirStr}%
             </span>
           </div>
@@ -413,18 +523,18 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             setStatusClassFilter('all');
             setStatusSearchQuery('');
           }}
-          className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all cursor-pointer group flex items-center gap-3.5 text-left active:scale-98"
+          className="bg-gradient-to-br from-[#9A3412] via-[#EA580C] to-[#F97316] text-white p-4 sm:p-4.5 rounded-2xl border border-white/20 shadow-md shadow-orange-900/20 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3 text-left active:scale-98"
           title="Klik untuk melihat daftar seluruh siswa yang Tidak Hadir (Sakit, Izin, Alpa)"
         >
-          <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0 group-hover:scale-105 transition-transform">
-            <AlertTriangle className="w-6 h-6" />
+          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-105 transition-transform">
+            <AlertTriangle className="w-6 h-6 stroke-[2.2]" />
           </div>
           <div className="min-w-0">
-            <span className="text-xs font-semibold text-slate-500 block truncate">Tidak Hadir</span>
-            <div className="text-2xl font-black text-slate-900 leading-tight">
+            <span className="text-[11px] font-bold text-orange-100 uppercase tracking-wider block truncate">Tidak Hadir</span>
+            <div className="text-2xl font-black text-white leading-tight">
               {tidakHadirCount}
             </div>
-            <span className="text-[11px] font-bold text-amber-600 block truncate">
+            <span className="text-[11px] font-black text-orange-100 block truncate">
               {percentTidakHadirStr}%
             </span>
           </div>
@@ -432,38 +542,76 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
         {/* KPI 4: Guru & Tendik */}
         <div 
-          className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-3.5"
-          title="Total Guru dan Tenaga Kependidikan"
+          className="bg-gradient-to-br from-[#581C87] via-[#7E22CE] to-[#A855F7] text-white p-4 sm:p-4.5 rounded-2xl border border-white/20 shadow-md shadow-purple-900/20 hover:scale-[1.02] transition-all flex items-center gap-3"
+          title="Total Guru dan Tenaga Kependidikan DAPODIK"
         >
-          <div className="w-12 h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-500/20 shrink-0">
-            <GraduationCap className="w-6 h-6" />
+          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0">
+            <GraduationCap className="w-6 h-6 stroke-[2.2]" />
           </div>
           <div className="min-w-0">
-            <span className="text-xs font-semibold text-slate-500 block truncate">Guru & Tendik</span>
-            <div className="text-2xl font-black text-slate-900 leading-tight">
-              58
+            <span className="text-[11px] font-bold text-purple-100 uppercase tracking-wider block truncate">Guru & Tendik</span>
+            <div className="text-2xl font-black text-white leading-tight">
+              45
             </div>
-            <span className="text-[11px] font-medium text-purple-600 block truncate">Orang</span>
+            <span className="text-[11px] font-bold text-purple-200 block truncate">Petugas Resmi</span>
           </div>
         </div>
 
-        {/* KPI 5: Kelas */}
+        {/* KPI 5: Kelas (24 Rombel) */}
         <div 
           onClick={() => onNavigate('attendance')}
-          className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all cursor-pointer group flex items-center gap-3.5"
+          className="bg-gradient-to-br from-[#0E7490] via-[#0891B2] to-[#06B6D4] text-white p-4 sm:p-4.5 rounded-2xl border border-white/20 shadow-md shadow-cyan-900/20 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3"
           title="24 Rombel (Kelas 7A - 9H)"
         >
-          <div className="w-12 h-12 rounded-2xl bg-cyan-600 text-white flex items-center justify-center shadow-md shadow-cyan-500/20 shrink-0 group-hover:scale-105 transition-transform">
-            <Layers className="w-6 h-6" />
+          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-105 transition-transform">
+            <Layers className="w-6 h-6 stroke-[2.2]" />
           </div>
           <div className="min-w-0">
-            <span className="text-xs font-semibold text-slate-500 block truncate">Kelas</span>
-            <div className="text-2xl font-black text-slate-900 leading-tight">
+            <span className="text-[11px] font-bold text-cyan-100 uppercase tracking-wider block truncate">Kelas</span>
+            <div className="text-2xl font-black text-white leading-tight">
               24
             </div>
-            <span className="text-[11px] font-medium text-cyan-700 block truncate">7A - 9H</span>
+            <span className="text-[11px] font-bold text-cyan-200 block truncate">7A - 9H</span>
           </div>
         </div>
+
+        {/* KPI 6: KARTU BARU - Catat Pelanggaran (Action KPI) */}
+        <button
+          type="button"
+          onClick={onOpenQuickViolation}
+          className="bg-gradient-to-br from-[#991B1B] via-[#DC2626] to-[#EF4444] text-white p-4 sm:p-4.5 rounded-2xl border border-white/25 shadow-md shadow-rose-900/30 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3 text-left active:scale-98"
+          title="Klik untuk membuka form pencatatan kasus pelanggaran siswa"
+        >
+          <div className="w-11 h-11 rounded-2xl bg-white/25 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-110 transition-transform">
+            <ShieldAlert className="w-6 h-6 stroke-[2.2]" />
+          </div>
+          <div className="min-w-0">
+            <span className="text-[10px] font-black text-rose-100 uppercase tracking-wider block truncate">Aksi Cepat</span>
+            <div className="text-sm sm:text-base font-black text-white leading-tight truncate">
+              Catat Pelanggaran
+            </div>
+            <span className="text-[11px] font-bold text-rose-100 block truncate">Input Kasus & Poin →</span>
+          </div>
+        </button>
+
+        {/* KPI 7: KARTU BARU - Catat Kehadiran (Action KPI) */}
+        <button
+          type="button"
+          onClick={() => onNavigate('attendance')}
+          className="bg-gradient-to-br from-[#312E81] via-[#4338CA] to-[#6366F1] text-white p-4 sm:p-4.5 rounded-2xl border border-white/25 shadow-md shadow-indigo-900/30 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3 text-left active:scale-98"
+          title="Klik untuk masuk ke modul presensi 24 rombel"
+        >
+          <div className="w-11 h-11 rounded-2xl bg-white/25 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-110 transition-transform">
+            <CalendarCheck className="w-6 h-6 stroke-[2.2]" />
+          </div>
+          <div className="min-w-0">
+            <span className="text-[10px] font-black text-indigo-100 uppercase tracking-wider block truncate">Aksi Cepat</span>
+            <div className="text-sm sm:text-base font-black text-white leading-tight truncate">
+              Catat Kehadiran
+            </div>
+            <span className="text-[11px] font-bold text-indigo-100 block truncate">24 Rombel Siswa →</span>
+          </div>
+        </button>
       </div>
 
       {/* =========================================================================
@@ -1041,54 +1189,148 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </div>
         </div>
 
-        {/* Card 2 (4 cols): Informasi & Pengumuman (Matching Gambar 2 Exact Copy) */}
+        {/* Card 2 (4 cols): Informasi & Pengumuman (Dynamic CRUD with H-5 to Hari H Sound Alerts) */}
         <div className="lg:col-span-4 bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="pb-3 border-b border-slate-100 flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-blue-100 text-[#3B5BDB] flex items-center justify-center">
-                <Megaphone className="w-4 h-4" />
+            <div className="pb-3 border-b border-slate-100 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-100 text-[#1E3A8A] flex items-center justify-center font-bold">
+                  <Megaphone className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-sm">
+                    Informasi & Pengumuman
+                  </h3>
+                  <p className="text-[10px] text-slate-600 font-semibold">
+                    Notifikasi aktif H-5 s/d Hari H
+                  </p>
+                </div>
               </div>
-              <h3 className="font-bold text-slate-900 text-sm">
-                Informasi & Pengumuman
-              </h3>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* School Chime Button */}
+                <button
+                  type="button"
+                  onClick={handleTriggerChime}
+                  disabled={isChimePlaying}
+                  className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[10px] font-black transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  title="Bunyikan nada bel sekolah"
+                >
+                  <Volume2 className="w-3 h-3" />
+                  <span>{isChimePlaying ? 'Bunyi...' : 'Bel'}</span>
+                </button>
+
+                {/* Tambah Kegiatan Button */}
+                <button
+                  type="button"
+                  onClick={handleOpenAddActivity}
+                  className="px-2.5 py-1 bg-[#1E3A8A] hover:bg-[#2563EB] text-white rounded-lg text-[10px] font-black transition-colors flex items-center gap-1 cursor-pointer shadow-xs"
+                  title="Tambah agenda kegiatan sekolah baru"
+                >
+                  <Plus className="w-3 h-3 stroke-[3]" />
+                  <span>Tambah</span>
+                </button>
+              </div>
             </div>
 
-            <div className="mt-3.5 space-y-3.5 text-xs text-slate-700">
-              {/* Item 1 */}
-              <div className="flex items-start gap-2.5">
-                <span className="w-2 h-2 rounded-full bg-[#3B5BDB] mt-1 shrink-0"></span>
-                <div>
-                  <div className="font-bold text-slate-900">Upacara Hari Kebangkitan Nasional</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">Selasa, 20 Mei 2025 pukul 07.00 WIB</div>
+            {/* List of Activities with Status Badges and Edit/Delete Controls */}
+            <div className="mt-3.5 space-y-3 text-xs max-h-72 overflow-y-auto pr-1">
+              {activities.length === 0 ? (
+                <div className="text-center py-8">
+                  <Megaphone className="w-8 h-8 text-slate-300 mx-auto mb-1.5" />
+                  <p className="text-xs font-bold text-slate-700">Belum ada agenda kegiatan</p>
+                  <button
+                    type="button"
+                    onClick={handleOpenAddActivity}
+                    className="mt-2 text-[11px] font-bold text-blue-600 hover:underline"
+                  >
+                    + Tambah Kegiatan Pertama
+                  </button>
                 </div>
-              </div>
+              ) : (
+                activities.map((act) => {
+                  const status = getActivityNotificationStatus(act);
 
-              {/* Item 2 */}
-              <div className="flex items-start gap-2.5">
-                <span className="w-2 h-2 rounded-full bg-[#3B5BDB] mt-1 shrink-0"></span>
-                <div>
-                  <div className="font-bold text-slate-900">Penilaian Akhir Semester Genap</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">26 Mei - 2 Juni 2025</div>
-                </div>
-              </div>
+                  return (
+                    <div 
+                      key={act.id}
+                      className={`p-2.5 rounded-xl border transition-all ${
+                        status.isHariH
+                          ? 'bg-rose-50/80 border-rose-300 ring-1 ring-rose-200'
+                          : status.isUpcomingAlert
+                          ? 'bg-amber-50/80 border-amber-300'
+                          : 'bg-slate-50/80 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-black text-slate-900 leading-tight">
+                              {act.title}
+                            </span>
+                            {/* Alert Badge */}
+                            <span 
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tight shrink-0 ${
+                                status.isHariH
+                                  ? 'bg-rose-600 text-white animate-pulse'
+                                  : status.isUpcomingAlert
+                                  ? 'bg-amber-500 text-white'
+                                  : 'bg-blue-100 text-[#1E3A8A]'
+                              }`}
+                            >
+                              {status.badgeText}
+                            </span>
+                          </div>
 
-              {/* Item 3 */}
-              <div className="flex items-start gap-2.5">
-                <span className="w-2 h-2 rounded-full bg-[#3B5BDB] mt-1 shrink-0"></span>
-                <div>
-                  <div className="font-bold text-slate-900">Kegiatan Class Meeting</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">5 - 7 Juni 2025</div>
-                </div>
-              </div>
+                          <div className="text-[11px] text-slate-700 font-medium mt-1 flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-slate-800">{act.date}</span>
+                            {act.time && <span>• {act.time}</span>}
+                            {act.location && <span>• 📍 {act.location}</span>}
+                          </div>
+
+                          {act.description && (
+                            <p className="text-[10px] text-slate-600 mt-0.5 line-clamp-2">
+                              {act.description}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Edit and Delete Actions */}
+                        <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditActivity(act)}
+                            className="p-1 hover:bg-white text-slate-500 hover:text-blue-700 rounded-md transition-colors cursor-pointer"
+                            title="Edit Kegiatan"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteActivity(act.id, act.title)}
+                            className="p-1 hover:bg-white text-slate-500 hover:text-rose-600 rounded-md transition-colors cursor-pointer"
+                            title="Hapus Kegiatan"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 text-right mt-3">
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-3 text-[11px]">
+            <span className="text-slate-600 font-semibold">
+              Total {activities.length} Kegiatan Terjadwal
+            </span>
             <button
               onClick={() => onNavigate('tatatertib')}
-              className="text-xs font-bold text-[#3B5BDB] hover:text-[#2563EB] inline-flex items-center gap-1 transition-colors cursor-pointer"
+              className="font-bold text-[#1E3A8A] hover:text-[#2563EB] inline-flex items-center gap-1 transition-colors cursor-pointer"
             >
-              <span>Lihat Semua</span>
+              <span>Tata Tertib & Sanksi</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -1455,6 +1697,139 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 Tutup
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: Tambah & Edit Agenda Kegiatan / Pengumuman Sekolah
+      ========================================================================= */}
+      {isActivityModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in duration-150"
+          onClick={() => setIsActivityModalOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden my-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-[#172554] via-[#1E3A8A] to-[#2563EB] text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center font-bold">
+                  <Megaphone className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-white">
+                    {editingActivity ? 'Ubah Agenda Kegiatan' : 'Tambah Agenda Kegiatan Baru'}
+                  </h3>
+                  <p className="text-[10px] text-blue-100">
+                    Peringatan & suara bel aktif mulai H-5 s/d Hari H
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsActivityModalOpen(false)}
+                className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-blue-100 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSaveActivity} className="p-6 space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Nama / Judul Kegiatan *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Upacara Hari Guru Nasional"
+                  value={activityForm.title}
+                  onChange={(e) => setActivityForm({ ...activityForm, title: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-semibold text-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    Tanggal Pelaksanaan *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={activityForm.date}
+                    onChange={(e) => setActivityForm({ ...activityForm, date: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-bold text-slate-900 cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    Waktu / Jam
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: 07.00 WITA"
+                    value={activityForm.time}
+                    onChange={(e) => setActivityForm({ ...activityForm, time: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-semibold text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Lokasi / Tempat Pelaksanaan
+                </label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Lapangan Utama SMPN 1 Kandangan"
+                  value={activityForm.location}
+                  onChange={(e) => setActivityForm({ ...activityForm, location: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-semibold text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Keterangan Tambahan / Catatan
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Catatan atribut seragam, pembina upacara, atau petunjuk teknis kegiatan..."
+                  value={activityForm.description}
+                  onChange={(e) => setActivityForm({ ...activityForm, description: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-medium text-slate-900 resize-none"
+                />
+              </div>
+
+              {/* Information Alert Preview */}
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl flex items-start gap-2.5">
+                <Volume2 className="w-4 h-4 text-[#1E3A8A] shrink-0 mt-0.5" />
+                <div className="text-[11px] text-blue-900">
+                  <strong>Peringatan Suara Otomatis:</strong> Sistem akan menampilkan lencana khusus dan membunyikan bel sekolah mulai <strong>5 hari sebelum (H-5)</strong> sampai dengan <strong>Hari H</strong> pelaksanaan.
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsActivityModalOpen(false)}
+                  className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-xl font-bold cursor-pointer transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#1E3A8A] hover:bg-[#2563EB] text-white rounded-xl font-black shadow-xs cursor-pointer transition-colors"
+                >
+                  {editingActivity ? 'Simpan Perubahan' : 'Tambahkan Agenda'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

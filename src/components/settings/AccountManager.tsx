@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserAccount, UserRole } from '../../types/auth';
+import { UserAccount, UserRole, OFFICIAL_JABATAN_LIST } from '../../types/auth';
 import { 
   getStoredAccounts, 
   saveAccounts, 
@@ -41,7 +41,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
   // New account form state
   const [newName, setNewName] = useState('');
   const [newUsername, setNewUsername] = useState('');
-  const [newRole, setNewRole] = useState<UserRole>('Guru Piket');
+  const [newRole, setNewRole] = useState<UserRole>('Guru');
   const [newNip, setNewNip] = useState('');
   const [newPin, setNewPin] = useState('1234');
 
@@ -168,15 +168,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
     }
   };
 
-  const rolesList: UserRole[] = [
-    'Kepala Sekolah',
-    'Wakasek Kesiswaan',
-    'Guru BK',
-    'Tim Kesiswaan & Ketertiban',
-    'Guru Piket',
-    'Wali Kelas',
-    'Tata Usaha (Admin)'
-  ];
+  const rolesList = OFFICIAL_JABATAN_LIST;
 
   return (
     <div className="space-y-6">

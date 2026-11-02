@@ -586,6 +586,7 @@ export default function App() {
           searchQuery={searchQuery}
           schoolConfig={schoolConfig}
           onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
+          onNavigate={(view) => setCurrentView(view)}
         />
 
         {/* Viewport Content with clean mobile padding & responsive spacing */}

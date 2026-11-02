@@ -1,11 +1,28 @@
 export type UserRole = 
   | 'Kepala Sekolah'
+  | 'Wakil Kepala Sekolah Bidang Akademik'
+  | 'Wakil Kepala Sekolah Bidang Non Akademik'
+  | 'Wakil Kepala Sekolah Bidang Kesiswaan'
+  | 'Guru'
+  | 'Kepala/koordinator Tata Usaha'
+  | 'Staff Tata Usaha'
   | 'Wakasek Kesiswaan'
   | 'Guru BK'
   | 'Tim Kesiswaan & Ketertiban'
   | 'Guru Piket'
   | 'Wali Kelas'
-  | 'Tata Usaha (Admin)';
+  | 'Tata Usaha (Admin)'
+  | string;
+
+export const OFFICIAL_JABATAN_LIST: string[] = [
+  'Kepala Sekolah',
+  'Wakil Kepala Sekolah Bidang Akademik',
+  'Wakil Kepala Sekolah Bidang Non Akademik',
+  'Wakil Kepala Sekolah Bidang Kesiswaan',
+  'Guru',
+  'Kepala/koordinator Tata Usaha',
+  'Staff Tata Usaha',
+];
 
 export interface UserAccount {
   id: string;

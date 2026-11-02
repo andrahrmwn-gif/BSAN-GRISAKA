@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserAccount, UserRole } from '../../types/auth';
+import { UserAccount, UserRole, OFFICIAL_JABATAN_LIST } from '../../types/auth';
 import { getStoredAccounts, getCurrentUserId, setCurrentUserId, MAX_ACCOUNTS, updateAccount } from '../../services/authService';
 import { logAudit } from '../../services/auditLogger';
 import { 
@@ -94,6 +94,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
 
     const res = updateAccount(editingAcc.id, {
       name: editingAcc.name,
+      role: editingAcc.role,
       nip: editingAcc.nip,
       pin: editingAcc.pin,
     });
@@ -102,7 +103,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
       logAudit({
         actionType: 'UPDATE',
         module: 'Autentikasi',
-        description: `Memperbarui data akun (Nama/NIP/Password): ${editingAcc.name}`,
+        description: `Memperbarui profil akun (Nama/NIP/Jabatan/Password): ${editingAcc.name} (${editingAcc.role})`,
         status: 'SUCCESS',
       });
 
@@ -125,10 +126,9 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
       acc.nip.includes(searchQuery);
 
     if (roleFilter === 'all') return matchesSearch;
-    if (roleFilter === 'wali') return matchesSearch && acc.role === 'Wali Kelas';
-    if (roleFilter === 'piket') return matchesSearch && acc.role === 'Guru Piket';
-    if (roleFilter === 'pimpinan') return matchesSearch && (acc.role === 'Kepala Sekolah' || acc.role === 'Wakasek Kesiswaan' || acc.role === 'Guru BK');
-    if (roleFilter === 'tu') return matchesSearch && (acc.role === 'Tata Usaha (Admin)' || acc.role === 'Tim Kesiswaan & Ketertiban');
+    if (roleFilter === 'pimpinan') return matchesSearch && (acc.role === 'Kepala Sekolah' || acc.role.includes('Wakil Kepala Sekolah'));
+    if (roleFilter === 'guru') return matchesSearch && acc.role === 'Guru';
+    if (roleFilter === 'tu') return matchesSearch && (acc.role.toLowerCase().includes('tata usaha'));
 
     return matchesSearch;
   });
@@ -234,6 +234,23 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                   onChange={(e) => setEditingAcc({ ...editingAcc, name: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Jabatan Petugas BSAN
+                </label>
+                <select
+                  value={editingAcc.role}
+                  onChange={(e) => setEditingAcc({ ...editingAcc, role: e.target.value as any })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none font-bold text-slate-900 cursor-pointer text-xs"
+                >
+                  {OFFICIAL_JABATAN_LIST.map((jabatan) => (
+                    <option key={jabatan} value={jabatan}>
+                      {jabatan}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -367,11 +384,10 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
 
               <div className="flex flex-wrap gap-1 text-[11px]">
                 {[
-                  { id: 'all', label: 'Semua (55)' },
-                  { id: 'wali', label: 'Wali Kelas (24)' },
-                  { id: 'piket', label: 'Guru Piket (12)' },
-                  { id: 'pimpinan', label: 'Pimpinan & BK' },
-                  { id: 'tu', label: 'TU & Kesiswaan' },
+                  { id: 'all', label: `Semua (${accounts.length})` },
+                  { id: 'pimpinan', label: 'Pimpinan & Wakasek' },
+                  { id: 'guru', label: 'Guru' },
+                  { id: 'tu', label: 'Tata Usaha' },
                 ].map((f) => (
                   <button
                     key={f.id}
