@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { UserAccount, UserRole, OFFICIAL_JABATAN_LIST } from '../../types/auth';
-import { getStoredAccounts, getCurrentUserId, setCurrentUserId, MAX_ACCOUNTS, updateAccount } from '../../services/authService';
+import { 
+  getStoredAccounts, 
+  getCurrentUserId, 
+  setCurrentUserId, 
+  MAX_ACCOUNTS, 
+  updateAccount,
+  addAccount 
+} from '../../services/authService';
 import { logAudit } from '../../services/auditLogger';
 import { 
   Users, 
@@ -15,7 +22,8 @@ import {
   AlertCircle,
   Search,
   Edit3,
-  Filter
+  Filter,
+  UserPlus
 } from 'lucide-react';
 
 interface AccountSwitchModalProps {
@@ -40,6 +48,21 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
   // Quick Edit Account Modal
   const [editingAcc, setEditingAcc] = useState<UserAccount | null>(null);
   const [editSuccessMsg, setEditSuccessMsg] = useState<string | null>(null);
+
+  // New Account Modal State
+  const [isAddingAcc, setIsAddingAcc] = useState(false);
+  const [newAccForm, setNewAccForm] = useState({
+    name: '',
+    username: '',
+    role: 'Guru' as UserRole,
+    nip: '',
+    pin: '1234',
+    canEdit: true,
+    canDelete: false,
+    canManageSettings: false,
+  });
+  const [addErrorMsg, setAddErrorMsg] = useState<string | null>(null);
+  const [addSuccessMsg, setAddSuccessMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -117,6 +140,66 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
     }
   };
 
+  const handleOpenAddAccount = () => {
+    setEditingAcc(null);
+    setSelectedAccount(null);
+    setIsAddingAcc(true);
+    setAddErrorMsg(null);
+    setAddSuccessMsg(null);
+    setNewAccForm({
+      name: '',
+      username: '',
+      role: 'Guru',
+      nip: '',
+      pin: '1234',
+      canEdit: true,
+      canDelete: false,
+      canManageSettings: false,
+    });
+  };
+
+  const handleSaveNewAccount = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddErrorMsg(null);
+
+    if (!newAccForm.name.trim() || !newAccForm.username.trim()) {
+      setAddErrorMsg('Nama Lengkap dan Username wajib diisi.');
+      return;
+    }
+
+    const res = addAccount({
+      name: newAccForm.name.trim(),
+      username: newAccForm.username.trim().toLowerCase().replace(/\s+/g, '.'),
+      role: newAccForm.role,
+      nip: newAccForm.nip.trim() || '-',
+      pin: newAccForm.pin || '1234',
+      isActive: true,
+      canEdit: newAccForm.canEdit,
+      canDelete: newAccForm.canDelete || newAccForm.role === 'Kepala Sekolah' || newAccForm.role.includes('Tata Usaha'),
+      canManageSettings: newAccForm.canManageSettings || newAccForm.role === 'Kepala Sekolah',
+      avatarColor: '#2563EB',
+    });
+
+    if (res.success && res.account) {
+      logAudit({
+        actionType: 'CREATE',
+        module: 'Autentikasi',
+        description: `Mendaftarkan akun petugas baru: ${res.account.name} (${res.account.role})`,
+        status: 'SUCCESS',
+      });
+
+      const updated = getStoredAccounts();
+      setAccounts(updated);
+      setAddSuccessMsg(res.message);
+      setTimeout(() => {
+        setIsAddingAcc(false);
+        setAddSuccessMsg(null);
+      }, 1500);
+    } else {
+      setAddErrorMsg(res.message);
+    }
+  };
+
   // Filter accounts
   const filteredAccounts = accounts.filter((acc) => {
     const matchesSearch = 
@@ -152,12 +235,23 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-blue-100 hover:text-white transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleOpenAddAccount}
+              className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-white/20 shadow-xs"
+              title="Daftarkan akun atau petugas BSAN baru"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Tambah Akun</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-blue-100 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Guest Mode Option Bar */}
@@ -195,8 +289,172 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
           </div>
         </div>
 
-        {/* Modal Body: Quick Edit or PIN Entry or Accounts List */}
-        {editingAcc ? (
+        {/* Modal Body: Add Account or Quick Edit or PIN Entry or Accounts List */}
+        {isAddingAcc ? (
+          <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-600/20">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-black text-sm text-slate-900">
+                    Tambah Akun / Petugas Baru
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Daftarkan akun petugas resmi ({accounts.length} / {MAX_ACCOUNTS} slot terisi)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddingAcc(false)}
+                className="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {addSuccessMsg && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{addSuccessMsg}</span>
+              </div>
+            )}
+
+            {addErrorMsg && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{addErrorMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveNewAccount} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Nama Lengkap & Gelar *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Drs. H. Ahmad Fauzi, M.Pd."
+                  value={newAccForm.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    const autoUsername = name
+                      .toLowerCase()
+                      .replace(/[^a-z0-9\s]/g, '')
+                      .trim()
+                      .replace(/\s+/g, '.');
+                    setNewAccForm({ 
+                      ...newAccForm, 
+                      name, 
+                      username: newAccForm.username || autoUsername 
+                    });
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-semibold text-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    Username Login *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="nama.user"
+                    value={newAccForm.username}
+                    onChange={(e) => setNewAccForm({ ...newAccForm, username: e.target.value.toLowerCase().replace(/\s+/g, '.') })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-mono font-bold text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    Password / PIN Akses *
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="1234"
+                    value={newAccForm.pin}
+                    onChange={(e) => setNewAccForm({ ...newAccForm, pin: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-mono font-bold text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    Jabatan Petugas *
+                  </label>
+                  <select
+                    value={newAccForm.role}
+                    onChange={(e) => setNewAccForm({ ...newAccForm, role: e.target.value as any })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-bold text-slate-900 cursor-pointer"
+                  >
+                    {OFFICIAL_JABATAN_LIST.map((j) => (
+                      <option key={j} value={j}>{j}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    NIP (Nomor Induk Pegawai)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="1980... atau '-'"
+                    value={newAccForm.nip}
+                    onChange={(e) => setNewAccForm({ ...newAccForm, nip: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-mono font-semibold text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1.5">
+                <span className="block font-bold text-slate-800 text-[11px]">Wewenang Operasi:</span>
+                <label className="flex items-center gap-2 cursor-pointer text-[11px] font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={newAccForm.canEdit}
+                    onChange={(e) => setNewAccForm({ ...newAccForm, canEdit: e.target.checked })}
+                    className="rounded text-[#3B5BDB] focus:ring-[#3B5BDB]"
+                  />
+                  <span>Dapat menginput / mengedit catatan pelanggaran & presensi</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-[11px] font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={newAccForm.canDelete}
+                    onChange={(e) => setNewAccForm({ ...newAccForm, canDelete: e.target.checked })}
+                    className="rounded text-[#3B5BDB] focus:ring-[#3B5BDB]"
+                  />
+                  <span>Dapat menghapus catatan pelanggaran</span>
+                </label>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingAcc(false)}
+                  className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-xl font-bold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Daftarkan Akun</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : editingAcc ? (
           <div className="p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -382,26 +640,38 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                 />
               </div>
 
-              <div className="flex flex-wrap gap-1 text-[11px]">
-                {[
-                  { id: 'all', label: `Semua (${accounts.length})` },
-                  { id: 'pimpinan', label: 'Pimpinan & Wakasek' },
-                  { id: 'guru', label: 'Guru' },
-                  { id: 'tu', label: 'Tata Usaha' },
-                ].map((f) => (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => setRoleFilter(f.id)}
-                    className={`px-2.5 py-1 rounded-lg font-bold transition-colors cursor-pointer ${
-                      roleFilter === f.id
-                        ? 'bg-[#3B5BDB] text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { id: 'all', label: `Semua (${accounts.length})` },
+                    { id: 'pimpinan', label: 'Pimpinan & Wakasek' },
+                    { id: 'guru', label: 'Guru' },
+                    { id: 'tu', label: 'Tata Usaha' },
+                  ].map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setRoleFilter(f.id)}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-colors cursor-pointer ${
+                        roleFilter === f.id
+                          ? 'bg-[#3B5BDB] text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleOpenAddAccount}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                  title="Daftarkan akun atau petugas baru"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>+ Tambah Akun Baru</span>
+                </button>
               </div>
             </div>
 

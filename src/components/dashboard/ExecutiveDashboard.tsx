@@ -468,22 +468,21 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
       </div>
 
       {/* =========================================================================
-          ROW 2: 7 VIBRANT SOLID & GRADIENT KPI METRIC CARDS WITH SHARP CONTRAST
-          (Including 2 New Action Cards: Catat Pelanggaran & Catat Kehadiran)
+          ROW 2: TOP 5 KPI STATISTICAL METRIC CARDS (Exact Layout from Gambar 2)
       ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4.5">
         {/* KPI 1: Total Siswa */}
         <div 
           onClick={() => onNavigate('students')}
-          className="bg-gradient-to-br from-[#1E3A8A] via-[#2563EB] to-[#3B82F6] text-white p-4 sm:p-4.5 rounded-2xl border border-white/20 shadow-md shadow-blue-900/20 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3"
+          className="bg-gradient-to-br from-[#1E3A8A] via-[#2563EB] to-[#3B82F6] text-white p-4 sm:p-5 rounded-2xl border border-white/20 shadow-md shadow-blue-900/20 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3.5"
           title="Buka Database Siswa Terpusat"
         >
-          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-105 transition-transform">
+          <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-105 transition-transform">
             <Users className="w-6 h-6 stroke-[2.2]" />
           </div>
           <div className="min-w-0">
-            <span className="text-[11px] font-bold text-blue-100 uppercase tracking-wider block truncate">Total Siswa</span>
-            <div className="text-2xl font-black text-white leading-tight">
+            <span className="text-xs font-bold text-blue-100 uppercase tracking-wider block truncate">Total Siswa</span>
+            <div className="text-2xl sm:text-3xl font-black text-white leading-tight">
               {totalStudents}
             </div>
             <span className="text-[11px] font-bold text-blue-200 block truncate">Siswa Aktif</span>
@@ -498,15 +497,15 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             setStatusClassFilter('all');
             setStatusSearchQuery('');
           }}
-          className="bg-gradient-to-br from-[#065F46] via-[#059669] to-[#10B981] text-white p-4 sm:p-4.5 rounded-2xl border border-white/20 shadow-md shadow-emerald-900/20 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3 text-left active:scale-98"
+          className="bg-gradient-to-br from-[#065F46] via-[#059669] to-[#10B981] text-white p-4 sm:p-5 rounded-2xl border border-white/20 shadow-md shadow-emerald-900/20 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3.5 text-left active:scale-98"
           title="Klik untuk melihat daftar seluruh siswa yang Hadir hari ini"
         >
-          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-105 transition-transform">
+          <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-105 transition-transform">
             <CheckCircle2 className="w-6 h-6 stroke-[2.2]" />
           </div>
           <div className="min-w-0">
-            <span className="text-[11px] font-bold text-emerald-100 uppercase tracking-wider block truncate">Hadir Hari Ini</span>
-            <div className="text-2xl font-black text-white leading-tight">
+            <span className="text-xs font-bold text-emerald-100 uppercase tracking-wider block truncate">Hadir Hari Ini</span>
+            <div className="text-2xl sm:text-3xl font-black text-white leading-tight">
               {hadirCount}
             </div>
             <span className="text-[11px] font-black text-emerald-100 block truncate">
@@ -523,15 +522,15 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             setStatusClassFilter('all');
             setStatusSearchQuery('');
           }}
-          className="bg-gradient-to-br from-[#9A3412] via-[#EA580C] to-[#F97316] text-white p-4 sm:p-4.5 rounded-2xl border border-white/20 shadow-md shadow-orange-900/20 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3 text-left active:scale-98"
+          className="bg-gradient-to-br from-[#9A3412] via-[#EA580C] to-[#F97316] text-white p-4 sm:p-5 rounded-2xl border border-white/20 shadow-md shadow-orange-900/20 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3.5 text-left active:scale-98"
           title="Klik untuk melihat daftar seluruh siswa yang Tidak Hadir (Sakit, Izin, Alpa)"
         >
-          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-105 transition-transform">
+          <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-105 transition-transform">
             <AlertTriangle className="w-6 h-6 stroke-[2.2]" />
           </div>
           <div className="min-w-0">
-            <span className="text-[11px] font-bold text-orange-100 uppercase tracking-wider block truncate">Tidak Hadir</span>
-            <div className="text-2xl font-black text-white leading-tight">
+            <span className="text-xs font-bold text-orange-100 uppercase tracking-wider block truncate">Tidak Hadir</span>
+            <div className="text-2xl sm:text-3xl font-black text-white leading-tight">
               {tidakHadirCount}
             </div>
             <span className="text-[11px] font-black text-orange-100 block truncate">
@@ -542,15 +541,15 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
         {/* KPI 4: Guru & Tendik */}
         <div 
-          className="bg-gradient-to-br from-[#581C87] via-[#7E22CE] to-[#A855F7] text-white p-4 sm:p-4.5 rounded-2xl border border-white/20 shadow-md shadow-purple-900/20 hover:scale-[1.02] transition-all flex items-center gap-3"
+          className="bg-gradient-to-br from-[#581C87] via-[#7E22CE] to-[#A855F7] text-white p-4 sm:p-5 rounded-2xl border border-white/20 shadow-md shadow-purple-900/20 hover:scale-[1.02] transition-all flex items-center gap-3.5"
           title="Total Guru dan Tenaga Kependidikan DAPODIK"
         >
-          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0">
             <GraduationCap className="w-6 h-6 stroke-[2.2]" />
           </div>
           <div className="min-w-0">
-            <span className="text-[11px] font-bold text-purple-100 uppercase tracking-wider block truncate">Guru & Tendik</span>
-            <div className="text-2xl font-black text-white leading-tight">
+            <span className="text-xs font-bold text-purple-100 uppercase tracking-wider block truncate">Guru & Tendik</span>
+            <div className="text-2xl sm:text-3xl font-black text-white leading-tight">
               45
             </div>
             <span className="text-[11px] font-bold text-purple-200 block truncate">Petugas Resmi</span>
@@ -560,58 +559,124 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         {/* KPI 5: Kelas (24 Rombel) */}
         <div 
           onClick={() => onNavigate('attendance')}
-          className="bg-gradient-to-br from-[#0E7490] via-[#0891B2] to-[#06B6D4] text-white p-4 sm:p-4.5 rounded-2xl border border-white/20 shadow-md shadow-cyan-900/20 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3"
+          className="bg-gradient-to-br from-[#0E7490] via-[#0891B2] to-[#06B6D4] text-white p-4 sm:p-5 rounded-2xl border border-white/20 shadow-md shadow-cyan-900/20 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3.5"
           title="24 Rombel (Kelas 7A - 9H)"
         >
-          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-105 transition-transform">
+          <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-105 transition-transform">
             <Layers className="w-6 h-6 stroke-[2.2]" />
           </div>
           <div className="min-w-0">
-            <span className="text-[11px] font-bold text-cyan-100 uppercase tracking-wider block truncate">Kelas</span>
-            <div className="text-2xl font-black text-white leading-tight">
+            <span className="text-xs font-bold text-cyan-100 uppercase tracking-wider block truncate">Kelas</span>
+            <div className="text-2xl sm:text-3xl font-black text-white leading-tight">
               24
             </div>
             <span className="text-[11px] font-bold text-cyan-200 block truncate">7A - 9H</span>
           </div>
         </div>
+      </div>
 
-        {/* KPI 6: KARTU BARU - Catat Pelanggaran (Action KPI) */}
-        <button
-          type="button"
+      {/* =========================================================================
+          ROW 2B: 2 DEDICATED QUICK-ACTION COMMAND CARDS (Distinct Wide Banner Model)
+          Positioned below the 5 stats KPIs with custom shape and direct CTAs
+      ========================================================================= */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+        {/* ACTION CARD 1: Catat Pelanggaran Siswa */}
+        <div 
           onClick={onOpenQuickViolation}
-          className="bg-gradient-to-br from-[#991B1B] via-[#DC2626] to-[#EF4444] text-white p-4 sm:p-4.5 rounded-2xl border border-white/25 shadow-md shadow-rose-900/30 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3 text-left active:scale-98"
-          title="Klik untuk membuka form pencatatan kasus pelanggaran siswa"
+          className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#881337] via-[#9F1239] to-[#E11D48] text-white p-5 sm:p-6 border border-rose-400/40 shadow-lg shadow-rose-950/20 hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[160px]"
         >
-          <div className="w-11 h-11 rounded-2xl bg-white/25 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-110 transition-transform">
-            <ShieldAlert className="w-6 h-6 stroke-[2.2]" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-black text-rose-100 uppercase tracking-wider block truncate">Aksi Cepat</span>
-            <div className="text-sm sm:text-base font-black text-white leading-tight truncate">
-              Catat Pelanggaran
-            </div>
-            <span className="text-[11px] font-bold text-rose-100 block truncate">Input Kasus & Poin →</span>
-          </div>
-        </button>
+          {/* Subtle decorative background watermarks */}
+          <div className="absolute top-0 right-0 -mr-6 -mt-6 w-36 h-36 bg-white/10 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500"></div>
+          <div className="absolute bottom-0 right-10 w-24 h-24 bg-black/10 rounded-full blur-xl pointer-events-none"></div>
 
-        {/* KPI 7: KARTU BARU - Catat Kehadiran (Action KPI) */}
-        <button
-          type="button"
-          onClick={() => onNavigate('attendance')}
-          className="bg-gradient-to-br from-[#312E81] via-[#4338CA] to-[#6366F1] text-white p-4 sm:p-4.5 rounded-2xl border border-white/25 shadow-md shadow-indigo-900/30 hover:scale-[1.02] transition-all cursor-pointer group flex items-center gap-3 text-left active:scale-98"
-          title="Klik untuk masuk ke modul presensi 24 rombel"
-        >
-          <div className="w-11 h-11 rounded-2xl bg-white/25 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-110 transition-transform">
-            <CalendarCheck className="w-6 h-6 stroke-[2.2]" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-black text-indigo-100 uppercase tracking-wider block truncate">Aksi Cepat</span>
-            <div className="text-sm sm:text-base font-black text-white leading-tight truncate">
-              Catat Kehadiran
+          <div>
+            {/* Top Bar: Module Tag & Status Badge */}
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20 text-rose-100 backdrop-blur-xs border border-white/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-300 animate-ping"></span>
+                Modul Ketertiban & Poin Siswa
+              </span>
+              <span className="text-[11px] font-bold text-rose-200 hidden sm:inline-block">
+                Ringan • Sedang • Berat
+              </span>
             </div>
-            <span className="text-[11px] font-bold text-indigo-100 block truncate">24 Rombel Siswa →</span>
+
+            {/* Main Content: Icon & Title */}
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md text-white flex items-center justify-center shadow-lg shadow-black/20 shrink-0 border border-white/30 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300">
+                <ShieldAlert className="w-7 h-7 stroke-[2.3]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight flex items-center gap-2">
+                  <span>Catat Pelanggaran Siswa</span>
+                </h3>
+                <p className="text-xs sm:text-sm text-rose-100/90 font-medium mt-1 leading-relaxed line-clamp-2">
+                  Formulir input pelanggaran tata tertib, hitung poin sanksi otomatis, panggilan orang tua, serta cetak surat pernyataan.
+                </p>
+              </div>
+            </div>
           </div>
-        </button>
+
+          {/* Action CTA Button at Bottom */}
+          <div className="mt-4 pt-3.5 border-t border-white/20 flex items-center justify-between">
+            <span className="text-[11px] font-bold text-rose-200">
+              Total {totalRingan + totalSedang + totalBerat} Kasus Aktif
+            </span>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-rose-900 font-black text-xs shadow-md group-hover:bg-rose-50 transition-colors">
+              <span>Buka Form Pelanggaran</span>
+              <span className="text-sm font-bold group-hover:translate-x-1 transition-transform">➔</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ACTION CARD 2: Catat Kehadiran Siswa */}
+        <div 
+          onClick={() => onNavigate('attendance')}
+          className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1E1B4B] via-[#312E81] to-[#4338CA] text-white p-5 sm:p-6 border border-indigo-400/40 shadow-lg shadow-indigo-950/20 hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[160px]"
+        >
+          {/* Subtle decorative background watermarks */}
+          <div className="absolute top-0 right-0 -mr-6 -mt-6 w-36 h-36 bg-white/10 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500"></div>
+          <div className="absolute bottom-0 right-10 w-24 h-24 bg-black/10 rounded-full blur-xl pointer-events-none"></div>
+
+          <div>
+            {/* Top Bar: Module Tag & Status Badge */}
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20 text-indigo-100 backdrop-blur-xs border border-white/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                Presensi 24 Rombel (7A - 9H)
+              </span>
+              <span className="text-[11px] font-bold text-indigo-200 hidden sm:inline-block">
+                Tandai Hadir Otomatis
+              </span>
+            </div>
+
+            {/* Main Content: Icon & Title */}
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md text-white flex items-center justify-center shadow-lg shadow-black/20 shrink-0 border border-white/30 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300">
+                <CalendarCheck className="w-7 h-7 stroke-[2.3]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight flex items-center gap-2">
+                  <span>Catat Kehadiran Siswa</span>
+                </h3>
+                <p className="text-xs sm:text-sm text-indigo-100/90 font-medium mt-1 leading-relaxed line-clamp-2">
+                  Input kehadiran harian kelas 7A - 9H, verifikasi izin & sakit, serta kirim laporan presensi otomatis via WhatsApp orang tua.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Action CTA Button at Bottom */}
+          <div className="mt-4 pt-3.5 border-t border-white/20 flex items-center justify-between">
+            <span className="text-[11px] font-bold text-indigo-200">
+              {percentHadirStr}% Kehadiran ({hadirCount} Hadir)
+            </span>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-indigo-950 font-black text-xs shadow-md group-hover:bg-indigo-50 transition-colors">
+              <span>Buka Presensi Rombel</span>
+              <span className="text-sm font-bold group-hover:translate-x-1 transition-transform">➔</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* =========================================================================
