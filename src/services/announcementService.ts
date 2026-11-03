@@ -16,6 +16,8 @@ export interface SchoolActivity {
   createdAt: string;
 }
 
+import { syncActivityToFirestore, deleteActivityFromFirestore, bulkSyncActivitiesToFirestore } from './firebase';
+
 const STORAGE_KEY = 'bsan_grisaka_announcements_v1';
 
 // Seed initial default activities relative to current date and school calendar
@@ -129,6 +131,7 @@ export function addActivity(activity: Partial<SchoolActivity> & { title: string;
   };
   const updated = [newActivity, ...existing];
   saveActivities(updated);
+  syncActivityToFirestore(newActivity).catch(console.error);
   return updated;
 }
 
@@ -138,13 +141,15 @@ export function updateActivity(id: string, updates: Partial<SchoolActivity>): Sc
   if (idx === -1) return existing;
 
   const effectiveDate = updates.startDate || updates.date || existing[idx].startDate;
-  existing[idx] = { 
+  const updatedItem: SchoolActivity = { 
     ...existing[idx], 
     ...updates,
     startDate: effectiveDate,
     date: effectiveDate,
   };
+  existing[idx] = updatedItem;
   saveActivities(existing);
+  syncActivityToFirestore(updatedItem).catch(console.error);
   return existing;
 }
 
@@ -152,6 +157,7 @@ export function deleteActivity(id: string): SchoolActivity[] {
   const existing = getStoredActivities();
   const filtered = existing.filter((a) => a.id !== id);
   saveActivities(filtered);
+  deleteActivityFromFirestore(id).catch(console.error);
   return filtered;
 }
 

@@ -2,6 +2,7 @@ import { AttendanceSheet, AttendanceStatus, Student, AttendanceRecapRow, Attenda
 import { KELAS_LIST } from '../data/schoolConfig';
 import { INITIAL_STUDENTS } from '../data/initialStudents';
 import { sortByClassAndName } from '../utils/sortUtils';
+import { syncAttendanceSheetToFirestore, bulkSyncAttendanceSheets } from './firebase';
 
 const STORAGE_KEYS = {
   ATTENDANCE: 'bsan_grisaka_attendance_sheets_v1',
@@ -105,6 +106,7 @@ export const resetAttendanceToClean = (currentStudents?: Student[]): AttendanceS
 export const saveAttendanceSheets = (sheets: AttendanceSheet[]): void => {
   try {
     localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(sheets));
+    bulkSyncAttendanceSheets(sheets).catch(console.error);
   } catch (err) {
     console.error('Failed saving attendance sheets', err);
   }
@@ -122,7 +124,12 @@ export const saveSingleAttendanceSheet = (sheet: AttendanceSheet): AttendanceShe
     updated = [sheet, ...existing];
   }
 
-  saveAttendanceSheets(updated);
+  try {
+    localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(updated));
+    syncAttendanceSheetToFirestore(sheet).catch(console.error);
+  } catch (err) {
+    console.error('Failed saving attendance sheet', err);
+  }
   return updated;
 };
 

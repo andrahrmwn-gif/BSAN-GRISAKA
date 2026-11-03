@@ -154,8 +154,15 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
               </div>
               <div className="text-left hidden md:block">
-                <div className="text-xs font-black text-slate-900 group-hover:text-[#3B5BDB] transition-colors leading-tight">
-                  {userName}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-black text-slate-900 group-hover:text-[#3B5BDB] transition-colors leading-tight">
+                    {userName}
+                  </span>
+                  {currentUser?.pin === '1234' && (
+                    <span className="inline-flex items-center px-1.5 py-0.2 rounded-full bg-amber-100 border border-amber-300 text-amber-900 text-[9px] font-bold" title="PIN akun masih bawaan (1234). Disarankan segera ganti PIN.">
+                      ⚠️ Ganti PIN
+                    </span>
+                  )}
                 </div>
                 <div className="text-[10px] text-slate-600 font-bold truncate max-w-[160px]">
                   {userRole}

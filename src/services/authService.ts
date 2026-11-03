@@ -1,4 +1,5 @@
 import { UserAccount, UserRole, OFFICIAL_JABATAN_LIST } from '../types/auth';
+import { syncAccountToFirestore, deleteAccountFromFirestore, bulkSyncAccountsToFirestore } from './firebase';
 
 const STORAGE_KEYS = {
   ACCOUNTS: 'bsan_grisaka_accounts_dapodik_v3',
@@ -748,6 +749,7 @@ export const addAccount = (newAccount: Omit<UserAccount, 'id'>): { success: bool
 
   const updated = [...accounts, created];
   saveAccounts(updated);
+  syncAccountToFirestore(created).catch(console.error);
 
   return {
     success: true,
@@ -763,8 +765,10 @@ export const updateAccount = (id: string, updates: Partial<UserAccount>): { succ
     return { success: false, message: 'Akun tidak ditemukan' };
   }
 
-  accounts[index] = { ...accounts[index], ...updates };
+  const updatedAcc = { ...accounts[index], ...updates };
+  accounts[index] = updatedAcc;
   saveAccounts(accounts);
+  syncAccountToFirestore(updatedAcc).catch(console.error);
   return { success: true, message: 'Perubahan akun berhasil disimpan' };
 };
 
@@ -776,6 +780,7 @@ export const deleteAccount = (id: string): { success: boolean; message: string }
 
   const updated = accounts.filter(a => a.id !== id);
   saveAccounts(updated);
+  deleteAccountFromFirestore(id).catch(console.error);
 
   if (getCurrentUserId() === id) {
     setCurrentUserId('guest');

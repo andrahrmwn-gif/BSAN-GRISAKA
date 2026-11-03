@@ -13,6 +13,8 @@ import {
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Student, ViolationRecord, WhatsAppMessageLog, SchoolProfile, AttendanceSheet } from '../types';
+import { SchoolActivity } from './announcementService';
+import { UserAccount } from '../types/auth';
 
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
@@ -95,6 +97,8 @@ const COLLECTIONS = {
   WA_LOGS: 'wa_logs',
   ATTENDANCE: 'attendance_sheets',
   SETTINGS: 'school_config',
+  ACTIVITIES: 'activities',
+  ACCOUNTS: 'accounts',
 };
 
 /**
@@ -203,6 +207,50 @@ export const subscribeToAttendanceSheets = (onUpdate: (sheets: AttendanceSheet[]
   );
 };
 
+/**
+ * Subscribe to real-time School Activities & Announcements
+ */
+export const subscribeToActivities = (onUpdate: (activities: SchoolActivity[]) => void) => {
+  const colRef = collection(db, COLLECTIONS.ACTIVITIES);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const list: SchoolActivity[] = [];
+      snapshot.forEach((d) => {
+        list.push(d.data() as SchoolActivity);
+      });
+      // Sort by startDate
+      list.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+      onUpdate(list);
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.GET, COLLECTIONS.ACTIVITIES);
+    }
+  );
+};
+
+/**
+ * Subscribe to real-time Staff Accounts
+ */
+export const subscribeToAccounts = (onUpdate: (accounts: UserAccount[]) => void) => {
+  const colRef = collection(db, COLLECTIONS.ACCOUNTS);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const list: UserAccount[] = [];
+      snapshot.forEach((d) => {
+        list.push(d.data() as UserAccount);
+      });
+      // Sort by ID or sequence
+      list.sort((a, b) => a.id.localeCompare(b.id));
+      onUpdate(list);
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.GET, COLLECTIONS.ACCOUNTS);
+    }
+  );
+};
+
 /* =========================================================================
    FIRESTORE REAL-TIME MUTATION APIS
    ========================================================================= */
@@ -304,16 +352,132 @@ export const syncAttendanceSheetToFirestore = async (sheet: AttendanceSheet): Pr
 };
 
 /**
- * Bulk import students to Firestore
+ * Delete Attendance Sheet from Firestore
  */
-export const bulkImportStudentsToFirestore = async (students: Student[]): Promise<void> => {
+export const deleteAttendanceSheetFromFirestore = async (sheetId: string): Promise<void> => {
+  const path = `${COLLECTIONS.ATTENDANCE}/${sheetId}`;
+  try {
+    await deleteDoc(doc(db, COLLECTIONS.ATTENDANCE, sheetId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+  }
+};
+
+/**
+ * Bulk sync attendance sheets to Firestore with chunking
+ */
+export const bulkSyncAttendanceSheets = async (sheets: AttendanceSheet[]): Promise<void> => {
+  const CHUNK_SIZE = 350;
+  try {
+    for (let i = 0; i < sheets.length; i += CHUNK_SIZE) {
+      const chunk = sheets.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((sheet) => {
+        const ref = doc(db, COLLECTIONS.ATTENDANCE, sheet.id);
+        batch.set(ref, sheet);
+      });
+      await batch.commit();
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, COLLECTIONS.ATTENDANCE);
+  }
+};
+
+/**
+ * Save or update School Activity / Announcement to Firestore
+ */
+export const syncActivityToFirestore = async (activity: SchoolActivity): Promise<void> => {
+  const path = `${COLLECTIONS.ACTIVITIES}/${activity.id}`;
+  try {
+    await setDoc(doc(db, COLLECTIONS.ACTIVITIES, activity.id), activity);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+};
+
+/**
+ * Delete School Activity / Announcement from Firestore
+ */
+export const deleteActivityFromFirestore = async (activityId: string): Promise<void> => {
+  const path = `${COLLECTIONS.ACTIVITIES}/${activityId}`;
+  try {
+    await deleteDoc(doc(db, COLLECTIONS.ACTIVITIES, activityId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+  }
+};
+
+/**
+ * Bulk sync School Activities to Firestore
+ */
+export const bulkSyncActivitiesToFirestore = async (activities: SchoolActivity[]): Promise<void> => {
   try {
     const batch = writeBatch(db);
-    students.forEach((student) => {
-      const ref = doc(db, COLLECTIONS.STUDENTS, student.id);
-      batch.set(ref, student);
+    activities.forEach((act) => {
+      const ref = doc(db, COLLECTIONS.ACTIVITIES, act.id);
+      batch.set(ref, act);
     });
     await batch.commit();
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, COLLECTIONS.ACTIVITIES);
+  }
+};
+
+/**
+ * Save or update Staff Account to Firestore
+ */
+export const syncAccountToFirestore = async (account: UserAccount): Promise<void> => {
+  const path = `${COLLECTIONS.ACCOUNTS}/${account.id}`;
+  try {
+    await setDoc(doc(db, COLLECTIONS.ACCOUNTS, account.id), account);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+};
+
+/**
+ * Delete Staff Account from Firestore
+ */
+export const deleteAccountFromFirestore = async (accountId: string): Promise<void> => {
+  const path = `${COLLECTIONS.ACCOUNTS}/${accountId}`;
+  try {
+    await deleteDoc(doc(db, COLLECTIONS.ACCOUNTS, accountId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+  }
+};
+
+/**
+ * Bulk sync Staff Accounts to Firestore
+ */
+export const bulkSyncAccountsToFirestore = async (accounts: UserAccount[]): Promise<void> => {
+  try {
+    const batch = writeBatch(db);
+    accounts.forEach((acc) => {
+      const ref = doc(db, COLLECTIONS.ACCOUNTS, acc.id);
+      batch.set(ref, acc);
+    });
+    await batch.commit();
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, COLLECTIONS.ACCOUNTS);
+  }
+};
+
+/**
+ * Bulk import students to Firestore safely chunked by 350 to prevent 500 limit exception
+ */
+export const bulkImportStudentsToFirestore = async (students: Student[]): Promise<void> => {
+  const CHUNK_SIZE = 350;
+  try {
+    for (let i = 0; i < students.length; i += CHUNK_SIZE) {
+      const chunk = students.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((student) => {
+        const ref = doc(db, COLLECTIONS.STUDENTS, student.id);
+        batch.set(ref, student);
+      });
+      await batch.commit();
+    }
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, COLLECTIONS.STUDENTS);
   }
@@ -321,7 +485,7 @@ export const bulkImportStudentsToFirestore = async (students: Student[]): Promis
 
 /**
  * COMPLETELY CLEAN & RESET FIRESTORE
- * Deletes all documents in students, violations, wa_logs, attendance_sheets.
+ * Deletes all documents in students, violations, wa_logs, attendance_sheets, activities.
  * Ensures the database is 100% clean across all devices.
  */
 export const clearAllFirestoreData = async (): Promise<void> => {
@@ -331,6 +495,7 @@ export const clearAllFirestoreData = async (): Promise<void> => {
       COLLECTIONS.VIOLATIONS,
       COLLECTIONS.WA_LOGS,
       COLLECTIONS.ATTENDANCE,
+      COLLECTIONS.ACTIVITIES,
     ];
 
     for (const colName of collectionsToClear) {

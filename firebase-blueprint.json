@@ -89,6 +89,42 @@
         "kepsekNip": { "type": "string" }
       },
       "required": ["schoolName"]
+    },
+    "SchoolActivity": {
+      "title": "SchoolActivity",
+      "description": "School events and announcements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "time": { "type": "string" },
+        "location": { "type": "string" },
+        "description": { "type": "string" },
+        "priority": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "startDate"]
+    },
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Staff and teacher account configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "role": { "type": "string" },
+        "nip": { "type": "string" },
+        "pin": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "canEdit": { "type": "boolean" },
+        "canDelete": { "type": "boolean" },
+        "canManageSettings": { "type": "boolean" },
+        "avatarColor": { "type": "string" }
+      },
+      "required": ["id", "name", "role", "username"]
     }
   },
   "firestore": {
@@ -111,6 +147,14 @@
     "/school_config/{configId}": {
       "schema": "SchoolProfile",
       "description": "School profile and operational configurations"
+    },
+    "/activities/{activityId}": {
+      "schema": "SchoolActivity",
+      "description": "School announcements and activities"
+    },
+    "/accounts/{accountId}": {
+      "schema": "UserAccount",
+      "description": "Staff user credentials and role definitions"
     }
   }
 }

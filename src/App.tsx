@@ -17,6 +17,9 @@ import {
   subscribeToViolations,
   subscribeToWaLogs,
   subscribeToSchoolConfig,
+  subscribeToAttendanceSheets,
+  subscribeToActivities,
+  subscribeToAccounts,
   syncStudentToFirestore,
   deleteStudentFromFirestore,
   syncViolationToFirestore,
@@ -25,9 +28,15 @@ import {
   deleteWaLogFromFirestore,
   syncSchoolConfigToFirestore,
   bulkImportStudentsToFirestore,
+  bulkSyncAttendanceSheets,
+  bulkSyncActivitiesToFirestore,
+  bulkSyncAccountsToFirestore,
   clearAllFirestoreData,
 } from './services/firebase';
-import { getCurrentUser, isGuestMode } from './services/authService';
+import { INITIAL_STUDENTS } from './data/initialStudents';
+import { generateCleanTodayAttendanceSheets } from './services/attendanceStorage';
+import { getStoredActivities } from './services/announcementService';
+import { getCurrentUser, isGuestMode, getStoredAccounts, DEFAULT_ACCOUNTS, setCurrentUserId } from './services/authService';
 import { logAudit } from './services/auditLogger';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
@@ -79,8 +88,22 @@ export default function App() {
 
   // Real-time synchronization across accounts & devices via Firestore onSnapshot
   useEffect(() => {
+    let isInitialStudentSyncDone = false;
+
     const unsubStudents = subscribeToStudents((remoteStudents) => {
-      setStudents(remoteStudents);
+      if (remoteStudents.length > 0) {
+        setStudents(remoteStudents);
+        isInitialStudentSyncDone = true;
+      } else if (!isInitialStudentSyncDone) {
+        // First boot or empty Firestore: seed 864 students so they never disappear on iPad/mobile
+        const local = getStoredStudents();
+        const seedData = local && local.length > 0 ? local : INITIAL_STUDENTS;
+        setStudents(seedData);
+        bulkImportStudentsToFirestore(seedData).catch(console.error);
+        isInitialStudentSyncDone = true;
+      } else {
+        setStudents([]);
+      }
     });
 
     const unsubViolations = subscribeToViolations((remoteViolations) => {
@@ -95,13 +118,86 @@ export default function App() {
       setSchoolConfig((prev) => ({ ...prev, ...remoteConfig }));
     });
 
+    const unsubAttendance = subscribeToAttendanceSheets((remoteSheets) => {
+      if (remoteSheets.length > 0) {
+        try {
+          localStorage.setItem('bsan_grisaka_attendance_sheets_v1', JSON.stringify(remoteSheets));
+        } catch {}
+      } else {
+        // Attendance empty in cloud: seed clean today sheets
+        const clean = generateCleanTodayAttendanceSheets();
+        if (clean.length > 0) {
+          try {
+            localStorage.setItem('bsan_grisaka_attendance_sheets_v1', JSON.stringify(clean));
+          } catch {}
+          bulkSyncAttendanceSheets(clean).catch(console.error);
+        }
+      }
+    });
+
+    const unsubActivities = subscribeToActivities((remoteActivities) => {
+      if (remoteActivities.length > 0) {
+        try {
+          localStorage.setItem('bsan_grisaka_announcements_v1', JSON.stringify(remoteActivities));
+        } catch {}
+      } else {
+        const defaults = getStoredActivities();
+        bulkSyncActivitiesToFirestore(defaults).catch(console.error);
+      }
+    });
+
+    const unsubAccounts = subscribeToAccounts((remoteAccounts) => {
+      if (remoteAccounts.length > 0) {
+        try {
+          localStorage.setItem('bsan_grisaka_accounts_dapodik_v3', JSON.stringify(remoteAccounts));
+        } catch {}
+      } else {
+        const defaults = getStoredAccounts();
+        bulkSyncAccountsToFirestore(defaults).catch(console.error);
+      }
+    });
+
     return () => {
       unsubStudents();
       unsubViolations();
       unsubWaLogs();
       unsubConfig();
+      unsubAttendance();
+      unsubActivities();
+      unsubAccounts();
     };
   }, []);
+
+  // Security Auto-Lock: Automatically revert to Guest Mode after 15 minutes of inactivity
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let timeoutId: any;
+    const INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 minutes
+
+    const resetInactivityTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        setCurrentUserId('guest');
+        setCurrentUser(null);
+        logAudit({
+          actionType: 'LOGOUT',
+          module: 'Autentikasi',
+          description: 'Sesi otomatis terkunci kembali ke Mode Tamu karena tidak ada aktivitas selama 15 menit (Auto-Lock Keamanan)',
+          status: 'SUCCESS',
+        });
+      }, INACTIVITY_LIMIT_MS);
+    };
+
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    events.forEach((ev) => window.addEventListener(ev, resetInactivityTimer, { passive: true }));
+    resetInactivityTimer();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      events.forEach((ev) => window.removeEventListener(ev, resetInactivityTimer));
+    };
+  }, [currentUser]);
 
   // Sync to local storage
   useEffect(() => {

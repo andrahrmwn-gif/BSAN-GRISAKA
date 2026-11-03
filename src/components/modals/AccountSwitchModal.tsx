@@ -76,9 +76,15 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
     if (e) e.preventDefault();
     if (!selectedAccount) return;
 
-    if (selectedAccount.pin && enteredPin && enteredPin !== selectedAccount.pin) {
-      setPinError('PIN yang Anda masukkan salah. Default PIN: 1234');
-      return;
+    if (selectedAccount.pin) {
+      if (!enteredPin.trim()) {
+        setPinError('Harap masukkan PIN keamanan akun Anda.');
+        return;
+      }
+      if (enteredPin.trim() !== selectedAccount.pin) {
+        setPinError('PIN yang Anda masukkan salah. Masukkan PIN yang benar.');
+        return;
+      }
     }
 
     setCurrentUserId(selectedAccount.id);
@@ -570,10 +576,19 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
               </p>
             </div>
 
-            <form onSubmit={handleConfirmLogin} className="max-w-xs mx-auto space-y-3 pt-2">
+            {selectedAccount.pin === '1234' && (
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-[11px] leading-relaxed flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-amber-950">Peringatan Keamanan:</span> Akun ini masih menggunakan PIN bawaan standar (<span className="font-mono font-bold">1234</span>). Siapapun dapat masuk jika belum diganti. Disarankan segera mengganti PIN rahasia pribadi Anda.
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleConfirmLogin} className="max-w-xs mx-auto space-y-3 pt-1">
               <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1 text-center">
-                  Masukkan PIN / Password Akun (Default: 1234)
+                <label className="block text-[11px] font-bold text-slate-700 mb-1 text-center">
+                  Masukkan PIN / Password Akun {selectedAccount.pin === '1234' ? '(Default: 1234)' : ''}
                 </label>
                 <div className="relative">
                   <Key className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
