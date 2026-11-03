@@ -95,6 +95,9 @@ export const getStoredSchoolConfig = (): SchoolProfile => {
     if (parsed.wakasekName && parsed.wakasekName.includes('Subagyo')) {
       parsed.wakasekName = 'Tim Kesiswaan';
     }
+    if (!parsed.footerYear || parsed.footerYear.includes('2025')) {
+      parsed.footerYear = '2026';
+    }
     return parsed;
   } catch (err) {
     console.error('Failed reading school config storage', err);

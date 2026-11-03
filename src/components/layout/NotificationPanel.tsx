@@ -26,13 +26,21 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
   onClose,
   onNavigate,
 }) => {
-  const [activities, setActivities] = useState<SchoolActivity[]>([]);
+  const [activities, setActivities] = useState<SchoolActivity[]>(() => getStoredActivities());
   const [isPlayingSound, setIsPlayingSound] = useState(false);
 
   useEffect(() => {
-    if (isOpen) {
+    const handleUpdate = () => {
       setActivities(getStoredActivities());
-    }
+    };
+
+    handleUpdate();
+    window.addEventListener('bsan_activities_changed', handleUpdate);
+    window.addEventListener('focus', handleUpdate);
+    return () => {
+      window.removeEventListener('bsan_activities_changed', handleUpdate);
+      window.removeEventListener('focus', handleUpdate);
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -103,76 +111,98 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
           </button>
         </div>
 
-        {/* Notifications Content */}
+        {/* Notifications Content matching Dashboard Informasi & Pengumuman */}
         <div className="max-h-80 overflow-y-auto p-4 space-y-3">
-          {alertActivities.length === 0 ? (
-            <div className="text-center py-8">
-              <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
+          {activities.length === 0 ? (
+            <div className="text-center py-10 px-4">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2.5">
+                <Bell className="w-6 h-6 stroke-[1.8]" />
+              </div>
               <p className="text-xs font-bold text-slate-800">
-                Semua Agenda Terpantau Aman
+                Informasi & Pengumuman Kosong
               </p>
               <p className="text-[11px] text-slate-500 mt-1 max-w-xs mx-auto">
-                Tidak ada kegiatan mendesak dalam rentang H-5 hingga Hari H saat ini.
+                Belum ada kegiatan atau pengumuman yang tercatat di dashboard.
               </p>
+              {onNavigate && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onNavigate('dashboard');
+                  }}
+                  className="mt-3.5 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#1E3A8A] hover:bg-[#2563EB] text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                >
+                  <span>+ Tambah Pengumuman di Dashboard</span>
+                </button>
+              )}
             </div>
           ) : (
-            alertActivities.map(({ activity, status }) => (
-              <div
-                key={activity.id}
-                className={`p-3.5 rounded-2xl border transition-all ${
-                  status.isHariH
-                    ? 'bg-rose-50/90 border-rose-300 ring-1 ring-rose-300'
-                    : status.isUpcomingAlert
-                    ? 'bg-amber-50/90 border-amber-300'
-                    : 'bg-slate-50 border-slate-200'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <span className="font-bold text-slate-900 text-xs block leading-snug">
-                      {activity.title}
-                    </span>
-                    <div className="flex items-center gap-2 text-[11px] text-slate-600 mt-1">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-slate-400" />
-                        {activity.date}
+            activities.map((activity) => {
+              const status = getActivityNotificationStatus(activity);
+              return (
+                <div
+                  key={activity.id}
+                  className={`p-3.5 rounded-2xl border transition-all ${
+                    status.isHariH
+                      ? 'bg-rose-50/90 border-rose-300 ring-1 ring-rose-300'
+                      : status.isUpcomingAlert
+                      ? 'bg-amber-50/90 border-amber-300'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-slate-900 text-xs block leading-snug">
+                        {activity.title}
                       </span>
-                      {activity.time && (
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          {activity.time}
+                      <div className="flex items-center gap-2 text-[11px] text-slate-600 mt-1 flex-wrap">
+                        <span className="flex items-center gap-1 font-semibold text-slate-700">
+                          <Calendar className="w-3 h-3 text-slate-400" />
+                          {activity.date}
                         </span>
+                        {activity.time && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            {activity.time}
+                          </span>
+                        )}
+                        {activity.location && (
+                          <span className="text-[11px] text-slate-500">
+                            📍 {activity.location}
+                          </span>
+                        )}
+                      </div>
+                      {activity.description && (
+                        <p className="text-[10px] text-slate-500 mt-1 line-clamp-2">
+                          {activity.description}
+                        </p>
                       )}
                     </div>
-                    {activity.location && (
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        📍 {activity.location}
-                      </p>
-                    )}
-                  </div>
 
-                  {/* Badge */}
-                  <span
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-black shrink-0 uppercase tracking-tight ${
-                      status.isHariH
-                        ? 'bg-rose-600 text-white animate-pulse'
-                        : status.isUpcomingAlert
-                        ? 'bg-amber-500 text-white'
-                        : 'bg-blue-100 text-[#1E3A8A]'
-                    }`}
-                  >
-                    {status.badgeText}
-                  </span>
+                    {/* Badge */}
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-black shrink-0 uppercase tracking-tight ${
+                        status.isHariH
+                          ? 'bg-rose-600 text-white animate-pulse'
+                          : status.isUpcomingAlert
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-blue-100 text-[#1E3A8A]'
+                      }`}
+                    >
+                      {status.badgeText}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
         {/* Footer */}
         <div className="bg-slate-50 px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold">
           <span className="text-slate-500">
-            Total {alertActivities.length} Agenda Aktif
+            Total {activities.length} Kegiatan Terjadwal
           </span>
           {onNavigate && (
             <button
@@ -183,7 +213,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
               }}
               className="text-[#3B5BDB] hover:text-[#2563EB] inline-flex items-center gap-1 cursor-pointer font-bold"
             >
-              <span>Buka Dashboard</span>
+              <span>Kelola di Dashboard</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}

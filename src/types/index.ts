@@ -101,6 +101,7 @@ export interface SchoolProfile {
   bkTitle?: string;
   bkNip?: string;
   logoUrl?: string;
+  footerYear?: string;
 }
 
 export type ViewMode = 

@@ -38,7 +38,7 @@ import {
   Bell,
   Play
 } from 'lucide-react';
-import { getDateAttendanceSummary } from '../../services/attendanceStorage';
+import { getDateAttendanceSummary, getStoredAttendanceSheets } from '../../services/attendanceStorage';
 import { 
   getStoredActivities, 
   addActivity, 
@@ -85,6 +85,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
   // Chart & List filter state
   const [chartPeriodFilter, setChartPeriodFilter] = useState<'harian' | 'bulanan'>('harian');
+  const [chartMetricType, setChartMetricType] = useState<'jumlah' | 'persen'>('jumlah');
   const [absentStatusFilter, setAbsentStatusFilter] = useState<'all' | 'Sakit' | 'Izin' | 'Alfa'>('all');
   const [absentPeriodFilter, setAbsentPeriodFilter] = useState<'today' | 'month'>('today');
 
@@ -114,10 +115,17 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   });
   const [isChimePlaying, setIsChimePlaying] = useState(false);
 
-  // Play sound on mount if any activity is active (H-5 s/d Hari H)
+  // Play sound on mount if any activity is active (H-5 s/d Hari H) and listen to activity changes
   useEffect(() => {
+    const refreshActivities = () => {
+      const list = getStoredActivities();
+      setActivities(list);
+    };
+
+    refreshActivities();
+    window.addEventListener('bsan_activities_changed', refreshActivities);
+
     const list = getStoredActivities();
-    setActivities(list);
     const hasActiveEvent = list.some((a) => {
       const st = getActivityNotificationStatus(a);
       return st.shouldNotify;
@@ -127,8 +135,15 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
       const timer = setTimeout(() => {
         playSchoolChimeSound();
       }, 1500);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('bsan_activities_changed', refreshActivities);
+      };
     }
+
+    return () => {
+      window.removeEventListener('bsan_activities_changed', refreshActivities);
+    };
   }, []);
 
   useEffect(() => {
@@ -243,10 +258,94 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     return sortByClassAndName(list);
   }, [dateAttendance, absentStatusFilter]);
 
-  // Data for "Grafik Kehadiran Siswa Per Kelas" (24 Classes 7A - 9H) for selectedDate
+  // Data for "Grafik Kehadiran Siswa Per Kelas" (24 Classes 7A - 9H) integrated with student counts
   const classAttendanceChartData = useMemo(() => {
-    return dateAttendance.classData;
-  }, [dateAttendance]);
+    if (chartPeriodFilter === 'harian') {
+      return dateAttendance.classData.map((c) => ({
+        ...c,
+        barHadir: chartMetricType === 'jumlah' ? c.hadir : c.hadirPct,
+        barTidakHadir: chartMetricType === 'jumlah' ? c.tidakHadir : c.tidakHadirPct,
+      }));
+    }
+
+    // Monthly aggregation across all attendance sheets of the selected month
+    const allSheets = getStoredAttendanceSheets();
+    const currentYearMonth = selectedDate.substring(0, 7);
+    const monthSheets = allSheets.filter((s) => s.date.startsWith(currentYearMonth));
+
+    return KELAS_LIST.map((cls) => {
+      const clsSheets = monthSheets.filter((s) => s.kelas === cls);
+      const classStudents = students.filter((s) => s.kelas === cls);
+      const totalRombel = classStudents.length || 36;
+
+      let hadir = 0;
+      let sakit = 0;
+      let izin = 0;
+      let alfa = 0;
+      const sheetCount = clsSheets.length;
+
+      if (sheetCount > 0) {
+        clsSheets.forEach((s) => {
+          hadir += s.summary.hadir;
+          sakit += s.summary.sakit;
+          izin += s.summary.izin;
+          alfa += s.summary.alfa;
+        });
+
+        const avgHadir = Math.round(hadir / sheetCount);
+        const avgSakit = Math.round(sakit / sheetCount);
+        const avgIzin = Math.round(izin / sheetCount);
+        const avgAlfa = Math.round(alfa / sheetCount);
+        const avgTidakHadir = avgSakit + avgIzin + avgAlfa;
+        const total = totalRombel;
+        const hadirPct = total > 0 ? Math.round((avgHadir / total) * 100) : 100;
+        const tidakHadirPct = 100 - hadirPct;
+
+        return {
+          kelas: cls,
+          total,
+          hadir: avgHadir,
+          tidakHadir: avgTidakHadir,
+          sakit: avgSakit,
+          izin: avgIzin,
+          alfa: avgAlfa,
+          hadirPct,
+          tidakHadirPct,
+          barHadir: chartMetricType === 'jumlah' ? avgHadir : hadirPct,
+          barTidakHadir: chartMetricType === 'jumlah' ? avgTidakHadir : tidakHadirPct,
+          Hadir: chartMetricType === 'jumlah' ? avgHadir : hadirPct,
+          TidakHadir: chartMetricType === 'jumlah' ? avgTidakHadir : tidakHadirPct,
+          hadirCount: avgHadir,
+          tidakHadirCount: avgTidakHadir,
+        };
+      }
+
+      // Fallback to day data if no monthly sheets exist yet
+      const dayClass = dateAttendance.classData.find((c) => c.kelas === cls);
+      const dHadir = dayClass?.hadir ?? totalRombel;
+      const dTidakHadir = dayClass?.tidakHadir ?? 0;
+      const dHadirPct = dayClass?.hadirPct ?? 100;
+      const dTidakHadirPct = dayClass?.tidakHadirPct ?? 0;
+
+      return {
+        kelas: cls,
+        total: totalRombel,
+        hadir: dHadir,
+        tidakHadir: dTidakHadir,
+        sakit: dayClass?.sakit ?? 0,
+        izin: dayClass?.izin ?? 0,
+        alfa: dayClass?.alfa ?? 0,
+        hadirPct: dHadirPct,
+        tidakHadirPct: dTidakHadirPct,
+        barHadir: chartMetricType === 'jumlah' ? dHadir : dHadirPct,
+        barTidakHadir: chartMetricType === 'jumlah' ? dTidakHadir : dTidakHadirPct,
+        Hadir: chartMetricType === 'jumlah' ? dHadir : dHadirPct,
+        TidakHadir: chartMetricType === 'jumlah' ? dTidakHadir : dTidakHadirPct,
+        hadirCount: dHadir,
+        tidakHadirCount: dTidakHadir,
+      };
+    });
+  }, [dateAttendance, chartPeriodFilter, chartMetricType, selectedDate, students]);
 
   // Donut chart data for Prosentasi Kehadiran for selectedDate
   const donutData = useMemo(() => {
@@ -894,34 +993,78 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         {/* Card 1 (5 cols): Grafik Kehadiran Siswa Per Kelas (24 Rombel) */}
         <div className="lg:col-span-5 bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-100 gap-2">
               <div>
                 <h3 className="font-bold text-slate-900 text-sm">
                   Grafik Kehadiran Siswa Per Kelas
                 </h3>
-                <p className="text-[11px] text-slate-500">24 Rombongan Belajar (7A - 9H)</p>
+                <p className="text-[11px] text-slate-500">
+                  24 Rombel (7A - 9H) · {chartPeriodFilter === 'harian' ? selectedDateFormatted : 'Bulan Ini'}
+                </p>
               </div>
 
-              <select
-                value={chartPeriodFilter}
-                onChange={(e) => setChartPeriodFilter(e.target.value as any)}
-                className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 focus:outline-none cursor-pointer"
-              >
-                <option value="harian">Hari ini</option>
-                <option value="bulanan">Bulan ini</option>
-              </select>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Mode Selector: Jumlah Siswa vs Persentase */}
+                <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setChartMetricType('jumlah')}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                      chartMetricType === 'jumlah'
+                        ? 'bg-white text-[#1E3A8A] shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="Tampilkan grafik dalam jumlah siswa (orang)"
+                  >
+                    Jumlah (Orang)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChartMetricType('persen')}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                      chartMetricType === 'persen'
+                        ? 'bg-white text-[#1E3A8A] shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="Tampilkan grafik dalam persentase (%)"
+                  >
+                    Persentase (%)
+                  </button>
+                </div>
+
+                <select
+                  value={chartPeriodFilter}
+                  onChange={(e) => setChartPeriodFilter(e.target.value as any)}
+                  className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 focus:outline-none cursor-pointer"
+                >
+                  <option value="harian">Hari ini</option>
+                  <option value="bulanan">Bulan ini</option>
+                </select>
+              </div>
             </div>
 
-            {/* Custom Legend */}
-            <div className="flex items-center gap-4 text-xs font-medium text-slate-600 mt-3 mb-2 px-1">
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-sm bg-[#10B981]"></span>
-                <span>Hadir</span>
+            {/* Custom Legend & Info */}
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-medium text-slate-600 mt-3 mb-2 px-1">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-sm bg-[#10B981]"></span>
+                  <span className="font-semibold text-slate-800">
+                    {chartMetricType === 'jumlah' ? 'Masuk (Hadir)' : 'Hadir (%)'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-sm bg-[#EF4444]"></span>
+                  <span className="font-semibold text-slate-800">
+                    {chartMetricType === 'jumlah' ? 'Tidak Masuk' : 'Tidak Hadir (%)'}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-sm bg-[#EF4444]"></span>
-                <span>Tidak Hadir</span>
-              </div>
+
+              <span className="text-[11px] font-semibold text-slate-500">
+                {chartMetricType === 'jumlah' 
+                  ? 'Skala: Jumlah Siswa per Kelas' 
+                  : 'Skala: 0% - 100%'}
+              </span>
             </div>
 
             {/* Recharts Bar Chart */}
@@ -934,29 +1077,35 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                   <XAxis 
                     dataKey="kelas" 
-                    tick={{ fontSize: 9, fill: '#64748B' }} 
+                    tick={{ fontSize: 9, fill: '#64748B', fontWeight: 600 }} 
                     interval={0}
                     angle={-45}
                     textAnchor="end"
                   />
                   <YAxis 
-                    domain={[0, 100]} 
+                    domain={chartMetricType === 'persen' ? [0, 100] : [0, 'dataMax + 4']} 
                     tick={{ fontSize: 10, fill: '#64748B' }} 
-                    tickFormatter={(v) => `${v}%`}
+                    tickFormatter={(v) => chartMetricType === 'persen' ? `${v}%` : `${v}`}
                   />
                   <Tooltip 
                     formatter={(value: any, name: any, item: any) => {
-                      const payload = item.payload;
-                      if (name === 'Hadir') {
-                        return [`${value}% (${payload.hadirCount} siswa)`, 'Hadir'];
+                      const p = item.payload;
+                      if (name === 'barHadir') {
+                        return [`${p.hadir} Siswa (${p.hadirPct}%)`, 'Masuk (Hadir)'];
                       }
-                      return [`${value}% (${payload.tidakHadirCount} siswa)`, 'Tidak Hadir'];
+                      return [
+                        `${p.tidakHadir} Siswa (${p.tidakHadirPct}%) [S: ${p.sakit}, I: ${p.izin}, A: ${p.alfa}]`,
+                        'Tidak Masuk'
+                      ];
                     }}
-                    labelFormatter={(label) => `Kelas ${label}`}
-                    contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', fontSize: '11px' }}
+                    labelFormatter={(label) => {
+                      const item = classAttendanceChartData.find(c => c.kelas === label);
+                      return `Kelas ${label} (Total: ${item?.total || 36} Siswa)`;
+                    }}
+                    contentStyle={{ borderRadius: '12px', border: '1px solid #CBD5E1', fontSize: '11px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   />
-                  <Bar dataKey="Hadir" stackId="a" fill="#10B981" />
-                  <Bar dataKey="TidakHadir" stackId="a" fill="#EF4444" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="barHadir" name="barHadir" stackId="a" fill="#10B981" />
+                  <Bar dataKey="barTidakHadir" name="barTidakHadir" stackId="a" fill="#EF4444" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

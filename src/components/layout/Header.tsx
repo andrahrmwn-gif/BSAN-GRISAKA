@@ -8,7 +8,7 @@ import {
   User,
   ChevronDown
 } from 'lucide-react';
-import { getActiveNotificationActivities } from '../../services/announcementService';
+import { getActiveNotificationActivities, getStoredActivities } from '../../services/announcementService';
 import { NotificationPanel } from './NotificationPanel';
 import { HelpGuideModal } from '../modals/HelpGuideModal';
 
@@ -35,19 +35,23 @@ export const Header: React.FC<HeaderProps> = ({
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [activeAlertCount, setActiveAlertCount] = useState<number>(() => {
-    return getActiveNotificationActivities().length;
+    return getStoredActivities().length;
   });
 
-  // Re-calculate alert count periodically or on window focus
+  // Re-calculate alert count periodically, on window focus, or when activities change
   useEffect(() => {
     const updateCount = () => {
-      const active = getActiveNotificationActivities();
-      setActiveAlertCount(active.length);
+      const all = getStoredActivities();
+      setActiveAlertCount(all.length);
     };
 
     updateCount();
     window.addEventListener('focus', updateCount);
-    return () => window.removeEventListener('focus', updateCount);
+    window.addEventListener('bsan_activities_changed', updateCount);
+    return () => {
+      window.removeEventListener('focus', updateCount);
+      window.removeEventListener('bsan_activities_changed', updateCount);
+    };
   }, []);
 
   const getViewTitle = () => {

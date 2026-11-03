@@ -343,6 +343,10 @@ export const getDateAttendanceSummary = (targetDate: string, students: Student[]
       alfa,
       hadirPct,
       tidakHadirPct,
+      Hadir: hadir,
+      TidakHadir: tidakHadir,
+      hadirCount: hadir,
+      tidakHadirCount: tidakHadir,
     };
   });
 

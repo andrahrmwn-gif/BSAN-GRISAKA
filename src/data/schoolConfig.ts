@@ -24,6 +24,7 @@ export const SCHOOL_CONFIG: SchoolProfile = {
   bkTitle: 'Koordinator Guru BK / Konselor Sekolah',
   bkNip: '19780824 200501 2 008',
   logoUrl: '',
+  footerYear: '2026',
 };
 
 export const KELAS_LIST = [

@@ -795,7 +795,7 @@ export default function App() {
         {/* Footer Matching Gambar 2 */}
         <footer className="no-print mt-auto py-3.5 px-6 lg:px-8 border-t border-slate-200/90 bg-white text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-center sm:text-left">
-            <span>© 2025-2026 {schoolConfig.name || 'SMPN 1 Kandangan'}. All rights reserved.</span>
+            <span>© {schoolConfig.footerYear || '2026'} {schoolConfig.name || 'SMPN 1 Kandangan'}. All rights reserved.</span>
             <span>·</span>
             <button
               onClick={handleTriggerResetData}

@@ -925,6 +925,23 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
               />
             </div>
 
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Tahun Footer Aplikasi / Hak Cipta *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="2026"
+                value={formData.footerYear || '2026'}
+                onChange={(e) => setFormData({ ...formData, footerYear: e.target.value })}
+                className="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-slate-50/50 font-bold text-slate-900"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">
+                Ditampilkan pada bagian footer paling bawah aplikasi: "© [Tahun] {formData.name || 'SMPN 1 Kandangan'}"
+              </p>
+            </div>
+
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Motto Budaya Sekolah Aman dan Nyaman (BSAN)

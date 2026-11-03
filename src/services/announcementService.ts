@@ -89,31 +89,32 @@ function generateDefaultActivities(): SchoolActivity[] {
 export function getStoredActivities(): SchoolActivity[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
+    if (raw === null) {
       const defaults = generateDefaultActivities();
       saveActivities(defaults);
       return defaults;
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
+    if (Array.isArray(parsed)) {
       return parsed.map((item) => ({
         ...item,
         date: item.startDate || item.date,
         startDate: item.startDate || item.date,
       }));
     }
-    const defaults = generateDefaultActivities();
-    saveActivities(defaults);
-    return defaults;
+    return [];
   } catch (err) {
     console.error('Failed reading announcements from storage', err);
-    return generateDefaultActivities();
+    return [];
   }
 }
 
 export function saveActivities(activities: SchoolActivity[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(activities));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('bsan_activities_changed', { detail: activities }));
+    }
   } catch (err) {
     console.error('Failed saving announcements', err);
   }
