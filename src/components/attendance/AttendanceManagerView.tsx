@@ -97,10 +97,36 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
     setSelectedDate(d.toISOString().split('T')[0]);
   };
   
-  // Student entries state for currently selected class and date
   const [entries, setEntries] = useState<AttendanceStudentEntry[]>([]);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveTrigger, setSaveTrigger] = useState(0);
+
+  // Status map of all 24 classes for selectedDate (whether attendance has been recorded)
+  const classStatusMap = useMemo(() => {
+    const map: Record<string, { isDone: boolean; sheet?: AttendanceSheet; hadirPct?: number }> = {};
+    KELAS_LIST.forEach((k) => {
+      const sheet = getAttendanceByClassAndDate(k, selectedDate);
+      if (sheet && sheet.entries && sheet.entries.length > 0) {
+        map[k] = {
+          isDone: true,
+          sheet,
+          hadirPct: sheet.summary?.persentaseHadir ?? 100,
+        };
+      } else {
+        map[k] = {
+          isDone: false,
+        };
+      }
+    });
+    return map;
+  }, [selectedDate, saveTrigger]);
+
+  const currentClassStatus = classStatusMap[selectedKelas] || { isDone: false };
+
+  const completedClassesCount = useMemo(() => {
+    return Object.values(classStatusMap).filter((item) => item.isDone).length;
+  }, [classStatusMap]);
 
   // Recap View State
   const [recapPeriod, setRecapPeriod] = useState<AttendancePeriod>('harian');
@@ -279,6 +305,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
     };
 
     saveSingleAttendanceSheet(newSheet);
+    setSaveTrigger((c) => c + 1);
 
     // If the saved date is today, synchronize the Student database
     const todayStr = new Date().toISOString().split('T')[0];
@@ -307,8 +334,8 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
     });
 
     setIsSaving(false);
-    setSaveSuccessMsg(`Presensi Kelas ${selectedKelas} (${selectedDate}) berhasil disimpan & terekap otomatis!`);
-    setTimeout(() => setSaveSuccessMsg(null), 4000);
+    setSaveSuccessMsg(`✓ KETERANGAN RESMI: Presensi Kelas ${selectedKelas} Tanggal ${selectedDate} SUDAH DILAKUKAN & TERCATAT RESMI!`);
+    setTimeout(() => setSaveSuccessMsg(null), 5000);
   };
 
   // Real-time metrics for current input class
@@ -579,36 +606,146 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
                   type="button"
                   onClick={handleSaveAttendance}
                   disabled={isSaving}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-[#3B5BDB] hover:bg-[#2563EB] disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer"
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 ${
+                    currentClassStatus.isDone
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      : 'bg-[#3B5BDB] hover:bg-[#2563EB] text-white'
+                  }`}
+                  title={currentClassStatus.isDone ? 'Presensi sudah dilakukan. Klik untuk memperbarui' : 'Simpan presensi kelas'}
                 >
-                  <Save className="w-4 h-4 text-white" />
-                  <span>{isSaving ? 'Menyimpan...' : 'Simpan Presensi Kelas'}</span>
+                  {currentClassStatus.isDone ? (
+                    <CheckCircle2 className="w-4 h-4 text-white" />
+                  ) : (
+                    <Save className="w-4 h-4 text-white" />
+                  )}
+                  <span>
+                    {isSaving
+                      ? 'Menyimpan...'
+                      : currentClassStatus.isDone
+                      ? '✓ Presensi Sudah Dilakukan'
+                      : 'Simpan Presensi Kelas'}
+                  </span>
                 </button>
               </div>
             </div>
 
-            {/* Quick 24-Class Chips Picker */}
-            <div className="pt-3 border-t border-slate-100">
-              <span className="block text-[11px] font-semibold text-slate-400 mb-2">
-                PILIH CEPAT ROMBEL KELAS 7, 8, DAN 9:
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {KELAS_LIST.map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setSelectedKelas(k)}
-                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      selectedKelas === k
-                        ? 'bg-[#3B5BDB] text-white shadow-xs scale-105'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
-                    }`}
-                  >
-                    {k}
-                  </button>
-                ))}
+            {/* Quick 24-Class Chips Picker with Real-time Completion Badges */}
+            <div className="pt-3 border-t border-slate-100 space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
+                <span className="font-bold text-slate-600 uppercase tracking-wide">
+                  PILIH ROMBEL KELAS 7, 8, DAN 9 ({selectedDate}):
+                </span>
+                <span className="font-semibold text-slate-700">
+                  <strong className="text-emerald-700 font-bold">{completedClassesCount} dari 24 Rombel</strong> Selesai Presensi ({Math.round((completedClassesCount / 24) * 100)}%)
+                </span>
+              </div>
+
+              {/* Progress bar of recorded classes for selectedDate */}
+              <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${(completedClassesCount / 24) * 100}%` }}
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {KELAS_LIST.map((k) => {
+                  const status = classStatusMap[k];
+                  const isSelected = selectedKelas === k;
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setSelectedKelas(k)}
+                      className={`relative px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        isSelected
+                          ? status?.isDone
+                            ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-300 scale-105'
+                            : 'bg-[#3B5BDB] text-white shadow-md ring-2 ring-blue-300 scale-105'
+                          : status?.isDone
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border border-transparent'
+                      }`}
+                    >
+                      {status?.isDone && (
+                        <span className={`text-[11px] ${isSelected ? 'text-white' : 'text-emerald-600'}`}>✓</span>
+                      )}
+                      <span>{k}</span>
+                      {status?.isDone ? (
+                        <span className={`text-[9px] px-1 py-0.2 rounded font-mono ${
+                          isSelected ? 'bg-white/25 text-white' : 'bg-emerald-200/80 text-emerald-900'
+                        }`}>
+                          {status.hadirPct}%
+                        </span>
+                      ) : (
+                        <span className="text-[9px] text-slate-400 font-normal">
+                          Belum
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+
+            {/* Permanent Keterangan Status Presensi Card for Selected Class */}
+            {currentClassStatus.isDone ? (
+              <div className="p-4 bg-emerald-50/90 border-2 border-emerald-300 rounded-2xl text-xs text-emerald-950 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 animate-fade-in">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-black text-sm text-emerald-900 uppercase">
+                        KETERANGAN: PRESENSI KELAS {selectedKelas} SUDAH DILAKUKAN
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-200 text-emerald-900 border border-emerald-400 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                        <span>Tersimpan & Terverifikasi</span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-emerald-800 mt-1">
+                      Presensi tanggal <strong>{selectedDate}</strong> telah berhasil dicatat pada <strong>{currentClassStatus.sheet?.recordedAt || `${selectedDate} WIB`}</strong> oleh <strong>{currentClassStatus.sheet?.recordedBy || 'Petugas Resmi'}</strong>.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5 text-[11px] font-bold text-emerald-900">
+                      <span className="bg-white/80 px-2 py-0.5 rounded border border-emerald-200">
+                        Hadir: {currentClassStatus.sheet?.summary.hadir} siswa
+                      </span>
+                      <span className="bg-white/80 px-2 py-0.5 rounded border border-emerald-200">
+                        Sakit: {currentClassStatus.sheet?.summary.sakit} siswa
+                      </span>
+                      <span className="bg-white/80 px-2 py-0.5 rounded border border-emerald-200">
+                        Izin: {currentClassStatus.sheet?.summary.izin} siswa
+                      </span>
+                      <span className="bg-white/80 px-2 py-0.5 rounded border border-emerald-200">
+                        Alpa: {currentClassStatus.sheet?.summary.alfa} siswa
+                      </span>
+                      <span className="bg-emerald-700 text-white px-2.5 py-0.5 rounded-md font-extrabold">
+                        Kehadiran: {currentClassStatus.sheet?.summary.persentaseHadir}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0 bg-white/80 p-2.5 rounded-xl border border-emerald-200">
+                  <span className="text-[10px] text-emerald-700 font-semibold uppercase block">Kondisi Tampilan</span>
+                  <span className="text-xs font-bold text-emerald-900">✓ Sudah Dilakukan</span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    Keterangan: Presensi <strong>Kelas {selectedKelas}</strong> tanggal <strong>{selectedDate}</strong> <em>belum disimpan</em>. Silakan periksa daftar kehadiran di bawah lalu klik tombol di bagian paling bawah untuk menyimpan.
+                  </span>
+                </div>
+                <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-200 text-amber-900 whitespace-nowrap">
+                  Belum Dilakukan
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Success Banner */}
@@ -791,20 +928,60 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
               </div>
             )}
 
-            {/* Bottom Save Bar */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="text-xs text-slate-500">
-                Pencatat: <strong>{getCurrentUser()?.name || 'Mode Tamu / Petugas'}</strong> · Tanggal: <strong>{selectedDate}</strong>
+            {/* Bottom Save Bar with Dynamic Keterangan & State Change */}
+            <div className={`p-4 sm:p-5 border-t transition-all flex flex-col sm:flex-row items-center justify-between gap-4 ${
+              currentClassStatus.isDone
+                ? 'bg-emerald-50/95 border-emerald-300 text-emerald-950'
+                : 'bg-slate-50 border-slate-100 text-slate-700'
+            }`}>
+              <div className="text-xs space-y-1">
+                <div className="flex items-center gap-2">
+                  {currentClassStatus.isDone ? (
+                    <span className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs sm:text-sm">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Keterangan: Presensi Kelas {selectedKelas} SUDAH DILAKUKAN</span>
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-slate-700">
+                      Status: Belum disimpan untuk Kelas {selectedKelas}
+                    </span>
+                  )}
+                  {currentClassStatus.isDone && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-200 text-emerald-900 border border-emerald-400">
+                      Tersimpan Resmi
+                    </span>
+                  )}
+                </div>
+                <p className="text-slate-500 text-[11px]">
+                  Pencatat: <strong>{getCurrentUser()?.name || 'Mode Tamu / Petugas'}</strong> · Tanggal Presensi: <strong>{selectedDate}</strong>
+                  {currentClassStatus.isDone && (
+                    <span> · Terakhir disimpan: <strong>{currentClassStatus.sheet?.recordedAt}</strong></span>
+                  )}
+                </p>
               </div>
 
               <button
                 type="button"
                 onClick={handleSaveAttendance}
                 disabled={isSaving}
-                className="flex items-center gap-2 px-6 py-2.5 bg-[#3B5BDB] hover:bg-[#2563EB] disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer"
+                className={`flex items-center gap-2.5 px-6 py-3 rounded-2xl text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 ${
+                  currentClassStatus.isDone
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300'
+                    : 'bg-[#3B5BDB] hover:bg-[#2563EB] text-white'
+                }`}
               >
-                <Save className="w-4 h-4 text-white" />
-                <span>{isSaving ? 'Menyimpan...' : 'Simpan Presensi Kelas Sekarang'}</span>
+                {currentClassStatus.isDone ? (
+                  <CheckCircle2 className="w-4 h-4 text-white" />
+                ) : (
+                  <Save className="w-4 h-4 text-white" />
+                )}
+                <span>
+                  {isSaving
+                    ? 'Menyimpan...'
+                    : currentClassStatus.isDone
+                    ? '✓ Presensi Sudah Dilakukan (Klik untuk Perbarui Data)'
+                    : 'Simpan Presensi Kelas Sekarang'}
+                </span>
               </button>
             </div>
           </div>

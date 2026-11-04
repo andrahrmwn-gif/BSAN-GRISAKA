@@ -912,6 +912,109 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </div>
         </div>
 
+        {/* Visual Progress Indicator / Progress Bar: Present vs Absent for Selected Day */}
+        <div className="bg-gradient-to-br from-slate-50 via-white to-blue-50/30 rounded-2xl p-4 border border-slate-200/90 shadow-2xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Progres & Rasio Kehadiran Murid ({selectedDateFormatted})
+                </span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                  percentHadirNum >= 95
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : percentHadirNum >= 88
+                    ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                    : 'bg-amber-100 text-amber-800 border border-amber-300'
+                }`}>
+                  {percentHadirNum >= 95 ? '★ Disiplin Sangat Prima' : percentHadirNum >= 88 ? '✓ Disiplin Baik' : '⚠ Perlu Perhatian'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Perbandingan siswa masuk vs tidak masuk di seluruh 24 rombel hari {selectedDateFormatted}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 text-xs font-bold">
+              <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                <span>Hadir: {hadirCount} ({percentHadirStr}%)</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-rose-700 bg-rose-50 px-2.5 py-1 rounded-xl border border-rose-200">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                <span>Tidak Hadir: {tidakHadirCount} ({percentTidakHadirStr}%)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Multi-Segment Stacked Progress Bar */}
+          <div className="relative">
+            <div className="w-full bg-slate-200/80 rounded-full h-4.5 overflow-hidden flex shadow-inner p-0.5 border border-slate-300/70">
+              {/* Hadir Bar */}
+              <div
+                style={{ width: `${Math.min(100, Math.max(0, percentHadirNum))}%` }}
+                className="bg-gradient-to-r from-emerald-600 to-emerald-500 h-full rounded-l-full transition-all duration-700 flex items-center justify-end pr-2 text-[10px] font-extrabold text-white"
+                title={`Hadir: ${hadirCount} siswa (${percentHadirStr}%)`}
+              >
+                {percentHadirNum > 15 && `${percentHadirNum.toFixed(1)}% Hadir`}
+              </div>
+
+              {/* Sakit Bar */}
+              {sakitCount > 0 && (
+                <div
+                  style={{ width: `${totalStudents > 0 ? (sakitCount / totalStudents) * 100 : 0}%` }}
+                  className="bg-amber-400 h-full transition-all duration-700 border-l border-white/40"
+                  title={`Sakit: ${sakitCount} siswa (${((sakitCount / totalStudents) * 100).toFixed(1)}%)`}
+                />
+              )}
+
+              {/* Izin Bar */}
+              {izinCount > 0 && (
+                <div
+                  style={{ width: `${totalStudents > 0 ? (izinCount / totalStudents) * 100 : 0}%` }}
+                  className="bg-sky-500 h-full transition-all duration-700 border-l border-white/40"
+                  title={`Izin: ${izinCount} siswa (${((izinCount / totalStudents) * 100).toFixed(1)}%)`}
+                />
+              )}
+
+              {/* Alfa Bar */}
+              {alfaCount > 0 && (
+                <div
+                  style={{ width: `${totalStudents > 0 ? (alfaCount / totalStudents) * 100 : 0}%` }}
+                  className="bg-rose-500 h-full rounded-r-full transition-all duration-700 border-l border-white/40"
+                  title={`Alpa: ${alfaCount} siswa (${((alfaCount / totalStudents) * 100).toFixed(1)}%)`}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Breakdown Legend Pill Badges */}
+          <div className="flex flex-wrap items-center justify-between text-[11px] gap-2 pt-1 border-t border-slate-200/60">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+              <span className="flex items-center gap-1.5 text-emerald-800 font-semibold">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                <span>Hadir ({hadirCount} anak · {percentHadirStr}%)</span>
+              </span>
+              <span className="flex items-center gap-1.5 text-amber-800 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                <span>Sakit ({sakitCount} anak)</span>
+              </span>
+              <span className="flex items-center gap-1.5 text-sky-800 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-sky-500"></span>
+                <span>Izin ({izinCount} anak)</span>
+              </span>
+              <span className="flex items-center gap-1.5 text-rose-800 font-medium">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                <span>Alpa ({alfaCount} anak)</span>
+              </span>
+            </div>
+
+            <span className="text-[10px] text-slate-500 font-mono font-medium">
+              Total Rombel: {KELAS_LIST.length} Kelas (24 Rombel) · {totalStudents} Siswa
+            </span>
+          </div>
+        </div>
+
         {/* 4 Attendance KPI Interactive Cards matching user request */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           {/* 1. KPI Hadir */}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Student, ViolationRecord, WhatsAppMessageLog, SchoolProfile } from '../../types';
 import { SCHOOL_CONFIG } from '../../data/schoolConfig';
 import { 
@@ -26,7 +26,10 @@ import {
   Smartphone,
   Eye,
   Info,
-  Trash2
+  Trash2,
+  CheckSquare,
+  Square,
+  Filter
 } from 'lucide-react';
 
 export interface WaTemplates {
@@ -76,13 +79,34 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
   onClearAllLogs,
 }) => {
 
-  const [activeTab, setActiveTab] = useState<'absensi' | 'pelanggaran' | 'templates' | 'logs'>('pelanggaran');
+  const [activeTab, setActiveTab] = useState<'absensi' | 'pelanggaran' | 'templates' | 'logs' | 'hapus_pesan'>('pelanggaran');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Modals for Edit and Delete in WA Gateway (Requirement 5)
+  // Modals for Edit and Delete in WA Gateway
   const [editingLog, setEditingLog] = useState<WhatsAppMessageLog | null>(null);
   const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
+
+  // Menu Hapus Pesan state (Multi-select, Category filter, Safe Confirmations)
+  const [selectedDeleteIds, setSelectedDeleteIds] = useState<string[]>([]);
+  const [deleteFilterCategory, setDeleteFilterCategory] = useState<'all' | 'Presensi' | 'Pelanggaran'>('all');
+  const [deleteSearchTerm, setDeleteSearchTerm] = useState('');
+  const [batchDeleteModal, setBatchDeleteModal] = useState<{
+    open: boolean;
+    type: 'single' | 'selected' | 'all' | 'category';
+    logId?: string;
+    categoryName?: string;
+    count: number;
+    idsToDelete?: string[];
+    title: string;
+    description: string;
+  }>({
+    open: false,
+    type: 'selected',
+    count: 0,
+    title: '',
+    description: '',
+  });
 
   // Templates State
   const [templates, setTemplates] = useState<WaTemplates>(() => {
@@ -125,6 +149,48 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
       v.pasalTitle.toLowerCase().includes(searchTerm.toLowerCase());
     return isUrgent && matchSearch;
   });
+
+  // Filtered Message Logs for Menu Hapus Pesan
+  const filteredDeleteLogs = useMemo(() => {
+    return waLogs.filter((l) => {
+      if (deleteFilterCategory === 'Presensi') {
+        const isPresensi = l.category.toLowerCase().includes('presensi') || l.category.toLowerCase().includes('absen');
+        if (!isPresensi) return false;
+      } else if (deleteFilterCategory === 'Pelanggaran') {
+        const isPelanggaran = !l.category.toLowerCase().includes('presensi') && !l.category.toLowerCase().includes('absen');
+        if (!isPelanggaran) return false;
+      }
+
+      if (deleteSearchTerm.trim()) {
+        const q = deleteSearchTerm.toLowerCase();
+        const matchName = l.studentName.toLowerCase().includes(q);
+        const matchPhone = l.recipientPhone.toLowerCase().includes(q);
+        const matchRecipient = l.recipientName.toLowerCase().includes(q);
+        const matchMsg = l.message.toLowerCase().includes(q);
+        const matchKelas = l.kelas.toLowerCase().includes(q);
+        return matchName || matchPhone || matchRecipient || matchMsg || matchKelas;
+      }
+      return true;
+    });
+  }, [waLogs, deleteFilterCategory, deleteSearchTerm]);
+
+  // Execute batch or single deletion from modal
+  const handleExecuteBatchDelete = () => {
+    if (batchDeleteModal.type === 'all' && onClearAllLogs) {
+      onClearAllLogs();
+      setSelectedDeleteIds([]);
+      setBatchDeleteModal((prev) => ({ ...prev, open: false }));
+      return;
+    }
+
+    if (onDeleteLog) {
+      const ids = batchDeleteModal.idsToDelete || (batchDeleteModal.logId ? [batchDeleteModal.logId] : selectedDeleteIds);
+      ids.forEach((id) => onDeleteLog(id));
+      setSelectedDeleteIds((prev) => prev.filter((id) => !ids.includes(id)));
+    }
+
+    setBatchDeleteModal((prev) => ({ ...prev, open: false }));
+  };
 
   // Template Parser
   const parseTemplate = (
@@ -380,7 +446,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
         <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl text-xs">
           <button
             onClick={() => setActiveTab('absensi')}
-            className={`px-3.5 py-1.5 rounded-xl font-medium transition-all ${
+            className={`px-3.5 py-1.5 rounded-xl font-medium transition-all cursor-pointer ${
               activeTab === 'absensi'
                 ? 'bg-[#3B5BDB] text-white shadow-xs font-semibold'
                 : 'text-slate-600 hover:text-slate-900'
@@ -390,7 +456,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('pelanggaran')}
-            className={`px-3.5 py-1.5 rounded-xl font-medium transition-all ${
+            className={`px-3.5 py-1.5 rounded-xl font-medium transition-all cursor-pointer ${
               activeTab === 'pelanggaran'
                 ? 'bg-[#3B5BDB] text-white shadow-xs font-semibold'
                 : 'text-slate-600 hover:text-slate-900'
@@ -400,7 +466,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('templates')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium transition-all cursor-pointer ${
               activeTab === 'templates'
                 ? 'bg-[#3B5BDB] text-white shadow-xs font-bold'
                 : 'text-slate-700 hover:text-slate-900 bg-white/70'
@@ -411,13 +477,32 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('logs')}
-            className={`px-3.5 py-1.5 rounded-xl font-medium transition-all ${
+            className={`px-3.5 py-1.5 rounded-xl font-medium transition-all cursor-pointer ${
               activeTab === 'logs'
                 ? 'bg-[#3B5BDB] text-white shadow-xs font-semibold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Log Riwayat ({waLogs.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('hapus_pesan')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium transition-all cursor-pointer ${
+              activeTab === 'hapus_pesan'
+                ? 'bg-rose-600 text-white shadow-xs font-bold'
+                : 'text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 border border-rose-200 font-semibold'
+            }`}
+            title="Menu Hapus Pesan: Kelola penghapusan pesan log terpilih, per kategori, atau total"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Menu Hapus Pesan</span>
+            {waLogs.length > 0 && (
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                activeTab === 'hapus_pesan' ? 'bg-white/25 text-white' : 'bg-rose-200 text-rose-800'
+              }`}>
+                {waLogs.length}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -900,19 +985,39 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
               </p>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-slate-500 font-mono">
                 Total Log: {waLogs.length} Pesan
               </span>
 
+              {/* Tombol Akses Cepat Menu Hapus Pesan */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('hapus_pesan')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold border border-rose-200 transition-colors cursor-pointer"
+                title="Buka Menu Hapus Pesan untuk seleksi massal atau filter"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>Menu Hapus Pesan</span>
+              </button>
+
               {onClearAllLogs && waLogs.length > 0 && (
                 <button
-                  onClick={onClearAllLogs}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold border border-rose-200 transition-colors cursor-pointer"
+                  onClick={() =>
+                    setBatchDeleteModal({
+                      open: true,
+                      type: 'all',
+                      count: waLogs.length,
+                      idsToDelete: waLogs.map((l) => l.id),
+                      title: 'Kosongkan Semua Log?',
+                      description: 'Seluruh riwayat pesan WhatsApp akan dibersihkan secara total.',
+                    })
+                  }
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 text-xs font-semibold border border-slate-200 transition-colors cursor-pointer"
                   title="Kosongkan seluruh riwayat pesan WhatsApp"
                 >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                  <span>Kosongkan Semua Log</span>
+                  <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Kosongkan Semua</span>
                 </button>
               )}
             </div>
@@ -968,7 +1073,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                       </td>
                       <td className="py-3 px-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
-                          {/* TOMBOL KIRIM (Requirement 5) */}
+                          {/* TOMBOL KIRIM */}
                           <button
                             onClick={() => handleSendExistingLog(log)}
                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-2xs transition-colors cursor-pointer"
@@ -978,7 +1083,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                             <span>Kirim</span>
                           </button>
 
-                          {/* TOMBOL EDIT (Requirement 5) */}
+                          {/* TOMBOL EDIT */}
                           <button
                             onClick={() => setEditingLog({ ...log })}
                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-semibold text-[11px] transition-colors cursor-pointer"
@@ -988,10 +1093,20 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                             <span>Edit</span>
                           </button>
 
-                          {/* TOMBOL HAPUS (Requirement 5) */}
+                          {/* TOMBOL HAPUS */}
                           {onDeleteLog && (
                             <button
-                              onClick={() => setDeletingLogId(log.id)}
+                              onClick={() => {
+                                setBatchDeleteModal({
+                                  open: true,
+                                  type: 'single',
+                                  logId: log.id,
+                                  count: 1,
+                                  idsToDelete: [log.id],
+                                  title: 'Hapus Pesan WhatsApp?',
+                                  description: `Apakah Anda yakin ingin menghapus pesan untuk ${log.studentName} (${log.recipientPhone})?`,
+                                });
+                              }}
                               className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors cursor-pointer"
                               title="Hapus arsip pesan ini"
                             >
@@ -1006,7 +1121,323 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
 
+      {/* ========================================================================= */}
+      {/* TAB 5: MENU HAPUS PESAN RESMI (Dedicated Message Deletion Hub)             */}
+      {/* ========================================================================= */}
+      {activeTab === 'hapus_pesan' && (
+        <div className="space-y-4 animate-fade-in">
+          {/* Header Banner */}
+          <div className="bg-gradient-to-r from-rose-900 via-rose-800 to-red-700 p-6 rounded-3xl text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Trash2 className="w-4 h-4 text-white" />
+                </div>
+                <h3 className="text-base font-bold">
+                  Menu Hapus Pesan — Manajemen Arsip WhatsApp
+                </h3>
+              </div>
+              <p className="text-xs text-rose-100 mt-1 max-w-xl">
+                Hapus riwayat pesan WhatsApp secara satuan, per kategori (Presensi / Pelanggaran), atau dengan memilih beberapa pesan sekaligus melalui checkbox.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="bg-white/10 px-4 py-2 rounded-2xl backdrop-blur-xs text-right border border-white/15">
+                <div className="text-[10px] text-rose-200 uppercase font-semibold">Total Log</div>
+                <div className="text-xl font-black">{waLogs.length} Pesan</div>
+              </div>
+              <div className="bg-white/10 px-4 py-2 rounded-2xl backdrop-blur-xs text-right border border-white/15">
+                <div className="text-[10px] text-rose-200 uppercase font-semibold">Tercentang</div>
+                <div className="text-xl font-black text-rose-200">{selectedDeleteIds.length}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Action Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Card 1: Hapus Terpilih */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-3">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                    Hapus Pesan Terpilih
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    selectedDeleteIds.length > 0 ? 'bg-rose-100 text-rose-800 font-mono' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {selectedDeleteIds.length} Terpilih
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Centang kotak pada baris pesan di bawah, lalu klik tombol ini untuk menghapus sekaligus.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={selectedDeleteIds.length === 0}
+                onClick={() =>
+                  setBatchDeleteModal({
+                    open: true,
+                    type: 'selected',
+                    count: selectedDeleteIds.length,
+                    idsToDelete: selectedDeleteIds,
+                    title: `Hapus ${selectedDeleteIds.length} Pesan Terpilih?`,
+                    description: `Apakah Anda yakin ingin menghapus ${selectedDeleteIds.length} pesan terpilih dari sistem? Tindakan ini tidak dapat dibatalkan.`,
+                  })
+                }
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus {selectedDeleteIds.length} Pesan Terpilih</span>
+              </button>
+            </div>
+
+            {/* Card 2: Hapus Per Kategori */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-3">
+              <div>
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                  Hapus Per Kategori
+                </span>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Hapus cepat semua pesan berdasarkan jenis Presensi atau Panggilan Pelanggaran.
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={waLogs.filter((l) => l.category.toLowerCase().includes('presensi') || l.category.toLowerCase().includes('absen')).length === 0}
+                  onClick={() => {
+                    const presensiIds = waLogs
+                      .filter((l) => l.category.toLowerCase().includes('presensi') || l.category.toLowerCase().includes('absen'))
+                      .map((l) => l.id);
+                    setBatchDeleteModal({
+                      open: true,
+                      type: 'category',
+                      categoryName: 'Presensi',
+                      count: presensiIds.length,
+                      idsToDelete: presensiIds,
+                      title: `Hapus Semua Pesan Presensi (${presensiIds.length} pesan)?`,
+                      description: `Seluruh riwayat pesan notifikasi presensi ketidakhadiran akan dihapus bersih dari database.`,
+                    });
+                  }}
+                  className="flex-1 px-2.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 disabled:opacity-40 border border-amber-200 text-amber-900 font-bold text-[11px] transition-colors cursor-pointer text-center"
+                >
+                  Presensi ({waLogs.filter((l) => l.category.toLowerCase().includes('presensi') || l.category.toLowerCase().includes('absen')).length})
+                </button>
+
+                <button
+                  type="button"
+                  disabled={waLogs.filter((l) => !l.category.toLowerCase().includes('presensi') && !l.category.toLowerCase().includes('absen')).length === 0}
+                  onClick={() => {
+                    const violIds = waLogs
+                      .filter((l) => !l.category.toLowerCase().includes('presensi') && !l.category.toLowerCase().includes('absen'))
+                      .map((l) => l.id);
+                    setBatchDeleteModal({
+                      open: true,
+                      type: 'category',
+                      categoryName: 'Pelanggaran',
+                      count: violIds.length,
+                      idsToDelete: violIds,
+                      title: `Hapus Semua Pesan Kasus (${violIds.length} pesan)?`,
+                      description: `Seluruh riwayat pesan surat pemanggilan dan kasus pelanggaran akan dihapus bersih dari database.`,
+                    });
+                  }}
+                  className="flex-1 px-2.5 py-2 rounded-xl bg-orange-50 hover:bg-orange-100 disabled:opacity-40 border border-orange-200 text-orange-900 font-bold text-[11px] transition-colors cursor-pointer text-center"
+                >
+                  Kasus ({waLogs.filter((l) => !l.category.toLowerCase().includes('presensi') && !l.category.toLowerCase().includes('absen')).length})
+                </button>
+              </div>
+            </div>
+
+            {/* Card 3: Kosongkan Total */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-3">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                    Kosongkan Semua Log
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-red-100 text-red-800 font-bold">
+                    Pembersihan Total
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Bersihkan dan kosongkan seluruh arsip pesan gateway dari memori dan database.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={waLogs.length === 0}
+                onClick={() =>
+                  setBatchDeleteModal({
+                    open: true,
+                    type: 'all',
+                    count: waLogs.length,
+                    idsToDelete: waLogs.map((l) => l.id),
+                    title: `Kosongkan Seluruh Riwayat Pesan (${waLogs.length} pesan)?`,
+                    description: `PERINGATAN: Semua pesan WhatsApp yang tersimpan akan dihapus secara total dan tidak dapat dipulihkan.`,
+                  })
+                }
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-red-700 hover:bg-red-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Kosongkan Seluruh Arsip</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Bar & Table for Hapus Pesan */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                {/* Search */}
+                <div className="relative flex-1 sm:w-64">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={deleteSearchTerm}
+                    onChange={(e) => setDeleteSearchTerm(e.target.value)}
+                    placeholder="Cari siswa, nomor, pesan..."
+                    className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-rose-400"
+                  />
+                </div>
+
+                {/* Category Filter */}
+                <select
+                  value={deleteFilterCategory}
+                  onChange={(e) => setDeleteFilterCategory(e.target.value as any)}
+                  className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-hidden cursor-pointer"
+                >
+                  <option value="all">Semua Kategori</option>
+                  <option value="Presensi">Hanya Presensi</option>
+                  <option value="Pelanggaran">Hanya Pelanggaran</option>
+                </select>
+              </div>
+
+              {/* Selection Controls */}
+              <div className="flex items-center gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const filteredIds = filteredDeleteLogs.map((l) => l.id);
+                    if (selectedDeleteIds.length === filteredIds.length && filteredIds.length > 0) {
+                      setSelectedDeleteIds([]);
+                    } else {
+                      setSelectedDeleteIds(filteredIds);
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors cursor-pointer"
+                >
+                  {selectedDeleteIds.length > 0 && selectedDeleteIds.length === filteredDeleteLogs.length
+                    ? 'Batal Pilih Semua'
+                    : `Pilih Semua (${filteredDeleteLogs.length})`}
+                </button>
+              </div>
+            </div>
+
+            {/* Table of Messages with Delete Actions */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-3 w-10 text-center">Pilih</th>
+                    <th className="py-3 px-3 font-bold">Waktu</th>
+                    <th className="py-3 px-4 font-bold">Siswa & Kelas</th>
+                    <th className="py-3 px-4 font-bold">Penerima & Nomor</th>
+                    <th className="py-3 px-3 font-bold">Kategori</th>
+                    <th className="py-3 px-4 font-bold">Isi Ringkas Pesan</th>
+                    <th className="py-3 px-3 font-bold text-center">Aksi Hapus</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredDeleteLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-slate-500">
+                        {waLogs.length === 0
+                          ? 'Belum ada arsip riwayat pesan WhatsApp yang tersimpan.'
+                          : 'Tidak ada riwayat pesan yang sesuai dengan filter pencarian.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDeleteLogs.map((log) => {
+                      const isChecked = selectedDeleteIds.includes(log.id);
+                      return (
+                        <tr
+                          key={log.id}
+                          className={`hover:bg-rose-50/40 transition-colors ${isChecked ? 'bg-rose-50/70' : ''}`}
+                        >
+                          <td className="py-3 px-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                setSelectedDeleteIds((prev) =>
+                                  prev.includes(log.id)
+                                    ? prev.filter((id) => id !== log.id)
+                                    : [...prev, log.id]
+                                );
+                              }}
+                              className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 cursor-pointer"
+                            />
+                          </td>
+                          <td className="py-3 px-3 font-mono text-slate-600 whitespace-nowrap">
+                            {log.timestamp}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-slate-900">{log.studentName}</div>
+                            <span className="font-mono text-[10px] text-slate-500">Kelas {log.kelas}</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="text-slate-800 font-medium">{log.recipientName}</div>
+                            <div className="text-[10px] font-mono text-slate-500">{log.recipientPhone}</div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className={`px-2 py-0.5 rounded-full font-semibold text-[10px] ${
+                              log.category.toLowerCase().includes('presensi') || log.category.toLowerCase().includes('absen')
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {log.category}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-slate-600 max-w-sm truncate">
+                            {log.message}
+                          </td>
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBatchDeleteModal({
+                                  open: true,
+                                  type: 'single',
+                                  logId: log.id,
+                                  count: 1,
+                                  idsToDelete: [log.id],
+                                  title: 'Hapus Pesan Ini?',
+                                  description: `Hapus pesan untuk ${log.studentName} (${log.recipientPhone}) dari riwayat?`,
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold transition-colors cursor-pointer"
+                              title="Hapus pesan ini sekarang"
+                            >
+                              <Trash2 className="w-3 h-3 text-rose-600" />
+                              <span>Hapus</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1112,24 +1543,31 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL KONFIRMASI HAPUS LOG (In-App Modal - Safe from iframe block) */}
+      {/* MODAL KONFIRMASI HAPUS LOG (In-App Modal - Safe from iframe block)         */}
       {/* ========================================================================= */}
-      {deletingLogId && (
+      {(batchDeleteModal.open || deletingLogId) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 text-center space-y-4 animate-fade-in">
             <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 mx-auto flex items-center justify-center">
               <Trash2 className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-bold text-sm text-slate-900">Hapus Riwayat Pesan?</h4>
+              <h4 className="font-bold text-sm text-slate-900">
+                {batchDeleteModal.open ? batchDeleteModal.title : 'Hapus Riwayat Pesan?'}
+              </h4>
               <p className="text-xs text-slate-500 mt-1">
-                Data pesan yang telah dihapus tidak dapat dipulihkan kembali dari sistem.
+                {batchDeleteModal.open
+                  ? batchDeleteModal.description
+                  : 'Data pesan yang telah dihapus tidak dapat dipulihkan kembali dari sistem.'}
               </p>
             </div>
             <div className="flex items-center justify-center gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setDeletingLogId(null)}
+                onClick={() => {
+                  setDeletingLogId(null);
+                  setBatchDeleteModal((prev) => ({ ...prev, open: false }));
+                }}
                 className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs cursor-pointer"
               >
                 Batal
@@ -1137,14 +1575,16 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (onDeleteLog && deletingLogId) {
+                  if (batchDeleteModal.open) {
+                    handleExecuteBatchDelete();
+                  } else if (onDeleteLog && deletingLogId) {
                     onDeleteLog(deletingLogId);
+                    setDeletingLogId(null);
                   }
-                  setDeletingLogId(null);
                 }}
                 className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer shadow-xs"
               >
-                Ya, Hapus
+                Ya, Hapus Sekarang
               </button>
             </div>
           </div>
