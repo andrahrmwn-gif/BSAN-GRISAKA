@@ -23,13 +23,27 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 20mm;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 15mm 20mm !important;
     background: white !important;
     color: black !important;
+    box-shadow: none !important;
+    border: none !important;
   }
   .no-print {
     display: none !important;
+  }
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+  tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm;
   }
 }

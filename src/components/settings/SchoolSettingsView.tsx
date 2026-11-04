@@ -35,9 +35,10 @@ import {
 import { User } from 'firebase/auth';
 import { AccountManager } from './AccountManager';
 import { AuditLogTable } from './AuditLogTable';
-import { isGuestMode, getCurrentUser } from '../../services/authService';
+import { isGuestMode, getCurrentUser, updateAccount } from '../../services/authService';
 import { logAudit } from '../../services/auditLogger';
-import { Users, Shield, History, Lock } from 'lucide-react';
+import { UserAccount } from '../../types/auth';
+import { Users, Shield, History, Lock, Key, Eye, EyeOff } from 'lucide-react';
 
 interface SchoolSettingsViewProps {
   schoolConfig: SchoolProfile;
@@ -50,6 +51,7 @@ interface SchoolSettingsViewProps {
     partialConfig?: Partial<SchoolProfile>
   ) => void;
   onResetData?: () => void;
+  onUserUpdated?: (user: UserAccount) => void;
 }
 
 export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
@@ -59,6 +61,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
   onUpdateSchoolConfig,
   onPullDataFromSheets,
   onResetData,
+  onUserUpdated,
 }) => {
   const [formData, setFormData] = useState<SchoolProfile>({
     ...schoolConfig,
@@ -140,7 +143,73 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
     setFormData((prev) => ({ ...prev, logoUrl: '' }));
   };
 
-  const [activeSettingsTab, setActiveSettingsTab] = useState<'profile_db' | 'accounts' | 'audit_log'>('profile_db');
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'profile_db' | 'accounts' | 'audit_log' | 'password'>('profile_db');
+
+  // Password Change State (Requirement 6)
+  const [passwordForm, setPasswordForm] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [showOldPass, setShowOldPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+
+  const currentUser = getCurrentUser();
+
+  const handleChangePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (!currentUser || isGuestMode()) {
+      setPasswordError('Akses Ditolak: Anda sedang dalam Mode Tamu. Silakan login terlebih dahulu dengan akun petugas resmi untuk mengubah password.');
+      return;
+    }
+
+    const currentPin = currentUser.pin || '1234';
+
+    // Requirement 6: setiap mau mengganti password, harus menyertakan password lamanya.
+    if (passwordForm.oldPassword.trim() !== currentPin) {
+      setPasswordError('Password Lama yang Anda masukkan salah. Harap periksa kembali.');
+      return;
+    }
+
+    if (passwordForm.newPassword.trim().length < 4) {
+      setPasswordError('Password Baru minimal terdiri dari 4 karakter / digit.');
+      return;
+    }
+
+    if (passwordForm.newPassword.trim() !== passwordForm.confirmPassword.trim()) {
+      setPasswordError('Konfirmasi Password Baru tidak cocok dengan Password Baru.');
+      return;
+    }
+
+    const newPin = passwordForm.newPassword.trim();
+    const res = updateAccount(currentUser.id, { pin: newPin });
+    if (res.success) {
+      const updatedUser: UserAccount = { ...currentUser, pin: newPin };
+      if (onUserUpdated) {
+        onUserUpdated(updatedUser);
+      }
+      logAudit({
+        actionType: 'UPDATE',
+        module: 'Autentikasi',
+        description: `Perubahan password berhasil disimpan untuk akun ${currentUser.name} (${currentUser.role})`,
+        status: 'SUCCESS',
+      });
+      setPasswordSuccess('Password akun Anda berhasil diperbarui! Password baru inilah yang akan digunakan untuk login seterusnya.');
+      setPasswordForm({
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+    } else {
+      setPasswordError(res.message);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -338,6 +407,18 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
         >
           <History className="w-4 h-4" />
           <span>System Audit Log & Keamanan</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSettingsTab('password')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeSettingsTab === 'password'
+              ? 'bg-[#3B5BDB] text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Key className="w-4 h-4" />
+          <span>Ubah Password / PIN Akun Saya</span>
         </button>
       </div>
 
@@ -978,6 +1059,165 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
       {/* TAB 3: SYSTEM AUDIT LOG & KEAMANAN */}
       {activeSettingsTab === 'audit_log' && (
         <AuditLogTable />
+      )}
+
+      {/* TAB 4: UBAH PASSWORD / PIN AKUN SAYA (Requirement 6) */}
+      {activeSettingsTab === 'password' && (
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#3B5BDB]"></span>
+                <h3 className="font-bold text-base text-slate-900">
+                  Ubah Password / PIN Keamanan Akun
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Gunakan menu ini untuk mengubah password/PIN login akun Anda. Password baru inilah yang akan digunakan untuk login seterusnya.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-800">
+              <ShieldCheck className="w-4 h-4 text-[#3B5BDB]" />
+              <span>Keamanan DAPODIK</span>
+            </div>
+          </div>
+
+          {isGuestMode() || !currentUser ? (
+            <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-3xl space-y-3">
+              <div className="w-12 h-12 rounded-full bg-slate-200 text-slate-600 mx-auto flex items-center justify-center">
+                <Lock className="w-6 h-6" />
+              </div>
+              <div className="font-bold text-slate-800 text-sm">Mode Tamu Aktif</div>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Anda saat ini sedang menjelajah dalam Mode Tamu. Mode Tamu tidak memiliki akun petugas personal dan tidak dapat mengubah password. Silakan login terlebih dahulu dengan akun petugas resmi.
+              </p>
+            </div>
+          ) : (
+            <div className="max-w-xl mx-auto space-y-6">
+              {/* Account Info Badge */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50/60 border border-blue-100 flex items-center gap-4">
+                <div 
+                  className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-base shadow-xs shrink-0"
+                  style={{ backgroundColor: currentUser.avatarColor || '#3B5BDB' }}
+                >
+                  {currentUser.name.charAt(0)}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-black text-sm text-slate-900 truncate">{currentUser.name}</div>
+                  <div className="text-xs text-blue-700 font-semibold">{currentUser.role}</div>
+                  <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                    NIP: {currentUser.nip || '-'} · Username: @{currentUser.username}
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Notifications */}
+              {passwordError && (
+                <div className="flex items-start gap-2.5 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs font-medium animate-fade-in">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <span>{passwordError}</span>
+                </div>
+              )}
+
+              {passwordSuccess && (
+                <div className="flex items-start gap-2.5 p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-xs font-medium animate-fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span>{passwordSuccess}</span>
+                </div>
+              )}
+
+              {/* Password Change Form */}
+              <form onSubmit={handleChangePasswordSubmit} className="space-y-4">
+                {/* Password Lama */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Password / PIN Lama (Saat Ini):
+                  </label>
+                  <div className="relative">
+                    <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type={showOldPass ? 'text' : 'password'}
+                      value={passwordForm.oldPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
+                      placeholder="Masukkan password lama (default awal: 1234)"
+                      className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 font-mono text-slate-900 bg-slate-50"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowOldPass(!showOldPass)}
+                      className="absolute right-3.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showOldPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Wajib menyertakan password lama akun untuk verifikasi keamanan.
+                  </p>
+                </div>
+
+                {/* Password Baru */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Password / PIN Baru:
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type={showNewPass ? 'text' : 'password'}
+                      value={passwordForm.newPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                      placeholder="Masukkan password baru (minimal 4 karakter)"
+                      className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 font-mono text-slate-900 bg-slate-50"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPass(!showNewPass)}
+                      className="absolute right-3.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Konfirmasi Password Baru */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Konfirmasi Password Baru:
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type={showConfirmPass ? 'text' : 'password'}
+                      value={passwordForm.confirmPassword}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                      placeholder="Ketik ulang password baru Anda"
+                      className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 font-mono text-slate-900 bg-slate-50"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPass(!showConfirmPass)}
+                      className="absolute right-3.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    className="w-full py-3 px-4 rounded-xl bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white font-bold text-xs shadow-md shadow-blue-900/20 transition-all active:scale-98 cursor-pointer"
+                  >
+                    Simpan Perubahan Password
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Confirmation Modal for Pulling data from Google Sheets */}

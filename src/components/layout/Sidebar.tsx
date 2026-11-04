@@ -13,7 +13,8 @@ import {
   X,
   ChevronRight,
   LogOut,
-  Quote
+  Quote,
+  Lock
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,6 +26,7 @@ interface SidebarProps {
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
   onOpenAccountSwitch?: () => void;
+  isGuest?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -36,8 +38,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpenMobile = false,
   onCloseMobile,
   onOpenAccountSwitch,
+  isGuest = false,
 }) => {
   const handleSelect = (view: ViewMode) => {
+    if (isGuest && view !== 'dashboard') {
+      return;
+    }
     onSelectView(view);
     if (onCloseMobile) {
       onCloseMobile();
@@ -133,127 +139,184 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Database Siswa */}
           <button
             onClick={() => handleSelect('students')}
-            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
-              currentView === 'students'
-                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
-                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            disabled={isGuest}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+              isGuest
+                ? 'opacity-40 cursor-not-allowed text-blue-200'
+                : currentView === 'students'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold cursor-pointer'
+                : 'text-blue-100 hover:text-white hover:bg-white/10 cursor-pointer'
             }`}
           >
             <div className="flex items-center gap-3 min-w-0">
-              <Users className={`w-5 h-5 shrink-0 ${currentView === 'students' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <Users className={`w-5 h-5 shrink-0 ${currentView === 'students' && !isGuest ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
               <span className="truncate">Database Siswa</span>
             </div>
-            <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'students' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+            {isGuest ? (
+              <Lock className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+            ) : (
+              <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'students' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+            )}
           </button>
 
           {/* Jenis Pelanggaran (Tata Tertib) */}
           <button
             onClick={() => handleSelect('tatatertib')}
-            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
-              currentView === 'tatatertib'
-                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
-                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            disabled={isGuest}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+              isGuest
+                ? 'opacity-40 cursor-not-allowed text-blue-200'
+                : currentView === 'tatatertib'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold cursor-pointer'
+                : 'text-blue-100 hover:text-white hover:bg-white/10 cursor-pointer'
             }`}
           >
             <div className="flex items-center gap-3 min-w-0">
-              <BookOpen className={`w-5 h-5 shrink-0 ${currentView === 'tatatertib' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <BookOpen className={`w-5 h-5 shrink-0 ${currentView === 'tatatertib' && !isGuest ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
               <span className="truncate">Jenis Pelanggaran</span>
             </div>
-            <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'tatatertib' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+            {isGuest ? (
+              <Lock className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+            ) : (
+              <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'tatatertib' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+            )}
           </button>
 
           {/* Kehadiran (Presensi) */}
           <button
             onClick={() => handleSelect('attendance')}
-            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
-              currentView === 'attendance'
-                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
-                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            disabled={isGuest}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+              isGuest
+                ? 'opacity-40 cursor-not-allowed text-blue-200'
+                : currentView === 'attendance'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold cursor-pointer'
+                : 'text-blue-100 hover:text-white hover:bg-white/10 cursor-pointer'
             }`}
           >
             <div className="flex items-center gap-3 min-w-0">
-              <CalendarCheck className={`w-5 h-5 shrink-0 ${currentView === 'attendance' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <CalendarCheck className={`w-5 h-5 shrink-0 ${currentView === 'attendance' && !isGuest ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
               <span className="truncate">Kehadiran</span>
             </div>
-            <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'attendance' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+            {isGuest ? (
+              <Lock className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+            ) : (
+              <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'attendance' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+            )}
           </button>
 
           {/* Pelanggaran Siswa */}
           <button
             onClick={() => handleSelect('violations')}
-            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
-              currentView === 'violations'
-                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
-                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            disabled={isGuest}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+              isGuest
+                ? 'opacity-40 cursor-not-allowed text-blue-200'
+                : currentView === 'violations'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold cursor-pointer'
+                : 'text-blue-100 hover:text-white hover:bg-white/10 cursor-pointer'
             }`}
           >
             <div className="flex items-center gap-3 min-w-0">
-              <ShieldAlert className={`w-5 h-5 shrink-0 ${currentView === 'violations' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <ShieldAlert className={`w-5 h-5 shrink-0 ${currentView === 'violations' && !isGuest ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
               <span className="truncate">Pelanggaran Siswa</span>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              {activeViolationsCount > 0 && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500 text-white">
-                  {activeViolationsCount}
-                </span>
+              {isGuest ? (
+                <Lock className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+              ) : (
+                <>
+                  {activeViolationsCount > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500 text-white">
+                      {activeViolationsCount}
+                    </span>
+                  )}
+                  <ChevronRight className={`w-4 h-4 transition-transform ${currentView === 'violations' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+                </>
               )}
-              <ChevronRight className={`w-4 h-4 transition-transform ${currentView === 'violations' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
             </div>
           </button>
 
           {/* WhatsApp Gateway */}
           <button
             onClick={() => handleSelect('whatsapp')}
-            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
-              currentView === 'whatsapp'
-                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
-                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            disabled={isGuest}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+              isGuest
+                ? 'opacity-40 cursor-not-allowed text-blue-200'
+                : currentView === 'whatsapp'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold cursor-pointer'
+                : 'text-blue-100 hover:text-white hover:bg-white/10 cursor-pointer'
             }`}
           >
             <div className="flex items-center gap-3 min-w-0">
-              <MessageSquare className={`w-5 h-5 shrink-0 ${currentView === 'whatsapp' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <MessageSquare className={`w-5 h-5 shrink-0 ${currentView === 'whatsapp' && !isGuest ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
               <span className="truncate">WhatsApp Gateway</span>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              {pendingWaCount > 0 && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-900">
-                  {pendingWaCount}
-                </span>
+              {isGuest ? (
+                <Lock className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+              ) : (
+                <>
+                  {pendingWaCount > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-900">
+                      {pendingWaCount}
+                    </span>
+                  )}
+                  <ChevronRight className={`w-4 h-4 transition-transform ${currentView === 'whatsapp' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+                </>
               )}
-              <ChevronRight className={`w-4 h-4 transition-transform ${currentView === 'whatsapp' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
             </div>
           </button>
 
           {/* Rekap & Laporan */}
           <button
             onClick={() => handleSelect('reports')}
-            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
-              currentView === 'reports'
-                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
-                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            disabled={isGuest}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+              isGuest
+                ? 'opacity-40 cursor-not-allowed text-blue-200'
+                : currentView === 'reports'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold cursor-pointer'
+                : 'text-blue-100 hover:text-white hover:bg-white/10 cursor-pointer'
             }`}
           >
             <div className="flex items-center gap-3 min-w-0">
-              <FileSpreadsheet className={`w-5 h-5 shrink-0 ${currentView === 'reports' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <FileSpreadsheet className={`w-5 h-5 shrink-0 ${currentView === 'reports' && !isGuest ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
               <span className="truncate">Rekap & Laporan</span>
             </div>
-            <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'reports' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+            {isGuest ? (
+              <Lock className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+            ) : (
+              <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'reports' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+            )}
           </button>
 
-          {/* Pengaturan */}
+          {/* Pengaturan (Kunci Khusus Mode Tamu) */}
           <button
             onClick={() => handleSelect('settings')}
-            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
-              currentView === 'settings'
-                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold'
-                : 'text-blue-100 hover:text-white hover:bg-white/10'
+            disabled={isGuest}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+              isGuest
+                ? 'opacity-35 cursor-not-allowed bg-black/10 text-rose-200'
+                : currentView === 'settings'
+                ? 'bg-white text-[#3B5BDB] shadow-md shadow-black/10 font-bold cursor-pointer'
+                : 'text-blue-100 hover:text-white hover:bg-white/10 cursor-pointer'
             }`}
+            title={isGuest ? 'Menu Pengaturan Terkunci: Mode Tamu tidak memiliki izin akses.' : 'Pengaturan'}
           >
             <div className="flex items-center gap-3 min-w-0">
-              <Settings className={`w-5 h-5 shrink-0 ${currentView === 'settings' ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
+              <Settings className={`w-5 h-5 shrink-0 ${currentView === 'settings' && !isGuest ? 'text-[#3B5BDB]' : 'text-blue-200'}`} />
               <span className="truncate">Pengaturan</span>
             </div>
-            <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'settings' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+            {isGuest ? (
+              <span className="flex items-center gap-1 text-[10px] bg-rose-500/80 px-2 py-0.5 rounded text-white font-bold">
+                <Lock className="w-3 h-3" />
+                <span>Terkunci</span>
+              </span>
+            ) : (
+              <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${currentView === 'settings' ? 'text-[#3B5BDB] rotate-90' : 'text-blue-300'}`} />
+            )}
           </button>
 
           {/* Quote Callout Box on Sidebar Bottom (Gambar 2 Exact Quote) */}

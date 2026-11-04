@@ -60,6 +60,7 @@ interface WhatsAppGatewayProps {
   waLogs: WhatsAppMessageLog[];
   schoolConfig?: SchoolProfile;
   onAddLog: (log: WhatsAppMessageLog) => void;
+  onUpdateLog?: (log: WhatsAppMessageLog) => void;
   onDeleteLog?: (logId: string) => void;
   onClearAllLogs?: () => void;
 }
@@ -70,13 +71,18 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
   waLogs,
   schoolConfig = SCHOOL_CONFIG,
   onAddLog,
+  onUpdateLog,
   onDeleteLog,
   onClearAllLogs,
 }) => {
 
-  const [activeTab, setActiveTab] = useState<'absensi' | 'pelanggaran' | 'templates' | 'logs'>('absensi');
+  const [activeTab, setActiveTab] = useState<'absensi' | 'pelanggaran' | 'templates' | 'logs'>('pelanggaran');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Modals for Edit and Delete in WA Gateway (Requirement 5)
+  const [editingLog, setEditingLog] = useState<WhatsAppMessageLog | null>(null);
+  const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
 
   // Templates State
   const [templates, setTemplates] = useState<WaTemplates>(() => {
@@ -228,6 +234,29 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
 
     // Open WhatsApp
     window.open(waUrl, '_blank');
+  };
+
+  // Kirim Pesan dari Log (Requirement 5: Menu Kirim)
+  const handleSendExistingLog = (log: WhatsAppMessageLog) => {
+    const formattedPhone = formatPhoneNumber(log.recipientPhone);
+    const waUrl = getWhatsAppUrl(formattedPhone, log.message);
+    if (log.status !== 'Terkirim' && onUpdateLog) {
+      onUpdateLog({
+        ...log,
+        status: 'Terkirim',
+      });
+    }
+    window.open(waUrl, '_blank');
+  };
+
+  // Simpan Perubahan Edit Log (Requirement 5: Menu Edit)
+  const handleSaveEditedLog = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLog) return;
+    if (onUpdateLog) {
+      onUpdateLog(editingLog);
+    }
+    setEditingLog(null);
   };
 
   // Save customized templates to localStorage
@@ -937,16 +966,39 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                           <span>{log.status}</span>
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-center">
-                        {onDeleteLog && (
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {/* TOMBOL KIRIM (Requirement 5) */}
                           <button
-                            onClick={() => onDeleteLog(log.id)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                            title="Hapus Log Pesan Ini"
+                            onClick={() => handleSendExistingLog(log)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-2xs transition-colors cursor-pointer"
+                            title="Kirim pesan ini ke WhatsApp wali murid"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Send className="w-3 h-3 text-white" />
+                            <span>Kirim</span>
                           </button>
-                        )}
+
+                          {/* TOMBOL EDIT (Requirement 5) */}
+                          <button
+                            onClick={() => setEditingLog({ ...log })}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-semibold text-[11px] transition-colors cursor-pointer"
+                            title="Edit nomor telepon atau kalimat pesan ini"
+                          >
+                            <Edit2 className="w-3 h-3 text-blue-600" />
+                            <span>Edit</span>
+                          </button>
+
+                          {/* TOMBOL HAPUS (Requirement 5) */}
+                          {onDeleteLog && (
+                            <button
+                              onClick={() => setDeletingLogId(log.id)}
+                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors cursor-pointer"
+                              title="Hapus arsip pesan ini"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -955,6 +1007,147 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
             </table>
           </div>
 
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL EDIT PESAN WHATSAPP (Requirement 5) */}
+      {/* ========================================================================= */}
+      {editingLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden animate-fade-in">
+            <div className="bg-gradient-to-r from-[#1E3A8A] to-[#3B5BDB] p-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Edit2 className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">Edit Pesan WhatsApp Gateway</h3>
+                  <p className="text-[11px] text-blue-100">
+                    Siswa: {editingLog.studentName} (Kelas {editingLog.kelas})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingLog(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedLog} className="p-6 space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Nama Penerima (Wali Murid):
+                </label>
+                <input
+                  type="text"
+                  value={editingLog.recipientName}
+                  onChange={(e) => setEditingLog({ ...editingLog, recipientName: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 font-medium text-slate-900"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Nomor WhatsApp Tujuan:
+                </label>
+                <input
+                  type="text"
+                  value={editingLog.recipientPhone}
+                  onChange={(e) => setEditingLog({ ...editingLog, recipientPhone: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 font-mono text-slate-900"
+                  placeholder="08123456789 atau 628123456789"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Status Pengiriman:
+                </label>
+                <select
+                  value={editingLog.status}
+                  onChange={(e) => setEditingLog({ ...editingLog, status: e.target.value as any })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden font-medium text-slate-800"
+                >
+                  <option value="Antrian">Antrian (Belum Dikirim)</option>
+                  <option value="Terkirim">Terkirim</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Isi Kalimat Pesan WhatsApp:
+                </label>
+                <textarea
+                  value={editingLog.message}
+                  onChange={(e) => setEditingLog({ ...editingLog, message: e.target.value })}
+                  rows={8}
+                  className="w-full p-3 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 font-mono text-xs leading-relaxed"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingLog(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white font-bold cursor-pointer shadow-xs"
+                >
+                  Simpan Perubahan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL KONFIRMASI HAPUS LOG (In-App Modal - Safe from iframe block) */}
+      {/* ========================================================================= */}
+      {deletingLogId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 text-center space-y-4 animate-fade-in">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 mx-auto flex items-center justify-center">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-bold text-sm text-slate-900">Hapus Riwayat Pesan?</h4>
+              <p className="text-xs text-slate-500 mt-1">
+                Data pesan yang telah dihapus tidak dapat dipulihkan kembali dari sistem.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingLogId(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onDeleteLog && deletingLogId) {
+                    onDeleteLog(deletingLogId);
+                  }
+                  setDeletingLogId(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer shadow-xs"
+              >
+                Ya, Hapus
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

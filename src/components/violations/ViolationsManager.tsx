@@ -16,7 +16,11 @@ import {
   FileSpreadsheet,
   X,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays
 } from 'lucide-react';
 
 interface ViolationsManagerProps {
@@ -48,7 +52,50 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
   const [deletingViolationId, setDeletingViolationId] = useState<string | null>(null);
   const [isConfirmClearAllOpen, setIsConfirmClearAllOpen] = useState(false);
 
-  // Filtered Violations
+  // Calendar / Date selection state (Defaults to today in YYYY-MM-DD)
+  const getTodayDateStr = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayDateStr);
+  const [isFilterByDate, setIsFilterByDate] = useState<boolean>(true);
+
+  // Helper to change day by offset
+  const handleChangeDay = (offsetDays: number) => {
+    try {
+      const parts = selectedDate.split('-');
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      d.setDate(d.getDate() + offsetDays);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      setSelectedDate(`${year}-${month}-${day}`);
+      setIsFilterByDate(true);
+    } catch {
+      setSelectedDate(getTodayDateStr());
+    }
+  };
+
+  const formatIndoDate = (dateStr: string) => {
+    try {
+      const parts = dateStr.split('-');
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      return new Intl.DateTimeFormat('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      }).format(d);
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Filtered Violations: When isFilterByDate is true, strictly display violations matching selectedDate
   const filteredViolations = violations.filter((v) => {
     const matchSearch =
       v.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -59,9 +106,13 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
     const matchSeverity = severityFilter === 'all' || v.tingkat === severityFilter;
     const matchPasal = pasalFilter === 'all' || v.pasalNumber.toString() === pasalFilter;
     const matchKelas = kelasFilter === 'all' || v.kelas === kelasFilter;
+    const matchDate = !isFilterByDate || v.tanggal === selectedDate;
 
-    return matchSearch && matchSeverity && matchPasal && matchKelas;
+    return matchSearch && matchSeverity && matchPasal && matchKelas && matchDate;
   });
+
+  // Count violations specifically on selected date
+  const selectedDateViolationsCount = violations.filter(v => v.tanggal === selectedDate).length;
 
   const handleDownloadWord = () => {
     exportViolationsToWord(filteredViolations, schoolConfig);
@@ -212,6 +263,99 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
         </div>
       </div>
 
+      {/* CALENDAR & DATE SELECTION BAR (Requirement 4) */}
+      <div className="bg-gradient-to-r from-blue-900 via-[#3451B2] to-[#3B5BDB] p-4 sm:p-5 rounded-3xl text-white shadow-md flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur-xs flex items-center justify-center shrink-0 border border-white/20">
+            <CalendarDays className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs uppercase tracking-wider font-bold text-blue-200">
+                Kalender Pelanggaran Harian
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white">
+                {isFilterByDate ? 'Mode Harian' : 'Semua Histori'}
+              </span>
+            </div>
+            <h3 className="text-sm sm:text-base font-black text-white mt-0.5">
+              {isFilterByDate ? formatIndoDate(selectedDate) : 'Menampilkan Seluruh Riwayat Tanggal'}
+            </h3>
+            <p className="text-[11px] text-blue-100/90 mt-0.5">
+              {isFilterByDate 
+                ? `Tercatat ${selectedDateViolationsCount} kejadian pelanggaran pada tanggal ini.`
+                : `Total keseluruhan ${violations.length} catatan tersimpan di database.`}
+            </p>
+          </div>
+        </div>
+
+        {/* Calendar Navigation & Date Controls */}
+        <div className="flex flex-wrap items-center gap-2 bg-black/20 p-1.5 rounded-2xl border border-white/10 self-start md:self-auto">
+          {/* Previous Day */}
+          <button
+            onClick={() => handleChangeDay(-1)}
+            disabled={!isFilterByDate}
+            className="p-2 rounded-xl bg-white/10 hover:bg-white/25 disabled:opacity-40 text-white transition-colors cursor-pointer"
+            title="Hari Sebelumnya"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {/* Date Picker Input */}
+          <div className="relative flex items-center">
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setSelectedDate(e.target.value);
+                  setIsFilterByDate(true);
+                }
+              }}
+              className="bg-white text-slate-900 text-xs font-bold px-3 py-1.5 rounded-xl border-none focus:outline-hidden focus:ring-2 focus:ring-white shadow-xs cursor-pointer"
+            />
+          </div>
+
+          {/* Next Day */}
+          <button
+            onClick={() => handleChangeDay(1)}
+            disabled={!isFilterByDate}
+            className="p-2 rounded-xl bg-white/10 hover:bg-white/25 disabled:opacity-40 text-white transition-colors cursor-pointer"
+            title="Hari Berikutnya"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+
+          {/* Quick "Hari Ini" Button */}
+          <button
+            onClick={() => {
+              setSelectedDate(getTodayDateStr());
+              setIsFilterByDate(true);
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              isFilterByDate && selectedDate === getTodayDateStr()
+                ? 'bg-white text-[#3B5BDB] shadow-xs'
+                : 'bg-white/15 hover:bg-white/25 text-white'
+            }`}
+          >
+            Hari Ini
+          </button>
+
+          {/* Toggle All History Mode */}
+          <button
+            onClick={() => setIsFilterByDate(!isFilterByDate)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              !isFilterByDate
+                ? 'bg-amber-400 text-slate-900 shadow-xs'
+                : 'bg-white/15 hover:bg-white/25 text-white'
+            }`}
+            title="Beralih antara filter tanggal terpilih vs seluruh riwayat data"
+          >
+            {!isFilterByDate ? '✓ Semua Riwayat' : 'Lihat Semua Tanggal'}
+          </button>
+        </div>
+      </div>
+
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">
         <div className="relative w-full md:w-80">
@@ -297,8 +441,40 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
             <tbody className="divide-y divide-slate-100">
               {filteredViolations.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500">
-                    Tidak ditemukan data pelanggaran dengan filter ini.
+                  <td colSpan={8} className="py-12 px-4 text-center">
+                    <div className="max-w-md mx-auto space-y-3">
+                      <div className="w-12 h-12 rounded-full bg-blue-50 text-[#3B5BDB] mx-auto flex items-center justify-center">
+                        <Calendar className="w-6 h-6" />
+                      </div>
+                      <div className="font-bold text-slate-800 text-sm">
+                        {isFilterByDate
+                          ? `Tidak Ada Catatan Pelanggaran Pada ${formatIndoDate(selectedDate)}`
+                          : 'Tidak Ditemukan Data Pelanggaran dengan Filter Ini'}
+                      </div>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        {isFilterByDate
+                          ? 'Daftar pada tanggal yang dipilih masih kosong. Seluruh data pelanggaran di hari-hari sebelumnya tetap tersimpan dengan aman di database.'
+                          : 'Silakan reset pencarian atau sesuaikan opsi filter tingkat/pasal.'}
+                      </p>
+                      {isFilterByDate && (
+                        <div className="flex items-center justify-center gap-2 pt-1">
+                          <button
+                            onClick={() => {
+                              setSelectedDate(getTodayDateStr());
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#3B5BDB] text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            Kembali ke Hari Ini
+                          </button>
+                          <button
+                            onClick={() => setIsFilterByDate(false)}
+                            className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            Lihat Semua Riwayat ({violations.length})
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (

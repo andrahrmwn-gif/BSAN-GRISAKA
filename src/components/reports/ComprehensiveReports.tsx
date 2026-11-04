@@ -132,34 +132,37 @@ export const ComprehensiveReports: React.FC<ComprehensiveReportsProps> = ({
 
         {/* 3 Main Export Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Format 1: PDF Siap Cetak */}
+          {/* Format 1: Cetak Laporan Resmi (window.print()) */}
           <button
+            type="button"
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#3B5BDB] hover:bg-[#2563EB] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
-            title="Cetak Laporan / Simpan PDF dengan Kop Resmi"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#1E3A8A] to-[#3B5BDB] hover:from-[#172554] hover:to-[#2563EB] text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+            title="Cetak Laporan Resmi atau Simpan PDF (window.print())"
           >
             <Printer className="w-4 h-4 text-white" />
-            <span>1. Cetak / Simpan PDF</span>
+            <span>Cetak Laporan</span>
           </button>
 
           {/* Format 2: Word Doc */}
           <button
+            type="button"
             onClick={handleExportWord}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
             title="Unduh Dokumen Word (.doc/.docx) untuk Disunting"
           >
             <FileText className="w-4 h-4" />
-            <span>2. Unduh Word (.docx)</span>
+            <span>Unduh Word (.docx)</span>
           </button>
 
           {/* Format 3: Excel */}
           <button
+            type="button"
             onClick={handleExportExcel}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
             title="Unduh Rekap Spreadsheet Excel"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span>3. Unduh Excel (.xlsx)</span>
+            <span>Unduh Excel (.xlsx)</span>
           </button>
         </div>
       </div>
@@ -224,9 +227,9 @@ export const ComprehensiveReports: React.FC<ComprehensiveReportsProps> = ({
         </div>
       </div>
 
-      {/* Tab Content: Analytics vs Document Preview */}
-      {activeTab === 'analytics' ? (
-        <div className="space-y-6">
+      {/* Tab Content: Analytics View */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-6 print:hidden">
           {/* Executive Metrics Overview */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
@@ -352,115 +355,129 @@ export const ComprehensiveReports: React.FC<ComprehensiveReportsProps> = ({
             </div>
           </div>
         </div>
-      ) : (
-        /* Tab Content: Official Printed Letterhead Document Preview */
-        <div className="flex justify-center bg-slate-200/70 p-6 rounded-3xl">
-          <div className="print-area bg-white text-slate-900 w-full max-w-[210mm] min-h-[297mm] p-12 shadow-xl rounded-2xl border border-slate-300 font-serif leading-relaxed text-xs">
-            {/* Kop Surat Resmi Lembaga */}
-            <div className="border-b-[3px] border-double border-black pb-4 mb-6 text-center flex items-center justify-between gap-4">
-              {currentConfig.logoUrl && (
-                <div className="w-20 h-20 shrink-0 flex items-center justify-center">
-                  <img
-                    src={currentConfig.logoUrl}
-                    alt="Logo Sekolah"
-                    className="max-h-20 max-w-20 object-contain"
-                  />
-                </div>
-              )}
-              <div className="flex-1 text-center">
-                <div className="text-xs uppercase tracking-wider font-bold">PEMERINTAH KABUPATEN TEMANGGUNG</div>
-                <div className="text-xs uppercase tracking-wider font-bold">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
-                <div className="text-xl font-black uppercase tracking-wide text-black mt-1">
-                  {currentConfig.name} ({currentConfig.shortName})
-                </div>
-                <div className="text-[11px] text-black mt-0.5">
-                  NPSN: {currentConfig.npsn}
-                </div>
-                <div className="text-[11px] text-black">
-                  {currentConfig.address}, {currentConfig.city}, {currentConfig.province} {currentConfig.postalCode}
-                </div>
-                <div className="text-[10px] text-black">
-                  Telp: {currentConfig.phone} · Website: {currentConfig.website} · Email: {currentConfig.email}
-                </div>
-              </div>
-              {currentConfig.logoUrl && <div className="w-20 shrink-0"></div>}
-            </div>
+      )}
 
-            {/* Document Title */}
-            <div className="text-center mb-6">
-              <div className="text-base font-bold uppercase underline tracking-wide">
-                LAPORAN REKAPITULASI KEDISIPLINAN DAN KESISWAAN (BSAN)
+      {/* Official Printable Document (Always in DOM so window.print() prints neat A4 report from any tab) */}
+      <div className={activeTab === 'preview' ? 'flex justify-center bg-slate-200/70 p-6 rounded-3xl' : 'hidden print:block'}>
+        <div className="print-area bg-white text-slate-900 w-full max-w-[210mm] min-h-[297mm] p-8 sm:p-12 shadow-xl rounded-2xl border border-slate-300 font-serif leading-relaxed text-xs">
+          {/* Kop Surat Resmi Lembaga */}
+          <div className="border-b-[3px] border-double border-black pb-4 mb-6 text-center flex items-center justify-between gap-4">
+            {currentConfig.logoUrl ? (
+              <div className="w-20 h-20 shrink-0 flex items-center justify-center">
+                <img
+                  src={currentConfig.logoUrl}
+                  alt="Logo Sekolah"
+                  className="max-h-20 max-w-20 object-contain"
+                />
               </div>
-              <div className="text-xs font-sans text-slate-700 mt-1">
-                Periode Pelaporan: <strong>{getPeriodLabel()}</strong>
+            ) : (
+              <div className="w-16 h-16 rounded-xl border border-black flex items-center justify-center font-bold text-sm shrink-0">
+                {currentConfig.shortName || 'SMP'}
+              </div>
+            )}
+            <div className="flex-1 text-center">
+              <div className="text-xs uppercase tracking-wider font-bold">PEMERINTAH KABUPATEN TEMANGGUNG</div>
+              <div className="text-xs uppercase tracking-wider font-bold">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
+              <div className="text-xl font-black uppercase tracking-wide text-black mt-1">
+                {currentConfig.name} ({currentConfig.shortName})
+              </div>
+              <div className="text-[11px] text-black mt-0.5">
+                NPSN: {currentConfig.npsn} · Terakreditasi {currentConfig.accreditation || 'A'}
+              </div>
+              <div className="text-[11px] text-black">
+                {currentConfig.address}, {currentConfig.city}, {currentConfig.province} {currentConfig.postalCode}
+              </div>
+              <div className="text-[10px] text-black">
+                Telp: {currentConfig.phone} · Website: {currentConfig.website} · Email: {currentConfig.email}
               </div>
             </div>
+            <div className="w-16 sm:w-20 shrink-0"></div>
+          </div>
 
-            {/* Statistical Table Summary */}
-            <table className="w-full border-collapse border border-black mb-6 text-xs font-sans">
-              <tbody>
-                <tr className="bg-slate-100">
-                  <td className="border border-black p-2 font-bold w-1/4">Populasi Siswa Dievaluasi</td>
-                  <td className="border border-black p-2 font-mono w-1/4">{totalStudents} Siswa</td>
-                  <td className="border border-black p-2 font-bold w-1/4">Persentase Kehadiran</td>
-                  <td className="border border-black p-2 font-mono w-1/4">{attendanceRate}</td>
-                </tr>
+          {/* Document Title */}
+          <div className="text-center mb-6">
+            <div className="text-base font-bold uppercase underline tracking-wide">
+              LAPORAN REKAPITULASI KEDISIPLINAN DAN KESISWAAN (BSAN)
+            </div>
+            <div className="text-xs font-sans text-slate-700 mt-1">
+              Periode Pelaporan: <strong>{getPeriodLabel()}</strong> · Rombel: <strong>{selectedKelas === 'all' ? 'Seluruh Kelas (7A - 9H)' : `Kelas ${selectedKelas}`}</strong>
+            </div>
+          </div>
+
+          {/* Statistical Table Summary */}
+          <table className="w-full border-collapse border border-black mb-6 text-xs font-sans">
+            <tbody>
+              <tr className="bg-slate-100">
+                <td className="border border-black p-2 font-bold w-1/4">Populasi Siswa Dievaluasi</td>
+                <td className="border border-black p-2 font-mono w-1/4">{totalStudents} Siswa</td>
+                <td className="border border-black p-2 font-bold w-1/4">Persentase Kehadiran</td>
+                <td className="border border-black p-2 font-mono w-1/4">{attendanceRate}</td>
+              </tr>
+              <tr>
+                <td className="border border-black p-2 font-bold">Total Pelanggaran</td>
+                <td className="border border-black p-2 font-mono">{filteredViolations.length} Kasus</td>
+                <td className="border border-black p-2 font-bold">Rincian Tingkat Kasus</td>
+                <td className="border border-black p-2">Ringan: {ringanCount} | Sedang: {sedangCount} | Berat: {beratCount}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Table of Violations */}
+          <div className="font-bold text-xs uppercase mb-2 font-sans flex items-center justify-between">
+            <span>DAFTAR CATATAN KEDISIPLINAN DAN PEMBINAAN SISWA ({filteredViolations.length} Data):</span>
+          </div>
+          <table className="w-full border-collapse border border-black text-[11px] font-sans mb-8">
+            <thead>
+              <tr className="bg-slate-100">
+                <th className="border border-black p-1.5 text-center w-8">No</th>
+                <th className="border border-black p-1.5 text-center w-24">Tanggal</th>
+                <th className="border border-black p-1.5 text-left">Nama Lengkap Siswa</th>
+                <th className="border border-black p-1.5 text-center w-12">Kelas</th>
+                <th className="border border-black p-1.5 text-left">Pasal & Uraian Pelanggaran</th>
+                <th className="border border-black p-1.5 text-center w-20">Klasifikasi</th>
+                <th className="border border-black p-1.5 text-left">Tahap Pembinaan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredViolations.length === 0 ? (
                 <tr>
-                  <td className="border border-black p-2 font-bold">Total Pelanggaran</td>
-                  <td className="border border-black p-2 font-mono">{filteredViolations.length} Kasus</td>
-                  <td className="border border-black p-2 font-bold">Rincian Tingkat Kasus</td>
-                  <td className="border border-black p-2">Ringan: {ringanCount} | Sedang: {sedangCount} | Berat: {beratCount}</td>
+                  <td colSpan={7} className="border border-black p-4 text-center text-slate-500 font-sans italic">
+                    Nihil catatan pelanggaran pada filter periode ini.
+                  </td>
                 </tr>
-              </tbody>
-            </table>
-
-            {/* Table of Violations */}
-            <div className="font-bold text-xs uppercase mb-2 font-sans">
-              DAFTAR TINDAKAN KEDISIPLINAN DAN PEMBINAAN SISWA:
-            </div>
-            <table className="w-full border-collapse border border-black text-[11px] font-sans mb-8">
-              <thead>
-                <tr className="bg-slate-100">
-                  <th className="border border-black p-1.5 text-center w-8">No</th>
-                  <th className="border border-black p-1.5 text-center">Nama Lengkap Siswa</th>
-                  <th className="border border-black p-1.5 text-center w-12">Kelas</th>
-                  <th className="border border-black p-1.5 text-left">Pasal & Uraian Pelanggaran</th>
-                  <th className="border border-black p-1.5 text-center w-20">Klasifikasi</th>
-                  <th className="border border-black p-1.5 text-left">Tahap Pembinaan</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredViolations.slice(0, 15).map((v, i) => (
-                  <tr key={v.id}>
+              ) : (
+                filteredViolations.map((v, i) => (
+                  <tr key={v.id} className="break-inside-avoid">
                     <td className="border border-black p-1.5 text-center font-mono">{i + 1}</td>
+                    <td className="border border-black p-1.5 text-center font-mono whitespace-nowrap">{v.tanggal}</td>
                     <td className="border border-black p-1.5 font-bold">{v.studentName}</td>
                     <td className="border border-black p-1.5 text-center font-mono">{v.kelas}</td>
                     <td className="border border-black p-1.5"><strong>{v.kodePasal}:</strong> {v.uraian}</td>
                     <td className="border border-black p-1.5 text-center font-semibold">{v.tingkat}</td>
                     <td className="border border-black p-1.5 text-[10px]">{v.tahapPembinaan}</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                ))
+              )}
+            </tbody>
+          </table>
 
-            {/* Signatures */}
-            <div className="grid grid-cols-2 gap-8 text-center text-xs mt-12 font-sans">
-              <div>
-                Mengetahui,<br />
-                <strong>{currentConfig.timKesiswaanTitle || 'Wakasek Urusan Kesiswaan'}</strong><br /><br /><br /><br />
-                <u><strong>{currentConfig.timKesiswaanName || currentConfig.wakasekName || 'Tim Kesiswaan'}</strong></u><br />
-                NIP. {currentConfig.timKesiswaanNip || currentConfig.wakasekNip || '-'}
-              </div>
-              <div>
-                Kandangan, {todayStr}<br />
-                <strong>Kepala {currentConfig.name}</strong><br /><br /><br /><br />
-                <u><strong>{currentConfig.principalName}</strong></u><br />
-                NIP. {currentConfig.principalNip}
-              </div>
+          {/* Signatures */}
+          <div className="grid grid-cols-2 gap-8 text-center text-xs mt-12 font-sans break-inside-avoid">
+            <div>
+              Mengetahui,<br />
+              <strong>{currentConfig.timKesiswaanTitle || 'Wakasek Urusan Kesiswaan'}</strong><br /><br /><br /><br />
+              <u><strong>{currentConfig.timKesiswaanName || currentConfig.wakasekName || 'Tim Kesiswaan'}</strong></u><br />
+              NIP. {currentConfig.timKesiswaanNip || currentConfig.wakasekNip || '-'}
+            </div>
+            <div>
+              Kandangan, {todayStr}<br />
+              <strong>Kepala {currentConfig.name}</strong><br /><br /><br /><br />
+              <u><strong>{currentConfig.principalName}</strong></u><br />
+              NIP. {currentConfig.principalNip}
             </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };

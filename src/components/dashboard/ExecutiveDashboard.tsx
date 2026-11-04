@@ -36,7 +36,8 @@ import {
   Edit3,
   Volume2,
   Bell,
-  Play
+  Play,
+  Lock
 } from 'lucide-react';
 import { getDateAttendanceSummary, getStoredAttendanceSheets } from '../../services/attendanceStorage';
 import { 
@@ -48,6 +49,7 @@ import {
   SchoolActivity 
 } from '../../services/announcementService';
 import { playSchoolChimeSound } from '../../utils/soundNotification';
+import { isGuestMode } from '../../services/authService';
 import {
   ResponsiveContainer,
   BarChart,
@@ -106,6 +108,8 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   const [activities, setActivities] = useState<SchoolActivity[]>(() => getStoredActivities());
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<SchoolActivity | null>(null);
+  const [deletingActivity, setDeletingActivity] = useState<SchoolActivity | null>(null);
+  const isGuest = isGuestMode();
   const [activityForm, setActivityForm] = useState({
     title: '',
     date: todayStr,
@@ -463,11 +467,15 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     setIsActivityModalOpen(false);
   };
 
-  const handleDeleteActivity = (id: string, title: string) => {
-    if (window.confirm(`Yakin ingin menghapus agenda kegiatan "${title}"?`)) {
-      const updated = deleteActivity(id);
-      setActivities(updated);
-    }
+  const handleDeleteActivity = (act: SchoolActivity) => {
+    setDeletingActivity(act);
+  };
+
+  const handleConfirmDeleteActivity = () => {
+    if (!deletingActivity) return;
+    const updated = deleteActivity(deletingActivity.id);
+    setActivities(updated);
+    setDeletingActivity(null);
   };
 
   const handleTriggerChime = () => {
@@ -478,6 +486,26 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
   return (
     <div className="space-y-5">
+      {/* MODE TAMU RESTRICTION BANNER (Requirement 3) */}
+      {isGuest && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-3xl p-4 sm:p-5 flex items-start sm:items-center gap-3.5 text-amber-900 shadow-sm animate-fade-in">
+          <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <Lock className="w-5 h-5 stroke-[2.5]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-black text-xs uppercase tracking-wider text-amber-950 flex items-center gap-2">
+              <span>Mode Tamu Aktif (Guest - View Only)</span>
+              <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-bold">
+                Akses Dibatasi
+              </span>
+            </div>
+            <p className="text-xs text-amber-800/90 mt-0.5 leading-relaxed">
+              Anda sedang mengakses sistem dalam mode baca-saja. Seluruh menu aksi penginputan data, pengeditan, penghapusan, dan menu lainnya (terutama menu Pengaturan) dikunci. Silakan masuk dengan akun petugas resmi untuk mengelola data.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* =========================================================================
           ROW 1: HERO EXECUTIVE BANNER (Matching Gambar 2 with Gambar 1 Tone)
       ========================================================================= */}
@@ -681,8 +709,10 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
         {/* ACTION CARD 1: Catat Pelanggaran Siswa */}
         <div 
-          onClick={onOpenQuickViolation}
-          className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#881337] via-[#9F1239] to-[#E11D48] text-white p-5 sm:p-6 border border-rose-400/40 shadow-lg shadow-rose-950/20 hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[160px]"
+          onClick={!isGuest ? onOpenQuickViolation : undefined}
+          className={`group relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#881337] via-[#9F1239] to-[#E11D48] text-white p-5 sm:p-6 border border-rose-400/40 shadow-lg shadow-rose-950/20 flex flex-col justify-between min-h-[160px] ${
+            isGuest ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200 cursor-pointer'
+          }`}
         >
           {/* Subtle decorative background watermarks */}
           <div className="absolute top-0 right-0 -mr-6 -mt-6 w-36 h-36 bg-white/10 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500"></div>
@@ -721,17 +751,28 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             <span className="text-[11px] font-bold text-rose-200">
               Total {totalRingan + totalSedang + totalBerat} Kasus Aktif
             </span>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-rose-900 font-black text-xs shadow-md group-hover:bg-rose-50 transition-colors">
-              <span>Buka Form Pelanggaran</span>
-              <span className="text-sm font-bold group-hover:translate-x-1 transition-transform">➔</span>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-rose-900 font-black text-xs shadow-md transition-colors">
+              {isGuest ? (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-rose-700" />
+                  <span>Terkunci (Mode Tamu)</span>
+                </>
+              ) : (
+                <>
+                  <span>Buka Form Pelanggaran</span>
+                  <span className="text-sm font-bold group-hover:translate-x-1 transition-transform">➔</span>
+                </>
+              )}
             </div>
           </div>
         </div>
 
         {/* ACTION CARD 2: Catat Kehadiran Siswa */}
         <div 
-          onClick={() => onNavigate('attendance')}
-          className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1E1B4B] via-[#312E81] to-[#4338CA] text-white p-5 sm:p-6 border border-indigo-400/40 shadow-lg shadow-indigo-950/20 hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col justify-between min-h-[160px]"
+          onClick={!isGuest ? () => onNavigate('attendance') : undefined}
+          className={`group relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1E1B4B] via-[#312E81] to-[#4338CA] text-white p-5 sm:p-6 border border-indigo-400/40 shadow-lg shadow-indigo-950/20 flex flex-col justify-between min-h-[160px] ${
+            isGuest ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-200 cursor-pointer'
+          }`}
         >
           {/* Subtle decorative background watermarks */}
           <div className="absolute top-0 right-0 -mr-6 -mt-6 w-36 h-36 bg-white/10 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500"></div>
@@ -770,9 +811,18 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             <span className="text-[11px] font-bold text-indigo-200">
               {percentHadirStr}% Kehadiran ({hadirCount} Hadir)
             </span>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-indigo-950 font-black text-xs shadow-md group-hover:bg-indigo-50 transition-colors">
-              <span>Buka Presensi Rombel</span>
-              <span className="text-sm font-bold group-hover:translate-x-1 transition-transform">➔</span>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-indigo-950 font-black text-xs shadow-md transition-colors">
+              {isGuest ? (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-indigo-700" />
+                  <span>Terkunci (Mode Tamu)</span>
+                </>
+              ) : (
+                <>
+                  <span>Buka Presensi Rombel</span>
+                  <span className="text-sm font-bold group-hover:translate-x-1 transition-transform">➔</span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1435,15 +1485,21 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 </button>
 
                 {/* Tambah Kegiatan Button */}
-                <button
-                  type="button"
-                  onClick={handleOpenAddActivity}
-                  className="px-2.5 py-1 bg-[#1E3A8A] hover:bg-[#2563EB] text-white rounded-lg text-[10px] font-black transition-colors flex items-center gap-1 cursor-pointer shadow-xs"
-                  title="Tambah agenda kegiatan sekolah baru"
-                >
-                  <Plus className="w-3 h-3 stroke-[3]" />
-                  <span>Tambah</span>
-                </button>
+                {!isGuest ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenAddActivity}
+                    className="px-2.5 py-1 bg-[#1E3A8A] hover:bg-[#2563EB] text-white rounded-lg text-[10px] font-black transition-colors flex items-center gap-1 cursor-pointer shadow-xs"
+                    title="Tambah agenda kegiatan sekolah baru"
+                  >
+                    <Plus className="w-3 h-3 stroke-[3]" />
+                    <span>Tambah</span>
+                  </button>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-slate-200 text-slate-600">
+                    Mode Tamu
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1453,13 +1509,15 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 <div className="text-center py-8">
                   <Megaphone className="w-8 h-8 text-slate-300 mx-auto mb-1.5" />
                   <p className="text-xs font-bold text-slate-700">Belum ada agenda kegiatan</p>
-                  <button
-                    type="button"
-                    onClick={handleOpenAddActivity}
-                    className="mt-2 text-[11px] font-bold text-blue-600 hover:underline"
-                  >
-                    + Tambah Kegiatan Pertama
-                  </button>
+                  {!isGuest && (
+                    <button
+                      type="button"
+                      onClick={handleOpenAddActivity}
+                      className="mt-2 text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+                    >
+                      + Tambah Kegiatan Pertama
+                    </button>
+                  )}
                 </div>
               ) : (
                 activities.map((act) => {
@@ -1510,24 +1568,26 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                         </div>
 
                         {/* Edit and Delete Actions */}
-                        <div className="flex items-center gap-1 shrink-0 pt-0.5">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditActivity(act)}
-                            className="p-1 hover:bg-white text-slate-500 hover:text-blue-700 rounded-md transition-colors cursor-pointer"
-                            title="Edit Kegiatan"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteActivity(act.id, act.title)}
-                            className="p-1 hover:bg-white text-slate-500 hover:text-rose-600 rounded-md transition-colors cursor-pointer"
-                            title="Hapus Kegiatan"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        {!isGuest ? (
+                          <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditActivity(act)}
+                              className="p-1 hover:bg-white text-slate-500 hover:text-blue-700 rounded-md transition-colors cursor-pointer"
+                              title="Edit Kegiatan"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteActivity(act)}
+                              className="p-1 hover:bg-white text-slate-500 hover:text-rose-600 rounded-md transition-colors cursor-pointer"
+                              title="Hapus Kegiatan"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -1586,13 +1646,20 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </div>
 
           <div className="pt-3 border-t border-slate-100 mt-2 text-right">
-            <button
-              onClick={onOpenQuickViolation}
-              className="text-xs font-bold text-[#3B5BDB] hover:text-[#2563EB] inline-flex items-center gap-1 transition-colors cursor-pointer"
-            >
-              <span>Catat Pelanggaran Cepat</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
+            {!isGuest ? (
+              <button
+                type="button"
+                onClick={onOpenQuickViolation}
+                className="text-xs font-bold text-[#3B5BDB] hover:text-[#2563EB] inline-flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <span>Catat Pelanggaran Cepat</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <span className="text-xs text-slate-400 font-semibold italic">
+                🔒 Mode Tamu (Hanya Melihat)
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -2044,6 +2111,52 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* In-app Activity Delete Confirmation Modal (no iframe blocking) */}
+      {deletingActivity && (
+        <div 
+          className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setDeletingActivity(null)}
+        >
+          <div 
+            className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-inner">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1.5">
+              <h4 className="font-bold text-slate-900 text-base">Hapus Agenda Kegiatan?</h4>
+              <p className="text-xs text-slate-700 font-semibold bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
+                "{deletingActivity.title}"
+                <span className="block text-[11px] font-normal text-slate-500 mt-0.5">
+                  Tanggal: {deletingActivity.date || deletingActivity.startDate} {deletingActivity.time ? `• ${deletingActivity.time}` : ''}
+                </span>
+              </p>
+              <p className="text-[11px] text-slate-500">
+                Agenda ini akan dihapus permanen dari kalender dashboard dan lonceng notifikasi header.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingActivity(null)}
+                className="flex-1 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteActivity}
+                className="flex-1 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-colors shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Ya, Hapus</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

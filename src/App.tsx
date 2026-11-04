@@ -52,6 +52,8 @@ import { RecordViolationModal } from './components/modals/RecordViolationModal';
 import { SuratPernyataanModal } from './components/modals/SuratPernyataanModal';
 import { StudentSlipDetailModal } from './components/modals/StudentSlipDetailModal';
 import { AccountSwitchModal } from './components/modals/AccountSwitchModal';
+import { LoginPage } from './components/auth/LoginPage';
+import { generateViolationMessage } from './utils/whatsapp';
 import { RotateCcw, AlertTriangle, CheckCircle2, X, ShieldAlert } from 'lucide-react';
 
 export default function App() {
@@ -60,6 +62,15 @@ export default function App() {
   const [violations, setViolations] = useState<ViolationRecord[]>(() => getStoredViolations());
   const [waLogs, setWaLogs] = useState<WhatsAppMessageLog[]>(() => getStoredWaLogs());
   const [schoolConfig, setSchoolConfig] = useState<SchoolProfile>(() => getStoredSchoolConfig());
+
+  // User Authentication & Session Unlocked state (Requirement 6: Login page first)
+  const [isSessionUnlocked, setIsSessionUnlocked] = useState<boolean>(() => {
+    try {
+      return Boolean(sessionStorage.getItem('bsan_active_session_unlocked'));
+    } catch {
+      return false;
+    }
+  });
 
   // User Authentication & Guest Mode state
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
@@ -135,14 +146,26 @@ export default function App() {
       }
     });
 
+    let isInitialActivitiesSeeded = false;
     const unsubActivities = subscribeToActivities((remoteActivities) => {
       if (remoteActivities.length > 0) {
         try {
           localStorage.setItem('bsan_grisaka_announcements_v1', JSON.stringify(remoteActivities));
+          window.dispatchEvent(new CustomEvent('bsan_activities_changed', { detail: remoteActivities }));
         } catch {}
-      } else {
+        isInitialActivitiesSeeded = true;
+      } else if (!isInitialActivitiesSeeded) {
         const defaults = getStoredActivities();
-        bulkSyncActivitiesToFirestore(defaults).catch(console.error);
+        if (defaults.length > 0) {
+          bulkSyncActivitiesToFirestore(defaults).catch(console.error);
+        }
+        isInitialActivitiesSeeded = true;
+      } else {
+        // Cloud is empty because activities were deleted; keep empty!
+        try {
+          localStorage.setItem('bsan_grisaka_announcements_v1', JSON.stringify([]));
+          window.dispatchEvent(new CustomEvent('bsan_activities_changed', { detail: [] }));
+        } catch {}
       }
     });
 
@@ -378,6 +401,50 @@ export default function App() {
       setActiveSuratViolation(newViolation);
       setActiveSuratStudent(targetStudent);
     }
+
+    // Requirement 5: Automatically generate WhatsApp Gateway log with customized message by level & type
+    const resolvedStudent: Student = targetStudent || {
+      id: newViolation.studentId,
+      nama: newViolation.studentName,
+      kelas: newViolation.kelas,
+      nisn: '-',
+      jenjang: 7,
+      gender: 'L',
+      noHpSiswa: '-',
+      namaOrtu: newViolation.namaOrtu || 'Orang Tua / Wali',
+      noWaOrtu: newViolation.noWaOrtu || '-',
+      alamat: '-',
+      statusKehadiran: 'Hadir',
+      totalPelanggaranRingan: 0,
+      totalPelanggaranSedang: 0,
+      totalPelanggaranBerat: 0,
+    };
+
+    const waText = generateViolationMessage(resolvedStudent, newViolation);
+    const nowStr = new Intl.DateTimeFormat('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date()) + ' WIB';
+
+    const autoWaLog: WhatsAppMessageLog = {
+      id: `walog-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      studentId: newViolation.studentId,
+      studentName: newViolation.studentName,
+      kelas: newViolation.kelas,
+      recipientName: resolvedStudent.namaOrtu || newViolation.namaOrtu || 'Orang Tua / Wali',
+      recipientPhone: resolvedStudent.noWaOrtu || newViolation.noWaOrtu || '',
+      category: newViolation.tingkat === 'Berat' ? 'Panggilan Ortu' : 'Pelanggaran',
+      message: waText,
+      timestamp: nowStr,
+      status: 'Antrian',
+      triggerType: 'Otomatis',
+    };
+
+    setWaLogs((prev) => [autoWaLog, ...prev]);
+    syncWaLogToFirestore(autoWaLog).catch(console.error);
   };
 
   const handleUpdateViolationStatus = (
@@ -543,6 +610,19 @@ export default function App() {
     setTimeout(() => setResetSuccessToast(null), 3000);
   };
 
+  // Update existing WhatsApp Log (Edit / Status change to Terkirim)
+  const handleUpdateWaLog = (updatedLog: WhatsAppMessageLog) => {
+    if (isGuestMode()) {
+      setResetErrorToast('Akses Ditolak: Mode Tamu tidak berhak mengubah riwayat pesan.');
+      setTimeout(() => setResetErrorToast(null), 4000);
+      return;
+    }
+    setWaLogs((prev) => prev.map((l) => (l.id === updatedLog.id ? updatedLog : l)));
+    syncWaLogToFirestore(updatedLog).catch(console.error);
+    setResetSuccessToast('Riwayat pesan WhatsApp berhasil diperbarui.');
+    setTimeout(() => setResetSuccessToast(null), 3000);
+  };
+
   // Clear all WhatsApp Logs
   const handleClearAllWaLogs = () => {
     if (isGuestMode()) {
@@ -622,6 +702,35 @@ export default function App() {
     }
   };
 
+  // Guard: In guest mode, force view to stay on dashboard (Requirement 3)
+  useEffect(() => {
+    if (isGuestMode() && currentView !== 'dashboard') {
+      setCurrentView('dashboard');
+    }
+  }, [currentUser, currentView]);
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('bsan_active_session_unlocked');
+    setCurrentUserId('guest');
+    setCurrentUser(null);
+    setIsSessionUnlocked(false);
+    setCurrentView('dashboard');
+  };
+
+  // Requirement 6: First view when opening the link/url is the dedicated Login Page
+  if (!isSessionUnlocked) {
+    return (
+      <LoginPage
+        schoolConfig={schoolConfig}
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          setIsSessionUnlocked(true);
+          setCurrentView('dashboard');
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen flex bg-[#EEF2F8] text-slate-800 relative">
       {/* Toast Notifications */}
@@ -659,6 +768,11 @@ export default function App() {
       <Sidebar
         currentView={currentView}
         onSelectView={(view) => {
+          if (isGuestMode() && view !== 'dashboard') {
+            setResetErrorToast('Akses Dibatasi: Mode Tamu hanya berhak melihat Dashboard.');
+            setTimeout(() => setResetErrorToast(null), 4000);
+            return;
+          }
           setCurrentView(view);
           setIsMobileSidebarOpen(false);
         }}
@@ -667,7 +781,8 @@ export default function App() {
         schoolConfig={schoolConfig}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
-        onOpenAccountSwitch={() => setIsAccountSwitchOpen(true)}
+        onOpenAccountSwitch={handleLogout}
+        isGuest={isGuestMode()}
       />
 
       {/* Main Content Area */}
@@ -682,7 +797,10 @@ export default function App() {
           searchQuery={searchQuery}
           schoolConfig={schoolConfig}
           onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
-          onNavigate={(view) => setCurrentView(view)}
+          onNavigate={(view) => {
+            if (isGuestMode() && view !== 'dashboard') return;
+            setCurrentView(view);
+          }}
         />
 
         {/* Viewport Content with clean mobile padding & responsive spacing */}
@@ -751,6 +869,7 @@ export default function App() {
               waLogs={waLogs}
               schoolConfig={schoolConfig}
               onAddLog={handleAddWaLog}
+              onUpdateLog={handleUpdateWaLog}
               onDeleteLog={handleDeleteWaLog}
               onClearAllLogs={handleClearAllWaLogs}
             />
@@ -772,6 +891,7 @@ export default function App() {
               violations={violations}
               onUpdateSchoolConfig={handleUpdateSchoolConfig}
               onResetData={handleTriggerResetData}
+              onUserUpdated={(updatedUser) => setCurrentUser(updatedUser)}
               onPullDataFromSheets={(newStudents, newViolations, partialConfig) => {
                 if (isGuestMode()) {
                   setResetErrorToast('Akses Ditolak: Mode Tamu tidak berhak memuat atau menimpa data.');
