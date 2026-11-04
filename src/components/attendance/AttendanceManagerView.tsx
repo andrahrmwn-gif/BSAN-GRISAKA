@@ -23,6 +23,7 @@ import { logAudit } from '../../services/auditLogger';
 import { exportAttendanceToWord, exportAttendanceToExcel, getPeriodLabel } from '../../utils/exportAttendance';
 import { exportElementToPDF } from '../../utils/exportDocs';
 import { sortByName, sortByClassAndName } from '../../utils/sortUtils';
+import { getRealtimeDateYMD, useRealtimeDateTracker, formatIndoFullDate } from '../../utils/dateUtils';
 import { 
   CalendarCheck, 
   CheckCircle2, 
@@ -67,35 +68,18 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
   
   // Input View State
   const [selectedKelas, setSelectedKelas] = useState<string>('7A');
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    return new Date().toISOString().split('T')[0];
-  });
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-
-  const handlePrevDay = () => {
-    const parts = selectedDate.split('-');
-    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    d.setDate(d.getDate() - 1);
-    setSelectedDate(d.toISOString().split('T')[0]);
-  };
-
-  const handleNextDay = () => {
-    const parts = selectedDate.split('-');
-    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    d.setDate(d.getDate() + 1);
-    setSelectedDate(d.toISOString().split('T')[0]);
-  };
-
-  const handleGoToday = () => {
-    setSelectedDate(todayStr);
-  };
-
-  const handleGoYesterday = () => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    setSelectedDate(d.toISOString().split('T')[0]);
-  };
+  // Realtime date tracker with automatic midnight rollover & history exploration
+  const {
+    todayStr,
+    selectedDate,
+    setSelectedDate,
+    isToday,
+    handleGoToday,
+    handleGoYesterday,
+    handlePrevDay,
+    handleNextDay,
+  } = useRealtimeDateTracker();
   
   const [entries, setEntries] = useState<AttendanceStudentEntry[]>([]);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
@@ -131,9 +115,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
   // Recap View State
   const [recapPeriod, setRecapPeriod] = useState<AttendancePeriod>('harian');
   const [recapKelas, setRecapKelas] = useState<string>('all');
-  const [recapDate, setRecapDate] = useState<string>(() => {
-    return new Date().toISOString().split('T')[0];
-  });
+  const [recapDate, setRecapDate] = useState<string>(() => getRealtimeDateYMD());
   const [isPdfExporting, setIsPdfExporting] = useState(false);
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -308,7 +290,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
     setSaveTrigger((c) => c + 1);
 
     // If the saved date is today, synchronize the Student database
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getRealtimeDateYMD();
     if (selectedDate === todayStr && onUpdateStudentsAttendance) {
       const updatedStudents = students.map((std) => {
         if (std.kelas === selectedKelas) {

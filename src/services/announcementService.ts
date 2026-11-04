@@ -17,13 +17,14 @@ export interface SchoolActivity {
 }
 
 import { syncActivityToFirestore, deleteActivityFromFirestore, bulkSyncActivitiesToFirestore } from './firebase';
+import { getRealtimeDateYMD } from '../utils/dateUtils';
 
 const STORAGE_KEY = 'bsan_grisaka_announcements_v1';
 
 // Seed initial default activities relative to current date and school calendar
 function generateDefaultActivities(): SchoolActivity[] {
   const today = new Date();
-  const formatYMD = (d: Date) => d.toISOString().split('T')[0];
+  const formatYMD = (d: Date) => getRealtimeDateYMD(d);
 
   const in2Days = new Date(today);
   in2Days.setDate(today.getDate() + 2);
@@ -122,7 +123,7 @@ export function saveActivities(activities: SchoolActivity[]): void {
 
 export function addActivity(activity: Partial<SchoolActivity> & { title: string; date?: string; startDate?: string }): SchoolActivity[] {
   const existing = getStoredActivities();
-  const effectiveDate = activity.startDate || activity.date || new Date().toISOString().split('T')[0];
+  const effectiveDate = activity.startDate || activity.date || getRealtimeDateYMD();
   const newActivity: SchoolActivity = {
     ...activity,
     startDate: effectiveDate,
@@ -184,11 +185,19 @@ export function getActivityNotificationStatus(
   activity: SchoolActivity,
   todayStr?: string
 ): ActivityNotificationStatus {
-  const today = todayStr ? new Date(todayStr) : new Date();
+  const parseLocal = (dStr: string) => {
+    const parts = dStr.split('-');
+    if (parts.length === 3) {
+      return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    }
+    return new Date(dStr);
+  };
+
+  const today = todayStr ? parseLocal(todayStr) : new Date();
   today.setHours(0, 0, 0, 0);
 
   const rawDate = activity.startDate || activity.date || '';
-  const eventStart = new Date(rawDate);
+  const eventStart = parseLocal(rawDate);
   eventStart.setHours(0, 0, 0, 0);
 
   const diffMs = eventStart.getTime() - today.getTime();

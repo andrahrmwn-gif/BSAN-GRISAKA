@@ -3,6 +3,7 @@ import { KELAS_LIST } from '../data/schoolConfig';
 import { INITIAL_STUDENTS } from '../data/initialStudents';
 import { sortByClassAndName } from '../utils/sortUtils';
 import { syncAttendanceSheetToFirestore, bulkSyncAttendanceSheets } from './firebase';
+import { getRealtimeDateYMD } from '../utils/dateUtils';
 
 const STORAGE_KEYS = {
   ATTENDANCE: 'bsan_grisaka_attendance_sheets_v1',
@@ -13,7 +14,7 @@ const STORAGE_KEYS = {
 // Generate clean today attendance sheets based on actual students in database
 export const generateCleanTodayAttendanceSheets = (currentStudents?: Student[]): AttendanceSheet[] => {
   const sheets: AttendanceSheet[] = [];
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getRealtimeDateYMD();
   
   // Use passed students or fallback to stored students
   let studentPool = currentStudents;
@@ -283,7 +284,7 @@ export interface DateAttendanceSummary {
 export const getDateAttendanceSummary = (targetDate: string, students: Student[]): DateAttendanceSummary => {
   const allSheets = getStoredAttendanceSheets();
   const dateSheets = allSheets.filter(s => s.date === targetDate);
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getRealtimeDateYMD();
 
   const studentRecords = students.map(student => {
     // 1. Check if an attendance sheet exists for this student's class on targetDate

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { AuditLogEntry, AuditActionType, AuditModule } from '../../types/auth';
 import { getAuditLogs, exportAuditLogsToExcel, clearAuditLogs } from '../../services/auditLogger';
 import { getStoredAccounts } from '../../services/authService';
+import { getRealtimeDateYMD } from '../../utils/dateUtils';
 import { 
   ShieldCheck, 
   Search, 
@@ -66,7 +67,8 @@ export const AuditLogTable: React.FC = () => {
 
   // Statistics
   const todayStr = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date());
-  const todayCount = logs.filter(l => l.timestamp.includes(todayStr) || l.isoTimestamp?.startsWith(new Date().toISOString().slice(0, 10))).length;
+  const todayYMD = getRealtimeDateYMD();
+  const todayCount = logs.filter(l => l.timestamp.includes(todayStr) || l.isoTimestamp?.startsWith(todayYMD)).length;
   const deleteOrResetCount = logs.filter(l => l.actionType === 'DELETE' || l.actionType === 'RESET').length;
   const blockedCount = logs.filter(l => l.status === 'BLOCKED' || l.actionType === 'BLOCKED').length;
 

@@ -3,6 +3,7 @@ import { ViolationRecord, Student, SchoolProfile } from '../../types';
 import { SCHOOL_CONFIG } from '../../data/schoolConfig';
 import { getWhatsAppUrl, generateViolationMessage } from '../../utils/whatsapp';
 import { exportViolationsToWord, exportViolationsToPrintPDF, exportToCSV, exportElementToPDF } from '../../utils/exportDocs';
+import { useRealtimeDateTracker, formatIndoFullDate } from '../../utils/dateUtils';
 import { 
   ShieldAlert, 
   Search, 
@@ -52,47 +53,21 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
   const [deletingViolationId, setDeletingViolationId] = useState<string | null>(null);
   const [isConfirmClearAllOpen, setIsConfirmClearAllOpen] = useState(false);
 
-  // Calendar / Date selection state (Defaults to today in YYYY-MM-DD)
-  const getTodayDateStr = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
+  // Realtime date tracker with automatic midnight rollover and past date exploration
+  const {
+    todayStr,
+    selectedDate,
+    setSelectedDate,
+    isToday,
+    handleGoToday,
+    handlePrevDay,
+    handleNextDay,
+  } = useRealtimeDateTracker();
 
-  const [selectedDate, setSelectedDate] = useState<string>(getTodayDateStr);
   const [isFilterByDate, setIsFilterByDate] = useState<boolean>(true);
 
-  // Helper to change day by offset
-  const handleChangeDay = (offsetDays: number) => {
-    try {
-      const parts = selectedDate.split('-');
-      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-      d.setDate(d.getDate() + offsetDays);
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      setSelectedDate(`${year}-${month}-${day}`);
-      setIsFilterByDate(true);
-    } catch {
-      setSelectedDate(getTodayDateStr());
-    }
-  };
-
   const formatIndoDate = (dateStr: string) => {
-    try {
-      const parts = dateStr.split('-');
-      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-      return new Intl.DateTimeFormat('id-ID', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      }).format(d);
-    } catch {
-      return dateStr;
-    }
+    return formatIndoFullDate(dateStr);
   };
 
   // Filtered Violations: When isFilterByDate is true, strictly display violations matching selectedDate
@@ -292,8 +267,12 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
         {/* Calendar Navigation & Date Controls */}
         <div className="flex flex-wrap items-center gap-2 bg-black/20 p-1.5 rounded-2xl border border-white/10 self-start md:self-auto">
           {/* Previous Day */}
+          {/* Prev Day */}
           <button
-            onClick={() => handleChangeDay(-1)}
+            onClick={() => {
+              handlePrevDay();
+              setIsFilterByDate(true);
+            }}
             disabled={!isFilterByDate}
             className="p-2 rounded-xl bg-white/10 hover:bg-white/25 disabled:opacity-40 text-white transition-colors cursor-pointer"
             title="Hari Sebelumnya"
@@ -318,7 +297,10 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
 
           {/* Next Day */}
           <button
-            onClick={() => handleChangeDay(1)}
+            onClick={() => {
+              handleNextDay();
+              setIsFilterByDate(true);
+            }}
             disabled={!isFilterByDate}
             className="p-2 rounded-xl bg-white/10 hover:bg-white/25 disabled:opacity-40 text-white transition-colors cursor-pointer"
             title="Hari Berikutnya"
@@ -329,11 +311,11 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
           {/* Quick "Hari Ini" Button */}
           <button
             onClick={() => {
-              setSelectedDate(getTodayDateStr());
+              handleGoToday();
               setIsFilterByDate(true);
             }}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              isFilterByDate && selectedDate === getTodayDateStr()
+              isFilterByDate && isToday
                 ? 'bg-white text-[#3B5BDB] shadow-xs'
                 : 'bg-white/15 hover:bg-white/25 text-white'
             }`}
@@ -460,7 +442,7 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
                         <div className="flex items-center justify-center gap-2 pt-1">
                           <button
                             onClick={() => {
-                              setSelectedDate(getTodayDateStr());
+                              handleGoToday();
                             }}
                             className="px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#3B5BDB] text-xs font-bold transition-colors cursor-pointer"
                           >

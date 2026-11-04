@@ -40,6 +40,7 @@ import {
   Lock
 } from 'lucide-react';
 import { getDateAttendanceSummary, getStoredAttendanceSheets } from '../../services/attendanceStorage';
+import { useRealtimeDateTracker, getRealtimeDateYMD, formatIndoFullDate } from '../../utils/dateUtils';
 import { 
   getStoredActivities, 
   addActivity, 
@@ -81,9 +82,17 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   onOpenQuickViolation,
   onSelectStudentProfile,
 }) => {
-  // Historical / Anytime Attendance Date Selection State (Cek Setiap Saat)
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+  // Historical / Anytime Attendance Date Selection State (Realtime local date with automatic rollover past 24:00)
+  const {
+    todayStr,
+    selectedDate,
+    setSelectedDate,
+    isToday,
+    handleGoToday,
+    handleGoYesterday,
+    handlePrevDay,
+    handleNextDay,
+  } = useRealtimeDateTracker();
 
   // Chart & List filter state
   const [chartPeriodFilter, setChartPeriodFilter] = useState<'harian' | 'bulanan'>('harian');
@@ -112,7 +121,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   const isGuest = isGuestMode();
   const [activityForm, setActivityForm] = useState({
     title: '',
-    date: todayStr,
+    date: getRealtimeDateYMD(),
     time: '07.00 WITA',
     location: 'SMPN 1 Kandangan',
     description: '',
@@ -172,46 +181,8 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
   // Formatted date string for selectedDate
   const selectedDateFormatted = useMemo(() => {
-    try {
-      const parts = selectedDate.split('-');
-      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-      return new Intl.DateTimeFormat('id-ID', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      }).format(d);
-    } catch {
-      return selectedDate;
-    }
+    return formatIndoFullDate(selectedDate);
   }, [selectedDate]);
-
-  const isToday = selectedDate === todayStr;
-
-  // Date Navigation Handlers (Prev Day, Next Day, Today, Yesterday)
-  const handlePrevDay = () => {
-    const parts = selectedDate.split('-');
-    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    d.setDate(d.getDate() - 1);
-    setSelectedDate(d.toISOString().split('T')[0]);
-  };
-
-  const handleNextDay = () => {
-    const parts = selectedDate.split('-');
-    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    d.setDate(d.getDate() + 1);
-    setSelectedDate(d.toISOString().split('T')[0]);
-  };
-
-  const handleGoToday = () => {
-    setSelectedDate(todayStr);
-  };
-
-  const handleGoYesterday = () => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    setSelectedDate(d.toISOString().split('T')[0]);
-  };
 
   // Filtered Students & Unified Date-Driven Attendance Calculations
   const totalStudents = students.length;

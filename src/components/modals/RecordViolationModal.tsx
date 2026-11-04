@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Student, TataTertibItem, ViolationRecord, DisciplinaryStage } from '../../types';
 import { TATA_TERTIB_ITEMS, determineDisciplinaryStage } from '../../data/rulesData';
 import { 
@@ -7,9 +7,12 @@ import {
   Search, 
   CheckCircle2, 
   AlertTriangle, 
-  Sparkles
+  Sparkles,
+  Calendar,
+  Clock
 } from 'lucide-react';
 import { getCurrentUser } from '../../services/authService';
+import { getRealtimeDateYMD, getRealtimeTimeHM, addDaysToDateStr } from '../../utils/dateUtils';
 
 interface RecordViolationModalProps {
   isOpen: boolean;
@@ -40,13 +43,19 @@ export const RecordViolationModal: React.FC<RecordViolationModalProps> = ({
     return getCurrentUser()?.name || 'Petugas Piket / Kesiswaan';
   });
   const [catatanKhusus, setCatatanKhusus] = useState<string>('');
-  const [customWaktu, setCustomWaktu] = useState<string>(() => {
-    const d = new Date();
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  });
-  const [customTanggal, setCustomTanggal] = useState<string>(() => {
-    return new Date().toISOString().slice(0, 10);
-  });
+  const [customWaktu, setCustomWaktu] = useState<string>(() => getRealtimeTimeHM());
+  const [customTanggal, setCustomTanggal] = useState<string>(() => getRealtimeDateYMD());
+
+  // Realtime update whenever modal is opened
+  useEffect(() => {
+    if (isOpen) {
+      setCustomTanggal(getRealtimeDateYMD());
+      setCustomWaktu(getRealtimeTimeHM());
+      if (preselectedStudentId) {
+        setSelectedStudentId(preselectedStudentId);
+      }
+    }
+  }, [isOpen, preselectedStudentId]);
 
   if (!isOpen) return null;
 
@@ -317,15 +326,45 @@ export const RecordViolationModal: React.FC<RecordViolationModalProps> = ({
           {/* Section 3: Waktu, Lokasi & Petugas */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">
-                Tanggal & Waktu Kejadian
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-slate-700">
+                  Tanggal & Waktu Kejadian
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomTanggal(getRealtimeDateYMD());
+                      setCustomWaktu(getRealtimeTimeHM());
+                    }}
+                    className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer ${
+                      customTanggal === getRealtimeDateYMD()
+                        ? 'bg-blue-100 text-[#3B5BDB] font-bold'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Hari Ini (Realtime)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomTanggal(addDaysToDateStr(getRealtimeDateYMD(), -1))}
+                    className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer ${
+                      customTanggal === addDaysToDateStr(getRealtimeDateYMD(), -1)
+                        ? 'bg-blue-100 text-[#3B5BDB] font-bold'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Kemarin
+                  </button>
+                </div>
+              </div>
               <div className="flex gap-2">
                 <input
                   type="date"
                   value={customTanggal}
                   onChange={(e) => setCustomTanggal(e.target.value)}
                   className="w-full text-xs p-2 rounded-xl border border-slate-200"
+                  title="Pilih tanggal kejadian (otomatis hari ini, dapat dipilih tanggal sebelumnya)"
                 />
                 <input
                   type="time"
