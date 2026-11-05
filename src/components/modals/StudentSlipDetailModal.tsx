@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Student, ViolationRecord, SchoolProfile } from '../../types';
 import { getWhatsAppUrl, generateAttendanceMessage } from '../../utils/whatsapp';
+import { getStoredAttendanceSheets } from '../../services/attendanceStorage';
 import { 
   X, 
   Printer, 
@@ -18,7 +19,11 @@ import {
   FileDown,
   FileSpreadsheet,
   ExternalLink,
-  Trash2
+  Trash2,
+  Calendar,
+  Clock,
+  Send,
+  Filter
 } from 'lucide-react';
 import { 
   exportStudentSlipToWord, 
@@ -48,6 +53,7 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
   onDeleteViolation,
 }) => {
   const [activeTab, setActiveTab] = useState<'timeline' | 'document'>('timeline');
+  const [timelineFilter, setTimelineFilter] = useState<'all' | 'pelanggaran' | 'ketidakhadiran'>('all');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -64,16 +70,172 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
     }
   }, []);
 
-  if (!isOpen || !student) return null;
-
   // Filter student violations and sort newest first safely
-  const studentViolations = (violations || [])
-    .filter((v) => v && v.studentId === student.id)
-    .sort((a, b) => {
-      const dateA = a.tanggal ? new Date(a.tanggal).getTime() : 0;
-      const dateB = b.tanggal ? new Date(b.tanggal).getTime() : 0;
-      return dateB - dateA;
+  const studentViolations = useMemo(() => {
+    if (!student) return [];
+    return (violations || [])
+      .filter((v) => v && (v.studentId === student.id || (v.studentName?.toLowerCase() === student.nama?.toLowerCase() && v.kelas === student.kelas)))
+      .sort((a, b) => {
+        const dateA = a.tanggal ? new Date(a.tanggal).getTime() : 0;
+        const dateB = b.tanggal ? new Date(b.tanggal).getTime() : 0;
+        return dateB - dateA;
+      });
+  }, [violations, student]);
+
+  // Extract all attendance absence records (Sakit, Izin, Alfa) for this student
+  const studentAbsences = useMemo(() => {
+    if (!student) return [];
+    const sheets = getStoredAttendanceSheets();
+    const list: Array<{
+      id: string;
+      date: string;
+      time: string;
+      status: 'Sakit' | 'Izin' | 'Alfa';
+      kelas: string;
+      keterangan: string;
+      recordedBy: string;
+    }> = [];
+
+    const datesSeen = new Set<string>();
+
+    sheets.forEach((sheet) => {
+      if (!sheet || !Array.isArray(sheet.entries)) return;
+      const entry = sheet.entries.find(
+        (e) => e && (e.studentId === student.id || e.nisn === student.nisn || (e.nama && e.nama.toLowerCase() === student.nama.toLowerCase()))
+      );
+      if (entry && entry.status && entry.status !== 'Hadir') {
+        const timeStr = sheet.recordedAt ? sheet.recordedAt.split('T')[1]?.substring(0, 5) || '07:30' : '07:30';
+        list.push({
+          id: `att-${sheet.id}-${student.id}`,
+          date: sheet.date,
+          time: `${timeStr} WIB`,
+          status: entry.status as 'Sakit' | 'Izin' | 'Alfa',
+          kelas: sheet.kelas,
+          keterangan: entry.keterangan || (entry.status === 'Alfa' ? 'Tanpa surat keterangan' : `Keterangan ${entry.status}`),
+          recordedBy: sheet.recordedBy || 'Wali Kelas / Guru Piket',
+        });
+        datesSeen.add(sheet.date);
+      }
     });
+
+    // Also check current student.statusKehadiran if not Hadir
+    if (student.statusKehadiran && student.statusKehadiran !== 'Hadir') {
+      const todayYMD = new Date().toISOString().split('T')[0];
+      if (!datesSeen.has(todayYMD)) {
+        list.push({
+          id: `att-today-${student.id}`,
+          date: todayYMD,
+          time: '07:30 WIB',
+          status: student.statusKehadiran as 'Sakit' | 'Izin' | 'Alfa',
+          kelas: student.kelas,
+          keterangan: student.keteranganKehadiran || (student.statusKehadiran === 'Alfa' ? 'Tanpa surat keterangan' : `Status ${student.statusKehadiran}`),
+          recordedBy: 'Presensi Terkini',
+        });
+      }
+    }
+
+    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [student]);
+
+  // Combined Unified Timeline (Violations + Absences)
+  const unifiedTimelineEvents = useMemo(() => {
+    const events: Array<{
+      id: string;
+      type: 'pelanggaran' | 'ketidakhadiran';
+      date: string;
+      time: string;
+      timestamp: number;
+      title: string;
+      category: 'Berat' | 'Sedang' | 'Ringan' | 'Alfa' | 'Sakit' | 'Izin';
+      badgeLabel: string;
+      badgeStyle: string;
+      nodeColor: string;
+      description: string;
+      location: string;
+      officer: string;
+      notes?: string;
+      tahapPembinaan?: string;
+      violation?: ViolationRecord;
+      absenceStatus?: 'Alfa' | 'Sakit' | 'Izin';
+    }> = [];
+
+    studentViolations.forEach((v) => {
+      const isBerat = v.tingkat === 'Berat';
+      const isSedang = v.tingkat === 'Sedang';
+      events.push({
+        id: `viol-${v.id}`,
+        type: 'pelanggaran',
+        date: v.tanggal,
+        time: v.waktu ? `${v.waktu} WIB` : '07:30 WIB',
+        timestamp: new Date(v.tanggal || '').getTime() || 0,
+        title: `${v.kodePasal} - ${v.pasalTitle}`,
+        category: v.tingkat as any,
+        badgeLabel: `Pelanggaran ${v.tingkat}`,
+        badgeStyle: isBerat
+          ? 'bg-rose-100 text-rose-800 border-rose-300 font-bold'
+          : isSedang
+          ? 'bg-amber-100 text-amber-800 border-amber-300 font-bold'
+          : 'bg-blue-100 text-blue-800 border-blue-200 font-semibold',
+        nodeColor: isBerat
+          ? 'border-rose-600 ring-rose-100'
+          : isSedang
+          ? 'border-amber-500 ring-amber-100'
+          : 'border-blue-600 ring-blue-100',
+        description: v.uraian,
+        location: v.lokasi || 'Lingkungan Sekolah',
+        officer: v.guruPencatat || 'Tim Kesiswaan',
+        notes: v.catatanKhusus,
+        tahapPembinaan: v.tahapPembinaan || 'Pembinaan Wali Kelas & BK',
+        violation: v,
+      });
+    });
+
+    studentAbsences.forEach((a) => {
+      const isAlfa = a.status === 'Alfa';
+      const isSakit = a.status === 'Sakit';
+      events.push({
+        id: a.id,
+        type: 'ketidakhadiran',
+        date: a.date,
+        time: a.time,
+        timestamp: new Date(a.date).getTime() || 0,
+        title: `Ketidakhadiran: ${a.status.toUpperCase()}`,
+        category: a.status,
+        badgeLabel: `Presensi: ${a.status}`,
+        badgeStyle: isAlfa
+          ? 'bg-red-100 text-red-800 border-red-300 font-black'
+          : isSakit
+          ? 'bg-amber-100 text-amber-800 border-amber-300 font-bold'
+          : 'bg-sky-100 text-sky-800 border-sky-300 font-bold',
+        nodeColor: isAlfa
+          ? 'border-red-600 ring-red-100'
+          : isSakit
+          ? 'border-amber-500 ring-amber-100'
+          : 'border-sky-500 ring-sky-100',
+        description: `Siswa tercatat tidak hadir (${a.status}) pada presensi harian Kelas ${a.kelas}.${a.keterangan ? ` Keterangan: ${a.keterangan}` : ''}`,
+        location: `Ruang Kelas ${a.kelas}`,
+        officer: a.recordedBy,
+        notes: a.keterangan,
+        tahapPembinaan: a.status === 'Alfa' ? 'Konfirmasi Orang Tua / Surat Panggilan Wali Kelas' : 'Pencatatan Rekap Presensi Rombel',
+        absenceStatus: a.status,
+      });
+    });
+
+    return events.sort((a, b) => b.timestamp - a.timestamp);
+  }, [studentViolations, studentAbsences]);
+
+  // Filtered timeline based on user choice
+  const displayedTimelineEvents = useMemo(() => {
+    if (timelineFilter === 'pelanggaran') {
+      return unifiedTimelineEvents.filter((e) => e.type === 'pelanggaran');
+    }
+    if (timelineFilter === 'ketidakhadiran') {
+      return unifiedTimelineEvents.filter((e) => e.type === 'ketidakhadiran');
+    }
+    return unifiedTimelineEvents;
+  }, [unifiedTimelineEvents, timelineFilter]);
+
+  if (!isOpen || !student) return null;
 
   const hasBerat = (student.totalPelanggaranBerat || 0) > 0;
   const hasSedang = (student.totalPelanggaranSedang || 0) > 0;
@@ -461,112 +623,149 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* DEDICATED 'PELANGGARAN HISTORY' TIMELINE */}
+              {/* DEDICATED UNIFIED 'PELANGGARAN & KETIDAKHADIRAN' TIMELINE */}
               <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-xl bg-red-100 text-red-700 flex items-center justify-center">
-                      <ShieldAlert className="w-4 h-4 stroke-[2.5]" />
+                    <div className="w-8 h-8 rounded-xl bg-[#3B5BDB]/10 text-[#3B5BDB] flex items-center justify-center font-bold">
+                      <Layers className="w-4 h-4 stroke-[2.5]" />
                     </div>
                     <div>
                       <h3 className="font-bold text-sm text-slate-900">
-                        Linimasa Rekam Jejak Pelanggaran (Violation History Timeline)
+                        Linimasa Rekam Jejak Pelanggaran & Ketidakhadiran
                       </h3>
                       <p className="text-[11px] text-slate-500">
-                        Kronologi pelanggaran tata tertib dan perkembangan tahap pembinaan peserta didik
+                        Kronologi peristiwa tata tertib (Ringan, Sedang, Berat) & kehadiran (Sakit, Izin, Alfa) peserta didik
                       </p>
                     </div>
                   </div>
 
-                  <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 self-start sm:self-auto">
-                    {studentViolations.length} Peristiwa Tercatat
-                  </span>
+                  {/* Filter Tabs */}
+                  <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setTimelineFilter('all')}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-colors cursor-pointer ${
+                        timelineFilter === 'all'
+                          ? 'bg-[#3B5BDB] text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Semua ({unifiedTimelineEvents.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTimelineFilter('pelanggaran')}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-colors cursor-pointer ${
+                        timelineFilter === 'pelanggaran'
+                          ? 'bg-rose-600 text-white shadow-xs'
+                          : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                      }`}
+                    >
+                      Pelanggaran ({studentViolations.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTimelineFilter('ketidakhadiran')}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-colors cursor-pointer ${
+                        timelineFilter === 'ketidakhadiran'
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
+                      }`}
+                    >
+                      Ketidakhadiran ({studentAbsences.length})
+                    </button>
+                  </div>
                 </div>
 
-                {studentViolations.length === 0 ? (
+                {displayedTimelineEvents.length === 0 ? (
                   <div className="py-12 text-center text-slate-500 space-y-2">
                     <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
                       <CheckCircle2 className="w-6 h-6 stroke-[2.5]" />
                     </div>
                     <div className="font-bold text-slate-800 text-sm">
-                      Nihil Catatan Pelanggaran
+                      Nihil Catatan Peristiwa
                     </div>
                     <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                      Peserta didik ini memiliki rekam jejak perilaku yang sangat baik dan mematuhi seluruh peraturan BSAN.
+                      Peserta didik ini memiliki rekam jejak perilaku disiplin yang prima serta kepatuhan penuh terhadap standar BSAN.
                     </p>
                   </div>
                 ) : (
-                  <div className="relative border-l-2 border-slate-200 ml-4 space-y-6 py-2">
-                    {studentViolations.map((v) => {
-                      const isBerat = v.tingkat === 'Berat';
-                      const isSedang = v.tingkat === 'Sedang';
+                  <div className="relative border-l-2 border-slate-200 ml-4 space-y-5 py-2">
+                    {displayedTimelineEvents.map((evt) => {
+                      const isViolation = evt.type === 'pelanggaran';
+                      const v = evt.violation;
 
                       return (
-                        <div key={v.id} className="relative pl-6 group">
-                          {/* Timeline node */}
+                        <div key={evt.id} className="relative pl-6 group">
+                          {/* Timeline node dot */}
                           <div
-                            className={`absolute -left-[9px] top-1.5 w-4 h-4 rounded-full border-2 bg-white ${
-                              isBerat
-                                ? 'border-red-600 ring-4 ring-red-100'
-                                : isSedang
-                                ? 'border-amber-500 ring-4 ring-amber-100'
-                                : 'border-emerald-600 ring-4 ring-emerald-100'
-                            }`}
+                            className={`absolute -left-[9px] top-2 w-4 h-4 rounded-full border-2 bg-white ring-4 ${evt.nodeColor}`}
                           />
 
                           <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-2.5">
+                            {/* Header event date & badge */}
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex items-center gap-2">
-                                <span className="font-bold text-slate-900 text-xs">{v.tanggal}</span>
+                                <span className="font-bold text-slate-900 text-xs flex items-center gap-1">
+                                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>{evt.date}</span>
+                                </span>
                                 <span className="text-slate-400">·</span>
-                                <span className="text-xs text-slate-500 font-mono">{v.waktu} WIB</span>
+                                <span className="text-xs text-slate-500 font-mono flex items-center gap-1">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>{evt.time}</span>
+                                </span>
                                 <span className="text-slate-400">·</span>
-                                <span className="text-xs text-slate-600 italic">Lokasi: {v.lokasi}</span>
+                                <span className="text-xs text-slate-600 italic">Lokasi: {evt.location}</span>
                               </div>
 
                               <span
-                                className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
-                                  isBerat
-                                    ? 'bg-red-100 text-red-800 border-red-200'
-                                    : isSedang
-                                    ? 'bg-amber-100 text-amber-800 border-amber-200'
-                                    : 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                                }`}
+                                className={`text-[10px] px-2.5 py-0.5 rounded-full border ${evt.badgeStyle}`}
                               >
-                                Tingkat {v.tingkat}
+                                {evt.badgeLabel}
                               </span>
                             </div>
 
+                            {/* Title & Description */}
                             <div className="space-y-1">
                               <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                                <span className="font-mono text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded text-xs border border-emerald-200">
-                                  {v.kodePasal}
-                                </span>
-                                <span>{v.pasalTitle}</span>
+                                {isViolation && v ? (
+                                  <span className="font-mono text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded text-xs border border-emerald-200 font-bold">
+                                    {v.kodePasal}
+                                  </span>
+                                ) : (
+                                  <span className="font-mono text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded text-xs border border-amber-200 font-bold">
+                                    ABSENSI
+                                  </span>
+                                )}
+                                <span>{evt.title}</span>
                               </div>
                               <p className="text-xs text-slate-700 leading-relaxed font-medium bg-white p-3 rounded-xl border border-slate-200/70">
-                                {v.uraian}
+                                {evt.description}
                               </p>
                             </div>
 
-                            {v.catatanKhusus && (
+                            {/* Notes if any */}
+                            {evt.notes && (
                               <div className="text-[11px] text-amber-900 bg-amber-50/70 p-2.5 rounded-xl border border-amber-200 italic">
-                                <strong>Catatan Penanganan:</strong> {v.catatanKhusus}
+                                <strong>Catatan Khusus:</strong> {evt.notes}
                               </div>
                             )}
 
+                            {/* Footer: Stage & Action buttons */}
                             <div className="pt-2 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-3 text-xs">
                               <div className="space-y-0.5">
                                 <div className="text-[11px] text-slate-500">
-                                  Tahap Pembinaan: <strong className="text-emerald-900">{v.tahapPembinaan}</strong>
+                                  Tahap Pembinaan: <strong className="text-slate-900 font-bold">{evt.tahapPembinaan}</strong>
                                 </div>
                                 <div className="text-[10px] text-slate-400">
-                                  Petugas Pencatat: {v.guruPencatat}
+                                  Petugas Pencatat: {evt.officer}
                                 </div>
                               </div>
 
                               <div className="flex items-center gap-2">
-                                {onDeleteViolation && (
+                                {isViolation && v && onDeleteViolation && (
                                   confirmDeleteId === v.id ? (
                                     <div className="flex items-center gap-1.5 bg-rose-100 p-1 rounded-xl">
                                       <span className="text-[10px] text-rose-800 font-bold px-1">Yakin hapus?</span>
@@ -575,13 +774,13 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                                           onDeleteViolation(v.id);
                                           setConfirmDeleteId(null);
                                         }}
-                                        className="px-2 py-0.5 bg-rose-600 text-white rounded-lg text-[10px] font-bold"
+                                        className="px-2 py-0.5 bg-rose-600 text-white rounded-lg text-[10px] font-bold cursor-pointer"
                                       >
                                         Ya
                                       </button>
                                       <button
                                         onClick={() => setConfirmDeleteId(null)}
-                                        className="px-2 py-0.5 bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold"
+                                        className="px-2 py-0.5 bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold cursor-pointer"
                                       >
                                         Batal
                                       </button>
@@ -598,16 +797,34 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                                   )
                                 )}
 
-                                <button
-                                  onClick={() => {
-                                    onClose();
-                                    onOpenSurat(v);
-                                  }}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-                                >
-                                  <FileText className="w-3.5 h-3.5 text-white" />
-                                  <span>Buka Surat Resmi</span>
-                                </button>
+                                {isViolation && v && (
+                                  <button
+                                    onClick={() => {
+                                      onClose();
+                                      onOpenSurat(v);
+                                    }}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                                  >
+                                    <FileText className="w-3.5 h-3.5 text-white" />
+                                    <span>Buka Surat Resmi</span>
+                                  </button>
+                                )}
+
+                                {!isViolation && student.noWaOrtu && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const text = generateAttendanceMessage(student);
+                                      const url = getWhatsAppUrl(student.noWaOrtu, text);
+                                      window.open(url, '_blank');
+                                    }}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                                    title="Kirim konfirmasi ketidakhadiran ke WhatsApp Orang Tua"
+                                  >
+                                    <Send className="w-3.5 h-3.5 text-white" />
+                                    <span>Kirim Notifikasi WA</span>
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>

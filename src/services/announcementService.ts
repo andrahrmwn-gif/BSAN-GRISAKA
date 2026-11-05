@@ -20,6 +20,7 @@ import { syncActivityToFirestore, deleteActivityFromFirestore, bulkSyncActivitie
 import { getRealtimeDateYMD } from '../utils/dateUtils';
 
 const STORAGE_KEY = 'bsan_grisaka_announcements_v1';
+const INITIALIZED_KEY = 'bsan_grisaka_announcements_initialized_v2';
 
 // Seed initial default activities relative to current date and school calendar
 function generateDefaultActivities(): SchoolActivity[] {
@@ -87,14 +88,32 @@ function generateDefaultActivities(): SchoolActivity[] {
   ];
 }
 
+export function isAnnouncementsInitialized(): boolean {
+  try {
+    return localStorage.getItem(INITIALIZED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
 export function getStoredActivities(): SchoolActivity[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw === null) {
+    const initialized = localStorage.getItem(INITIALIZED_KEY) === 'true';
+
+    // If never initialized before and no storage, seed defaults once
+    if (raw === null && !initialized) {
       const defaults = generateDefaultActivities();
+      localStorage.setItem(INITIALIZED_KEY, 'true');
       saveActivities(defaults);
       return defaults;
     }
+
+    // If initialized but empty or null, return empty array - NEVER re-seed deleted activities!
+    if (raw === null || raw.trim() === '' || raw === '[]') {
+      return [];
+    }
+
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       return parsed.map((item) => ({
@@ -113,6 +132,7 @@ export function getStoredActivities(): SchoolActivity[] {
 export function saveActivities(activities: SchoolActivity[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(activities));
+    localStorage.setItem(INITIALIZED_KEY, 'true');
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('bsan_activities_changed', { detail: activities }));
     }

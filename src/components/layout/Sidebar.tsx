@@ -12,7 +12,6 @@ import {
   Settings,
   X,
   ChevronRight,
-  LogOut,
   Quote,
   Lock
 } from 'lucide-react';
@@ -334,18 +333,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
         </nav>
-
-        {/* Bottom Logout Button (Gambar 2 Exact Bottom Item) */}
-        <div className="p-3 border-t border-white/15 bg-black/10">
-          <button
-            onClick={onOpenAccountSwitch}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-blue-100 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-            title="Keluar / Beralih Akun Petugas"
-          >
-            <LogOut className="w-5 h-5 text-blue-200" />
-            <span>Keluar</span>
-          </button>
-        </div>
       </aside>
     </>
   );

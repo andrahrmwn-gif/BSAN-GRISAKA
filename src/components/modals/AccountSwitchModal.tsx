@@ -1,764 +1,316 @@
 import React, { useState } from 'react';
-import { UserAccount, UserRole, OFFICIAL_JABATAN_LIST } from '../../types/auth';
-import { 
-  getStoredAccounts, 
-  getCurrentUserId, 
-  setCurrentUserId, 
-  MAX_ACCOUNTS, 
-  updateAccount,
-  addAccount 
-} from '../../services/authService';
+import { UserAccount } from '../../types/auth';
+import { getCurrentUser, updateAccount } from '../../services/authService';
 import { logAudit } from '../../services/auditLogger';
 import { 
-  Users, 
-  LogIn, 
-  Eye, 
+  User, 
   X, 
   ShieldCheck, 
   CheckCircle2, 
   Key, 
   Shield, 
-  UserCheck, 
   AlertCircle,
-  Search,
-  Edit3,
-  Filter,
-  UserPlus
+  LogOut,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 interface AccountSwitchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAccountChanged: (user: UserAccount | null) => void;
+  currentUser?: UserAccount | null;
+  onLogout?: () => void;
+  onAccountChanged?: (user: UserAccount | null) => void;
 }
 
 export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
   isOpen,
   onClose,
+  currentUser: propUser,
+  onLogout,
   onAccountChanged,
 }) => {
-  const [accounts, setAccounts] = useState<UserAccount[]>(() => getStoredAccounts());
-  const [currentId, setCurrentId] = useState<string>(() => getCurrentUserId());
-  const [selectedAccount, setSelectedAccount] = useState<UserAccount | null>(null);
-  const [enteredPin, setEnteredPin] = useState('');
-  const [pinError, setPinError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('all');
-  
-  // Quick Edit Account Modal
-  const [editingAcc, setEditingAcc] = useState<UserAccount | null>(null);
-  const [editSuccessMsg, setEditSuccessMsg] = useState<string | null>(null);
+  const activeUser = propUser || getCurrentUser();
 
-  // New Account Modal State
-  const [isAddingAcc, setIsAddingAcc] = useState(false);
-  const [newAccForm, setNewAccForm] = useState({
-    name: '',
-    username: '',
-    role: 'Guru' as UserRole,
-    nip: '',
-    pin: '1234',
-    canEdit: true,
-    canDelete: false,
-    canManageSettings: false,
-  });
-  const [addErrorMsg, setAddErrorMsg] = useState<string | null>(null);
-  const [addSuccessMsg, setAddSuccessMsg] = useState<string | null>(null);
+  // Change Password state
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [oldPin, setOldPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [showPins, setShowPins] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSelectAccountToLogin = (acc: UserAccount) => {
-    setSelectedAccount(acc);
-    setEnteredPin('');
-    setPinError(null);
-  };
-
-  const handleConfirmLogin = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!selectedAccount) return;
-
-    if (selectedAccount.pin) {
-      if (!enteredPin.trim()) {
-        setPinError('Harap masukkan PIN keamanan akun Anda.');
-        return;
-      }
-      if (enteredPin.trim() !== selectedAccount.pin) {
-        setPinError('PIN yang Anda masukkan salah. Masukkan PIN yang benar.');
-        return;
-      }
-    }
-
-    setCurrentUserId(selectedAccount.id);
-    setCurrentId(selectedAccount.id);
-
-    logAudit({
-      actionType: 'LOGIN',
-      module: 'Autentikasi',
-      description: `Login sesi berhasil: ${selectedAccount.name} (${selectedAccount.role})`,
-      status: 'SUCCESS',
-      forcedUser: { id: selectedAccount.id, name: selectedAccount.name, role: selectedAccount.role }
-    });
-
-    onAccountChanged(selectedAccount);
+  const handleLogoutClick = () => {
     onClose();
-  };
-
-  const handleSwitchToGuest = () => {
-    setCurrentUserId('guest');
-    setCurrentId('guest');
-
-    logAudit({
-      actionType: 'LOGIN',
-      module: 'Autentikasi',
-      description: 'Beralih ke Mode Tamu (Guest - View Only)',
-      status: 'SUCCESS'
-    });
-
-    onAccountChanged(null);
-    onClose();
-  };
-
-  const handleSaveQuickEdit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingAcc) return;
-
-    const res = updateAccount(editingAcc.id, {
-      name: editingAcc.name,
-      role: editingAcc.role,
-      nip: editingAcc.nip,
-      pin: editingAcc.pin,
-    });
-
-    if (res.success) {
-      logAudit({
-        actionType: 'UPDATE',
-        module: 'Autentikasi',
-        description: `Memperbarui profil akun (Nama/NIP/Jabatan/Password): ${editingAcc.name} (${editingAcc.role})`,
-        status: 'SUCCESS',
-      });
-
-      const updated = getStoredAccounts();
-      setAccounts(updated);
-      setEditSuccessMsg('Nama, NIP, atau Password akun berhasil diperbarui!');
-      setTimeout(() => {
-        setEditSuccessMsg(null);
-        setEditingAcc(null);
-      }, 1500);
+    if (onLogout) {
+      onLogout();
     }
   };
 
-  const handleOpenAddAccount = () => {
-    setEditingAcc(null);
-    setSelectedAccount(null);
-    setIsAddingAcc(true);
-    setAddErrorMsg(null);
-    setAddSuccessMsg(null);
-    setNewAccForm({
-      name: '',
-      username: '',
-      role: 'Guru',
-      nip: '',
-      pin: '1234',
-      canEdit: true,
-      canDelete: false,
-      canManageSettings: false,
-    });
-  };
-
-  const handleSaveNewAccount = (e: React.FormEvent) => {
+  const handleChangePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setAddErrorMsg(null);
+    setErrorMsg(null);
+    setSuccessMsg(null);
 
-    if (!newAccForm.name.trim() || !newAccForm.username.trim()) {
-      setAddErrorMsg('Nama Lengkap dan Username wajib diisi.');
+    if (!activeUser) return;
+
+    const currentExpectedPin = activeUser.pin || '1234';
+
+    if (oldPin !== currentExpectedPin) {
+      setErrorMsg('Password / PIN lama yang Anda masukkan salah.');
       return;
     }
 
-    const res = addAccount({
-      name: newAccForm.name.trim(),
-      username: newAccForm.username.trim().toLowerCase().replace(/\s+/g, '.'),
-      role: newAccForm.role,
-      nip: newAccForm.nip.trim() || '-',
-      pin: newAccForm.pin || '1234',
-      isActive: true,
-      canEdit: newAccForm.canEdit,
-      canDelete: newAccForm.canDelete || newAccForm.role === 'Kepala Sekolah' || newAccForm.role.includes('Tata Usaha'),
-      canManageSettings: newAccForm.canManageSettings || newAccForm.role === 'Kepala Sekolah',
-      avatarColor: '#2563EB',
-    });
+    if (!newPin || newPin.trim().length < 4) {
+      setErrorMsg('Password baru minimal 4 karakter.');
+      return;
+    }
 
-    if (res.success && res.account) {
+    if (newPin !== confirmPin) {
+      setErrorMsg('Konfirmasi password baru tidak cocok.');
+      return;
+    }
+
+    const res = updateAccount(activeUser.id, { pin: newPin.trim() });
+    if (res.success) {
+      setSuccessMsg('Password akun berhasil diperbarui! Gunakan password baru ini untuk login berikutnya.');
       logAudit({
-        actionType: 'CREATE',
+        actionType: 'UPDATE',
         module: 'Autentikasi',
-        description: `Mendaftarkan akun petugas baru: ${res.account.name} (${res.account.role})`,
+        description: `Ganti password akun sukses untuk: ${activeUser.name} (${activeUser.role})`,
         status: 'SUCCESS',
       });
 
-      const updated = getStoredAccounts();
-      setAccounts(updated);
-      setAddSuccessMsg(res.message);
+      if (onAccountChanged) {
+        onAccountChanged({ ...activeUser, pin: newPin.trim() });
+      }
+
       setTimeout(() => {
-        setIsAddingAcc(false);
-        setAddSuccessMsg(null);
-      }, 1500);
+        setOldPin('');
+        setNewPin('');
+        setConfirmPin('');
+        setShowPasswordChange(false);
+        setSuccessMsg(null);
+      }, 2000);
     } else {
-      setAddErrorMsg(res.message);
+      setErrorMsg(res.message);
     }
   };
 
-  // Filter accounts
-  const filteredAccounts = accounts.filter((acc) => {
-    const matchesSearch = 
-      acc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      acc.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      acc.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      acc.nip.includes(searchQuery);
-
-    if (roleFilter === 'all') return matchesSearch;
-    if (roleFilter === 'pimpinan') return matchesSearch && (acc.role === 'Kepala Sekolah' || acc.role.includes('Wakil Kepala Sekolah'));
-    if (roleFilter === 'guru') return matchesSearch && acc.role === 'Guru';
-    if (roleFilter === 'tu') return matchesSearch && (acc.role.toLowerCase().includes('tata usaha'));
-
-    return matchesSearch;
-  });
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden my-6 animate-fade-in">
         
         {/* Top Header */}
-        <div className="bg-gradient-to-r from-[#1E3A8A] via-[#3451B2] to-[#3B5BDB] px-6 py-4 flex items-center justify-between text-white">
+        <div className="bg-gradient-to-r from-[#1E3A8A] via-[#2F4CB7] to-[#3B5BDB] px-6 py-4 flex items-center justify-between text-white">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center font-bold shadow-inner">
-              <Users className="w-5 h-5 stroke-[2.5]" />
+              <User className="w-5 h-5 stroke-[2.5]" />
             </div>
             <div>
               <h3 className="font-bold text-base tracking-tight">
-                Pilih Akun Petugas BSAN ({accounts.length} / {MAX_ACCOUNTS} Terdaftar)
+                Profil Akun Petugas
               </h3>
               <p className="text-xs text-blue-100">
-                Tiap akun dapat dirubah Nama, NIP, dan Passwordnya. Mode Tamu berstatus view-only.
+                Informasi akun sesi aktif saat ini
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleOpenAddAccount}
-              className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-white/20 shadow-xs"
-              title="Daftarkan akun atau petugas BSAN baru"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>Tambah Akun</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-blue-100 hover:text-white transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-blue-100 hover:text-white transition-colors cursor-pointer"
+            title="Tutup"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Guest Mode Option Bar */}
-        <div className="p-4 border-b border-slate-100 bg-slate-50/70">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
-                <Eye className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-900 text-xs">Mode Tamu (Guest View-Only)</span>
-                  {currentId === 'guest' && (
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-200 text-amber-900">
-                      SEDANG AKTIF
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Dapat melihat seluruh grafik, presensi, & buku pelanggaran tanpa hak merubah data.
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={handleSwitchToGuest}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                currentId === 'guest'
-                  ? 'bg-slate-200 text-slate-600'
-                  : 'bg-slate-800 hover:bg-slate-900 text-white shadow-xs'
-              }`}
-            >
-              Beralih ke Tamu
-            </button>
-          </div>
-        </div>
-
-        {/* Modal Body: Add Account or Quick Edit or PIN Entry or Accounts List */}
-        {isAddingAcc ? (
-          <div className="p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-600/20">
-                  <UserPlus className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-black text-sm text-slate-900">
-                    Tambah Akun / Petugas Baru
-                  </h4>
-                  <p className="text-[11px] text-slate-500 font-medium">
-                    Daftarkan akun petugas resmi ({accounts.length} / {MAX_ACCOUNTS} slot terisi)
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAddingAcc(false)}
-                className="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            {addSuccessMsg && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{addSuccessMsg}</span>
-              </div>
-            )}
-
-            {addErrorMsg && (
-              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-xl flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>{addErrorMsg}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveNewAccount} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block font-bold text-slate-800 mb-1">
-                  Nama Lengkap & Gelar *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Drs. H. Ahmad Fauzi, M.Pd."
-                  value={newAccForm.name}
-                  onChange={(e) => {
-                    const name = e.target.value;
-                    const autoUsername = name
-                      .toLowerCase()
-                      .replace(/[^a-z0-9\s]/g, '')
-                      .trim()
-                      .replace(/\s+/g, '.');
-                    setNewAccForm({ 
-                      ...newAccForm, 
-                      name, 
-                      username: newAccForm.username || autoUsername 
-                    });
-                  }}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-semibold text-slate-900"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-800 mb-1">
-                    Username Login *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="nama.user"
-                    value={newAccForm.username}
-                    onChange={(e) => setNewAccForm({ ...newAccForm, username: e.target.value.toLowerCase().replace(/\s+/g, '.') })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-mono font-bold text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-800 mb-1">
-                    Password / PIN Akses *
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="1234"
-                    value={newAccForm.pin}
-                    onChange={(e) => setNewAccForm({ ...newAccForm, pin: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-mono font-bold text-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-800 mb-1">
-                    Jabatan Petugas *
-                  </label>
-                  <select
-                    value={newAccForm.role}
-                    onChange={(e) => setNewAccForm({ ...newAccForm, role: e.target.value as any })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-bold text-slate-900 cursor-pointer"
-                  >
-                    {OFFICIAL_JABATAN_LIST.map((j) => (
-                      <option key={j} value={j}>{j}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-800 mb-1">
-                    NIP (Nomor Induk Pegawai)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="1980... atau '-'"
-                    value={newAccForm.nip}
-                    onChange={(e) => setNewAccForm({ ...newAccForm, nip: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#1E3A8A] focus:outline-none font-mono font-semibold text-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1.5">
-                <span className="block font-bold text-slate-800 text-[11px]">Wewenang Operasi:</span>
-                <label className="flex items-center gap-2 cursor-pointer text-[11px] font-semibold text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={newAccForm.canEdit}
-                    onChange={(e) => setNewAccForm({ ...newAccForm, canEdit: e.target.checked })}
-                    className="rounded text-[#3B5BDB] focus:ring-[#3B5BDB]"
-                  />
-                  <span>Dapat menginput / mengedit catatan pelanggaran & presensi</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer text-[11px] font-semibold text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={newAccForm.canDelete}
-                    onChange={(e) => setNewAccForm({ ...newAccForm, canDelete: e.target.checked })}
-                    className="rounded text-[#3B5BDB] focus:ring-[#3B5BDB]"
-                  />
-                  <span>Dapat menghapus catatan pelanggaran</span>
-                </label>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setIsAddingAcc(false)}
-                  className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-xl font-bold cursor-pointer"
+        {/* Modal Body */}
+        <div className="p-6 space-y-5">
+          {activeUser ? (
+            <>
+              {/* Profile Card Summary */}
+              <div className="flex flex-col items-center text-center p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <div 
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-black shadow-md mb-3"
+                  style={{ backgroundColor: activeUser.avatarColor || '#3B5BDB' }}
                 >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>Daftarkan Akun</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        ) : editingAcc ? (
-          <div className="p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center">
-                  <Edit3 className="w-4 h-4" />
+                  {activeUser.name.charAt(0)}
                 </div>
-                <div>
-                  <h4 className="font-bold text-sm text-slate-900">Ubah Nama, NIP & Password Akun</h4>
-                  <p className="text-[11px] text-slate-500">{editingAcc.username} ({editingAcc.role})</p>
+
+                <h4 className="font-extrabold text-base text-slate-900">
+                  {activeUser.name}
+                </h4>
+                <div className="mt-1">
+                  <span className="inline-block px-3 py-1 rounded-full bg-blue-100 text-[#1E3A8A] font-bold text-xs">
+                    {activeUser.role}
+                  </span>
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingAcc(null)}
-                className="text-slate-400 hover:text-slate-700 font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            {editSuccessMsg && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>{editSuccessMsg}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveQuickEdit} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Nama Lengkap & Gelar</label>
-                <input
-                  type="text"
-                  required
-                  value={editingAcc.name}
-                  onChange={(e) => setEditingAcc({ ...editingAcc, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-800 mb-1">
-                  Jabatan Petugas BSAN
-                </label>
-                <select
-                  value={editingAcc.role}
-                  onChange={(e) => setEditingAcc({ ...editingAcc, role: e.target.value as any })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none font-bold text-slate-900 cursor-pointer text-xs"
-                >
-                  {OFFICIAL_JABATAN_LIST.map((jabatan) => (
-                    <option key={jabatan} value={jabatan}>
-                      {jabatan}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">NIP (Nomor Induk Pegawai)</label>
-                  <input
-                    type="text"
-                    value={editingAcc.nip}
-                    onChange={(e) => setEditingAcc({ ...editingAcc, nip: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none font-mono"
-                  />
+                <div className="flex items-center gap-1.5 mt-2 text-xs text-slate-500 font-mono">
+                  <span>NIP:</span>
+                  <strong className="text-slate-800">{activeUser.nip || '-'}</strong>
+                  <span className="mx-1">·</span>
+                  <span>Username:</span>
+                  <strong className="text-slate-800">{activeUser.username}</strong>
                 </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Password / PIN Baru</label>
-                  <input
-                    type="password"
-                    required
-                    value={editingAcc.pin}
-                    onChange={(e) => setEditingAcc({ ...editingAcc, pin: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none font-mono"
-                  />
+
+                <div className="flex items-center gap-1.5 mt-3 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-emerald-800 text-[11px] font-semibold">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Sesi Terautentikasi & Aktif</span>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingAcc(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white rounded-xl font-bold shadow-xs cursor-pointer"
-                >
-                  Simpan Perubahan
-                </button>
-              </div>
-            </form>
-          </div>
-        ) : selectedAccount ? (
-          <div className="p-6 space-y-4">
-            <div className="text-center space-y-1">
-              <div 
-                className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center text-white text-xl font-black shadow-md"
-                style={{ backgroundColor: selectedAccount.avatarColor || '#3B5BDB' }}
-              >
-                {selectedAccount.name.charAt(0)}
-              </div>
-              <h4 className="font-extrabold text-base text-slate-900 pt-2">
-                {selectedAccount.name}
-              </h4>
-              <p className="text-xs text-blue-700 font-semibold">
-                {selectedAccount.role} · {selectedAccount.username}
-              </p>
-              <p className="text-[11px] text-slate-400 font-mono">
-                NIP. {selectedAccount.nip || '-'}
-              </p>
-            </div>
-
-            {selectedAccount.pin === '1234' && (
-              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-[11px] leading-relaxed flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold text-amber-950">Peringatan Keamanan:</span> Akun ini masih menggunakan PIN bawaan standar (<span className="font-mono font-bold">1234</span>). Siapapun dapat masuk jika belum diganti. Disarankan segera mengganti PIN rahasia pribadi Anda.
+              {/* Password Default Warning */}
+              {activeUser.pin === '1234' && !showPasswordChange && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Password Masih Bawaan:</span> Akun Anda saat ini masih memakai password default (<code className="font-bold">1234</code>). Anda dapat mengganti password pribadi di bawah ini.
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <form onSubmit={handleConfirmLogin} className="max-w-xs mx-auto space-y-3 pt-1">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1 text-center">
-                  Masukkan PIN / Password Akun {selectedAccount.pin === '1234' ? '(Default: 1234)' : ''}
-                </label>
-                <div className="relative">
-                  <Key className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                  <input
-                    type="password"
-                    autoFocus
-                    maxLength={10}
-                    value={enteredPin}
-                    onChange={(e) => {
-                      setEnteredPin(e.target.value);
-                      setPinError(null);
-                    }}
-                    placeholder="••••"
-                    className="w-full text-center pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono text-base tracking-widest focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none"
-                  />
-                </div>
-                {pinError && (
-                  <p className="text-[11px] text-red-600 font-semibold text-center mt-1">
-                    {pinError}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedAccount(null)}
-                  className="flex-1 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-                >
-                  Kembali
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 rounded-xl text-xs font-bold bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white shadow-xs transition-all active:scale-95 cursor-pointer"
-                >
-                  Konfirmasi Login
-                </button>
-              </div>
-
-              <div className="text-center pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingAcc(selectedAccount)}
-                  className="text-[11px] text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer"
-                >
-                  Ubah Nama, NIP atau Password Akun Ini?
-                </button>
-              </div>
-            </form>
-          </div>
-        ) : (
-          /* List of 55 Accounts with Search & Filter */
-          <div className="p-5 space-y-3">
-            {/* Search and Category Filters */}
-            <div className="space-y-2">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Cari dari 55 akun (Nama, NIP, Peran, Rombel)..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none"
-                />
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                <div className="flex flex-wrap gap-1">
-                  {[
-                    { id: 'all', label: `Semua (${accounts.length})` },
-                    { id: 'pimpinan', label: 'Pimpinan & Wakasek' },
-                    { id: 'guru', label: 'Guru' },
-                    { id: 'tu', label: 'Tata Usaha' },
-                  ].map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => setRoleFilter(f.id)}
-                      className={`px-2.5 py-1 rounded-lg font-bold transition-colors cursor-pointer ${
-                        roleFilter === f.id
-                          ? 'bg-[#3B5BDB] text-white shadow-xs'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleOpenAddAccount}
-                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
-                  title="Daftarkan akun atau petugas baru"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>+ Tambah Akun Baru</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Scrollable list */}
-            <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {filteredAccounts.map((acc, idx) => {
-                  const isCurrent = currentId === acc.id;
-
-                  return (
-                    <div
-                      key={acc.id}
-                      className={`p-2.5 rounded-2xl border transition-all flex items-center justify-between gap-2.5 ${
-                        isCurrent
-                          ? 'bg-blue-50/90 border-[#3B5BDB] ring-1 ring-[#3B5BDB]'
-                          : 'bg-white hover:bg-slate-50 border-slate-200'
-                      }`}
-                    >
-                      <div 
-                        onClick={() => handleSelectAccountToLogin(acc)}
-                        className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
-                      >
-                        <div 
-                          className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
-                          style={{ backgroundColor: acc.avatarColor || '#3B5BDB' }}
-                        >
-                          {acc.name.charAt(0)}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-bold text-slate-900 text-xs truncate">
-                            {acc.name}
-                          </div>
-                          <div className="text-[10px] text-slate-500 truncate flex items-center gap-1">
-                            <span className="font-semibold text-blue-700">{acc.role}</span>
-                            <span>·</span>
-                            <span className="font-mono text-slate-400">NIP: {acc.nip.split(' ')[0] || '-'}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingAcc(acc);
-                          }}
-                          className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                          title="Ubah Nama, NIP atau Password"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleSelectAccountToLogin(acc)}
-                          className={`text-[10px] font-bold px-2 py-1 rounded-lg cursor-pointer ${
-                            isCurrent
-                              ? 'bg-[#3B5BDB] text-white font-black'
-                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                          }`}
-                        >
-                          {isCurrent ? 'Aktif' : 'Login'}
-                        </button>
-                      </div>
+              {/* Change Password Collapsible Section */}
+              {showPasswordChange ? (
+                <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                      <Lock className="w-4 h-4 text-[#3B5BDB]" />
+                      <span>Form Ubah Password Akun</span>
                     </div>
-                  );
-                })}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPasswordChange(false);
+                        setErrorMsg(null);
+                        setSuccessMsg(null);
+                      }}
+                      className="text-xs text-slate-500 hover:text-slate-800 font-semibold cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                  </div>
+
+                  {errorMsg && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>{errorMsg}</span>
+                    </div>
+                  )}
+
+                  {successMsg && (
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{successMsg}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleChangePasswordSubmit} className="space-y-2.5 text-xs">
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">Password Lama:</label>
+                      <input
+                        type={showPins ? 'text' : 'password'}
+                        required
+                        value={oldPin}
+                        onChange={(e) => setOldPin(e.target.value)}
+                        placeholder="Masukkan password saat ini (default: 1234)"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-hidden font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">Password Baru:</label>
+                      <input
+                        type={showPins ? 'text' : 'password'}
+                        required
+                        value={newPin}
+                        onChange={(e) => setNewPin(e.target.value)}
+                        placeholder="Minimal 4 karakter"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-hidden font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">Ulangi Password Baru:</label>
+                      <input
+                        type={showPins ? 'text' : 'password'}
+                        required
+                        value={confirmPin}
+                        onChange={(e) => setConfirmPin(e.target.value)}
+                        placeholder="Ketik ulang password baru"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-hidden font-mono"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowPins(!showPins)}
+                        className="text-[11px] text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
+                      >
+                        {showPins ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        <span>{showPins ? 'Sembunyikan' : 'Lihat'} Teks</span>
+                      </button>
+
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                      >
+                        Simpan Password Baru
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordChange(true)}
+                  className="w-full py-2.5 px-3 rounded-2xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-2xs"
+                >
+                  <Key className="w-4 h-4 text-blue-600" />
+                  <span>Ubah Password Akun Anda</span>
+                </button>
+              )}
+
+              {/* Action Buttons: Logout & Close */}
+              <div className="pt-2 border-t border-slate-100 flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleLogoutClick}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs font-bold shadow-md shadow-rose-900/10 transition-all cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout / Keluar dari Akun</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full py-2.5 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Tutup
+                </button>
               </div>
+            </>
+          ) : (
+            <div className="text-center py-6 space-y-3">
+              <p className="text-xs text-slate-500">
+                Tidak ada akun aktif yang terautentikasi.
+              </p>
+              <button
+                type="button"
+                onClick={handleLogoutClick}
+                className="py-2.5 px-4 rounded-xl bg-[#3B5BDB] text-white text-xs font-bold cursor-pointer"
+              >
+                Menuju Halaman Login
+              </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

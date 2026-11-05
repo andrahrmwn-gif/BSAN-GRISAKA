@@ -100,6 +100,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
     idsToDelete?: string[];
     title: string;
     description: string;
+    onCustomConfirm?: () => void;
   }>({
     open: false,
     type: 'selected',
@@ -107,6 +108,79 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
     title: '',
     description: '',
   });
+
+  // Local state to track deleted/dismissed message cards in Presensi and Pelanggaran tabs
+  const [dismissedAttendanceIds, setDismissedAttendanceIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('bsan_wa_dismissed_att_ids_v1');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [dismissedViolationIds, setDismissedViolationIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('bsan_wa_dismissed_viol_ids_v1');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleDeleteAttendanceCard = (studentId: string, studentName: string) => {
+    setBatchDeleteModal({
+      open: true,
+      type: 'single',
+      count: 1,
+      idsToDelete: [studentId],
+      title: 'Hapus Pesan Presensi Ini?',
+      description: `Apakah Anda yakin ingin menghapus kartu pesan presensi untuk ${studentName} dari antrean WhatsApp Gateway?`,
+      onCustomConfirm: () => {
+        setDismissedAttendanceIds((prev) => {
+          const next = [...prev, studentId];
+          try {
+            localStorage.setItem('bsan_wa_dismissed_att_ids_v1', JSON.stringify(next));
+          } catch {}
+          return next;
+        });
+      },
+    });
+  };
+
+  const handleRestoreAllAttendanceCards = () => {
+    setDismissedAttendanceIds([]);
+    try {
+      localStorage.removeItem('bsan_wa_dismissed_att_ids_v1');
+    } catch {}
+  };
+
+  const handleDeleteViolationCard = (violationId: string, studentName: string, pasal: string) => {
+    setBatchDeleteModal({
+      open: true,
+      type: 'single',
+      count: 1,
+      idsToDelete: [violationId],
+      title: 'Hapus Pesan Pelanggaran Ini?',
+      description: `Apakah Anda yakin ingin menghapus kartu notifikasi pesan pelanggaran (${pasal}) untuk ${studentName} dari antrean WhatsApp Gateway?`,
+      onCustomConfirm: () => {
+        setDismissedViolationIds((prev) => {
+          const next = [...prev, violationId];
+          try {
+            localStorage.setItem('bsan_wa_dismissed_viol_ids_v1', JSON.stringify(next));
+          } catch {}
+          return next;
+        });
+      },
+    });
+  };
+
+  const handleRestoreAllViolationCards = () => {
+    setDismissedViolationIds([]);
+    try {
+      localStorage.removeItem('bsan_wa_dismissed_viol_ids_v1');
+    } catch {}
+  };
 
   // Templates State
   const [templates, setTemplates] = useState<WaTemplates>(() => {
@@ -130,24 +204,26 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
 
   const currentSchool = schoolConfig || SCHOOL_CONFIG;
 
-  // Filter students who are absent (Sakit, Izin, Alfa)
+  // Filter students who are absent (Sakit, Izin, Alfa), excluding dismissed ones
   const absentStudents = students.filter((s) => {
     const isAbsent = s.statusKehadiran !== 'Hadir';
+    const notDismissed = !dismissedAttendanceIds.includes(s.id);
     const matchSearch =
       s.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.kelas.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.namaOrtu.toLowerCase().includes(searchTerm.toLowerCase());
-    return isAbsent && matchSearch;
+    return isAbsent && notDismissed && matchSearch;
   });
 
-  // Filter urgent violations
+  // Filter urgent violations, excluding dismissed ones
   const urgentViolations = violations.filter((v) => {
     const isUrgent = v.tingkat === 'Berat' || v.tingkat === 'Sedang' || v.statusSurat === 'Diterbitkan';
+    const notDismissed = !dismissedViolationIds.includes(v.id);
     const matchSearch =
       v.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.kelas.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.pasalTitle.toLowerCase().includes(searchTerm.toLowerCase());
-    return isUrgent && matchSearch;
+    return isUrgent && notDismissed && matchSearch;
   });
 
   // Filtered Message Logs for Menu Hapus Pesan
@@ -176,6 +252,12 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
 
   // Execute batch or single deletion from modal
   const handleExecuteBatchDelete = () => {
+    if (batchDeleteModal.onCustomConfirm) {
+      batchDeleteModal.onCustomConfirm();
+      setBatchDeleteModal((prev) => ({ ...prev, open: false }));
+      return;
+    }
+
     if (batchDeleteModal.type === 'all' && onClearAllLogs) {
       onClearAllLogs();
       setSelectedDeleteIds([]);
@@ -538,16 +620,28 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
               <div>
                 <div className="font-bold">Notifikasi Ketidakhadiran Siswa Hari Ini</div>
                 <p className="text-emerald-800 text-[11px] mt-0.5">
-                  Daftar siswa tercatat Sakit, Izin, atau Alfa. Kalimat pesan diambil dari template yang dapat diedit sewaktu-waktu.
+                  Daftar siswa tercatat Sakit, Izin, atau Alfa. Setiap pesan dilengkapi tombol <strong>Edit</strong>, <strong>Kirim</strong>, <strong>Salin</strong>, dan <strong>Hapus</strong>.
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setActiveTab('templates')}
-              className="text-xs text-emerald-800 hover:text-emerald-950 underline font-semibold shrink-0"
-            >
-              Ubah Template Kalimat
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {dismissedAttendanceIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleRestoreAllAttendanceCards}
+                  className="text-xs bg-emerald-200/80 hover:bg-emerald-200 text-emerald-950 px-2.5 py-1 rounded-xl font-bold transition-colors cursor-pointer"
+                  title="Pulihkan pesan presensi yang sempat dihapus"
+                >
+                  Pulihkan ({dismissedAttendanceIds.length}) Dihapus
+                </button>
+              )}
+              <button
+                onClick={() => setActiveTab('templates')}
+                className="text-xs text-emerald-800 hover:text-emerald-950 underline font-semibold"
+              >
+                Ubah Template Kalimat
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -623,33 +717,52 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-slate-100 text-xs">
+                      {/* Menu Edit */}
                       <button
+                        type="button"
                         onClick={() =>
                           setInlineEditingId(isEditing ? null : `att-${student.id}`)
                         }
-                        className="text-slate-500 hover:text-slate-800 font-medium flex items-center gap-1"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold border border-blue-200 transition-colors cursor-pointer text-[11px]"
+                        title="Edit isi kalimat pesan khusus siswa ini"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
-                        <span>{isEditing ? 'Tutup Editor' : 'Edit Khusus Siswa Ini'}</span>
+                        <span>{isEditing ? 'Tutup Edit' : 'Edit'}</span>
                       </button>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {/* Menu Kirim */}
                         <button
-                          onClick={() => handleCopyMessage(student.id, currentText)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-xs text-slate-600 transition-colors"
-                          title="Salin Teks Pesan"
+                          type="button"
+                          onClick={() => handleDispatchWa(student, 'Absensi', currentText, student.noWaOrtu)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer"
+                          title="Kirim pesan langsung ke WhatsApp orang tua"
                         >
-                          {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Kirim</span>
+                        </button>
+
+                        {/* Menu Salin */}
+                        <button
+                          type="button"
+                          onClick={() => handleCopyMessage(student.id, currentText)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-[11px] transition-colors cursor-pointer"
+                          title="Salin teks pesan ke papan klip (clipboard)"
+                        >
+                          {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
                           <span>{isCopied ? 'Tersalin' : 'Salin'}</span>
                         </button>
 
+                        {/* Menu Hapus */}
                         <button
-                          onClick={() => handleDispatchWa(student, 'Absensi', currentText, student.noWaOrtu)}
-                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs transition-transform active:scale-95"
+                          type="button"
+                          onClick={() => handleDeleteAttendanceCard(student.id, student.nama)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold border border-rose-200 transition-colors cursor-pointer text-[11px]"
+                          title="Hapus pesan presensi siswa ini dari antrean gateway"
                         >
-                          <Send className="w-3.5 h-3.5" />
-                          <span>Kirim via WA</span>
+                          <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                          <span>Hapus</span>
                         </button>
                       </div>
                     </div>
@@ -672,16 +785,28 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
               <div>
                 <div className="font-bold">Notifikasi Pelanggaran & Pemanggilan Orang Tua</div>
                 <p className="text-amber-800 text-[11px] mt-0.5">
-                  Pemberitahuan resmi kasus tata tertib tingkat Ringan, Sedang, atau Berat. Kalimat otomatis mengambil template aktif.
+                  Pemberitahuan resmi kasus tata tertib tingkat Ringan, Sedang, atau Berat. Setiap pesan dilengkapi tombol <strong>Edit</strong>, <strong>Kirim</strong>, <strong>Salin</strong>, dan <strong>Hapus</strong>.
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setActiveTab('templates')}
-              className="text-xs text-amber-900 hover:text-black underline font-semibold shrink-0"
-            >
-              Ubah Template Kalimat
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {dismissedViolationIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleRestoreAllViolationCards}
+                  className="text-xs bg-amber-200 hover:bg-amber-300 text-amber-950 px-2.5 py-1 rounded-xl font-bold transition-colors cursor-pointer"
+                  title="Pulihkan pesan pelanggaran yang sempat dihapus"
+                >
+                  Pulihkan ({dismissedViolationIds.length}) Dihapus
+                </button>
+              )}
+              <button
+                onClick={() => setActiveTab('templates')}
+                className="text-xs text-amber-900 hover:text-black underline font-semibold"
+              >
+                Ubah Template Kalimat
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -764,32 +889,52 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-slate-100 text-xs">
+                      {/* Menu Edit */}
                       <button
+                        type="button"
                         onClick={() =>
                           setInlineEditingId(isEditing ? null : `viol-${v.id}`)
                         }
-                        className="text-slate-500 hover:text-slate-800 font-medium flex items-center gap-1"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold border border-blue-200 transition-colors cursor-pointer text-[11px]"
+                        title="Edit isi kalimat pesan khusus kasus pelanggaran ini"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
-                        <span>{isEditing ? 'Tutup Editor' : 'Edit Khusus Kasus Ini'}</span>
+                        <span>{isEditing ? 'Tutup Edit' : 'Edit'}</span>
                       </button>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {/* Menu Kirim */}
                         <button
-                          onClick={() => handleCopyMessage(v.id, currentText)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-xs text-slate-600 transition-colors"
+                          type="button"
+                          onClick={() => handleDispatchWa(student, 'Panggilan Ortu', currentText, v.noWaOrtu)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer"
+                          title="Kirim pesan panggilan ke WhatsApp orang tua / wali"
                         >
-                          {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          <Send className="w-3.5 h-3.5 text-white" />
+                          <span>Kirim</span>
+                        </button>
+
+                        {/* Menu Salin */}
+                        <button
+                          type="button"
+                          onClick={() => handleCopyMessage(v.id, currentText)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-[11px] transition-colors cursor-pointer"
+                          title="Salin teks pesan ke papan klip (clipboard)"
+                        >
+                          {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
                           <span>{isCopied ? 'Tersalin' : 'Salin'}</span>
                         </button>
 
+                        {/* Menu Hapus */}
                         <button
-                          onClick={() => handleDispatchWa(student, 'Panggilan Ortu', currentText, v.noWaOrtu)}
-                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#3B5BDB] hover:bg-[#2563EB] text-white font-semibold text-xs shadow-xs transition-transform active:scale-95"
+                          type="button"
+                          onClick={() => handleDeleteViolationCard(v.id, v.studentName, v.pasalTitle)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold border border-rose-200 transition-colors cursor-pointer text-[11px]"
+                          title="Hapus notifikasi pesan pelanggaran ini dari antrean gateway"
                         >
-                          <Send className="w-3.5 h-3.5 text-white" />
-                          <span>Kirim via WA</span>
+                          <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                          <span>Hapus</span>
                         </button>
                       </div>
                     </div>
@@ -1073,6 +1218,16 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                       </td>
                       <td className="py-3 px-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
+                          {/* TOMBOL EDIT */}
+                          <button
+                            onClick={() => setEditingLog({ ...log })}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-semibold text-[11px] transition-colors cursor-pointer"
+                            title="Edit nomor telepon atau kalimat pesan ini"
+                          >
+                            <Edit2 className="w-3 h-3 text-blue-600" />
+                            <span>Edit</span>
+                          </button>
+
                           {/* TOMBOL KIRIM */}
                           <button
                             onClick={() => handleSendExistingLog(log)}
@@ -1083,14 +1238,14 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                             <span>Kirim</span>
                           </button>
 
-                          {/* TOMBOL EDIT */}
+                          {/* TOMBOL SALIN */}
                           <button
-                            onClick={() => setEditingLog({ ...log })}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-semibold text-[11px] transition-colors cursor-pointer"
-                            title="Edit nomor telepon atau kalimat pesan ini"
+                            onClick={() => handleCopyMessage(log.id, log.message)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-semibold text-[11px] transition-colors cursor-pointer"
+                            title="Salin isi pesan ini"
                           >
-                            <Edit2 className="w-3 h-3 text-blue-600" />
-                            <span>Edit</span>
+                            {copiedId === log.id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                            <span>{copiedId === log.id ? 'Tersalin' : 'Salin'}</span>
                           </button>
 
                           {/* TOMBOL HAPUS */}
@@ -1107,10 +1262,11 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                                   description: `Apakah Anda yakin ingin menghapus pesan untuk ${log.studentName} (${log.recipientPhone})?`,
                                 });
                               }}
-                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors cursor-pointer"
+                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-semibold text-[11px] transition-colors cursor-pointer"
                               title="Hapus arsip pesan ini"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-3 h-3 text-rose-600" />
+                              <span>Hapus</span>
                             </button>
                           )}
                         </div>
@@ -1352,7 +1508,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                     <th className="py-3 px-4 font-bold">Penerima & Nomor</th>
                     <th className="py-3 px-3 font-bold">Kategori</th>
                     <th className="py-3 px-4 font-bold">Isi Ringkas Pesan</th>
-                    <th className="py-3 px-3 font-bold text-center">Aksi Hapus</th>
+                    <th className="py-3 px-3 font-bold text-center">Aksi (Edit, Kirim, Salin, Hapus)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1410,25 +1566,61 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                             {log.message}
                           </td>
                           <td className="py-3 px-3 text-center whitespace-nowrap">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setBatchDeleteModal({
-                                  open: true,
-                                  type: 'single',
-                                  logId: log.id,
-                                  count: 1,
-                                  idsToDelete: [log.id],
-                                  title: 'Hapus Pesan Ini?',
-                                  description: `Hapus pesan untuk ${log.studentName} (${log.recipientPhone}) dari riwayat?`,
-                                });
-                              }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold transition-colors cursor-pointer"
-                              title="Hapus pesan ini sekarang"
-                            >
-                              <Trash2 className="w-3 h-3 text-rose-600" />
-                              <span>Hapus</span>
-                            </button>
+                            <div className="flex items-center justify-center gap-1.5">
+                              {/* TOMBOL EDIT */}
+                              <button
+                                type="button"
+                                onClick={() => setEditingLog({ ...log })}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-semibold transition-colors cursor-pointer"
+                                title="Edit nomor telepon atau kalimat pesan ini"
+                              >
+                                <Edit2 className="w-3 h-3 text-blue-600" />
+                                <span>Edit</span>
+                              </button>
+
+                              {/* TOMBOL KIRIM */}
+                              <button
+                                type="button"
+                                onClick={() => handleSendExistingLog(log)}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-2xs transition-colors cursor-pointer"
+                                title="Kirim pesan ini ke WhatsApp wali murid"
+                              >
+                                <Send className="w-3 h-3 text-white" />
+                                <span>Kirim</span>
+                              </button>
+
+                              {/* TOMBOL SALIN */}
+                              <button
+                                type="button"
+                                onClick={() => handleCopyMessage(log.id, log.message)}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-semibold text-[11px] transition-colors cursor-pointer"
+                                title="Salin isi pesan ini"
+                              >
+                                {copiedId === log.id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                                <span>{copiedId === log.id ? 'Tersalin' : 'Salin'}</span>
+                              </button>
+
+                              {/* TOMBOL HAPUS */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBatchDeleteModal({
+                                    open: true,
+                                    type: 'single',
+                                    logId: log.id,
+                                    count: 1,
+                                    idsToDelete: [log.id],
+                                    title: 'Hapus Pesan Ini?',
+                                    description: `Hapus pesan untuk ${log.studentName} (${log.recipientPhone}) dari riwayat?`,
+                                  });
+                                }}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold transition-colors cursor-pointer"
+                                title="Hapus pesan ini sekarang"
+                              >
+                                <Trash2 className="w-3 h-3 text-rose-600" />
+                                <span>Hapus</span>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

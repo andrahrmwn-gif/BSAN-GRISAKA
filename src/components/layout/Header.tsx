@@ -82,18 +82,19 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-3.5 sticky top-0 z-30 shadow-xs">
+      <header className="bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-3 sticky top-0 z-40 shadow-xs transition-all">
         <div className="flex items-center justify-between gap-4">
-          {/* Left: Hamburger & Greeting */}
+          {/* Left: Strip 3 Menu & Title */}
           <div className="flex items-center gap-3 min-w-0">
             {onToggleMobileSidebar && (
               <button
                 onClick={onToggleMobileSidebar}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 transition-colors cursor-pointer shrink-0 border border-slate-200"
-                title="Buka / Tutup Menu Navigasi"
+                className="p-2 sm:px-3 sm:py-2 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 transition-colors cursor-pointer shrink-0 border border-slate-200 flex items-center gap-1.5"
+                title="Buka / Tutup Menu Navigasi (Garis 3)"
                 aria-label="Toggle Navigation"
               >
                 <Menu className="w-5 h-5 text-slate-900" />
+                <span className="text-xs font-bold text-slate-700 hidden sm:inline-block">Menu</span>
               </button>
             )}
 
@@ -148,7 +149,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenAccountSwitch}
               className="flex items-center gap-2.5 pl-1.5 pr-3 py-1 rounded-2xl hover:bg-slate-100 border border-slate-300 transition-all cursor-pointer group"
-              title="Klik untuk beralih akun petugas resmi"
+              title="Klik untuk melihat profil akun & logout"
             >
               <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#1E3A8A] to-[#3B5BDB] text-white flex items-center justify-center font-black text-sm shadow-xs overflow-hidden">
                 {currentUser ? (

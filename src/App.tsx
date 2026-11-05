@@ -54,7 +54,7 @@ import { StudentSlipDetailModal } from './components/modals/StudentSlipDetailMod
 import { AccountSwitchModal } from './components/modals/AccountSwitchModal';
 import { LoginPage } from './components/auth/LoginPage';
 import { generateViolationMessage } from './utils/whatsapp';
-import { RotateCcw, AlertTriangle, CheckCircle2, X, ShieldAlert } from 'lucide-react';
+import { RotateCcw, AlertTriangle, CheckCircle2, X, ShieldAlert, Menu } from 'lucide-react';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>('dashboard');
@@ -146,22 +146,22 @@ export default function App() {
       }
     });
 
-    let isInitialActivitiesSeeded = false;
     const unsubActivities = subscribeToActivities((remoteActivities) => {
+      const initialized = localStorage.getItem('bsan_grisaka_announcements_initialized_v2') === 'true';
       if (remoteActivities.length > 0) {
         try {
           localStorage.setItem('bsan_grisaka_announcements_v1', JSON.stringify(remoteActivities));
+          localStorage.setItem('bsan_grisaka_announcements_initialized_v2', 'true');
           window.dispatchEvent(new CustomEvent('bsan_activities_changed', { detail: remoteActivities }));
         } catch {}
-        isInitialActivitiesSeeded = true;
-      } else if (!isInitialActivitiesSeeded) {
+      } else if (!initialized) {
+        // Only seed once on brand-new fresh system installation
         const defaults = getStoredActivities();
         if (defaults.length > 0) {
           bulkSyncActivitiesToFirestore(defaults).catch(console.error);
         }
-        isInitialActivitiesSeeded = true;
       } else {
-        // Cloud is empty because activities were deleted; keep empty!
+        // Cloud is empty because activities were deleted by user; keep empty! Never re-seed deleted activities!
         try {
           localStorage.setItem('bsan_grisaka_announcements_v1', JSON.stringify([]));
           window.dispatchEvent(new CustomEvent('bsan_activities_changed', { detail: [] }));
@@ -786,7 +786,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 w-full min-h-screen overflow-x-hidden">
+      <div className="flex-1 flex flex-col min-w-0 w-full min-h-screen relative">
         {/* Top Header with Mobile Hamburger, Account Switcher & Mode Tamu Indicator */}
         <Header
           currentView={currentView}
@@ -933,6 +933,18 @@ export default function App() {
         </footer>
       </div>
 
+      {/* Floating Strip 3 Navigation Button - Mengikuti Arah Scroll (Akses Cepat & Efektif) */}
+      <button
+        type="button"
+        onClick={() => setIsMobileSidebarOpen(true)}
+        className="lg:hidden fixed bottom-6 left-5 z-40 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-gradient-to-r from-[#1E3A8A] to-[#3B5BDB] hover:from-[#2F4CB7] hover:to-[#1E3A8A] text-white shadow-2xl shadow-blue-950/40 border border-white/30 active:scale-95 transition-all cursor-pointer backdrop-blur-md group animate-fade-in"
+        title="Buka Menu Utama Navigasi (Garis 3)"
+        aria-label="Buka Menu Utama Navigasi"
+      >
+        <Menu className="w-5 h-5 text-white stroke-[2.5]" />
+        <span className="text-xs font-bold tracking-wide">Menu Utama</span>
+      </button>
+
       {/* Record Violation Modal */}
       <RecordViolationModal
         isOpen={isRecordModalOpen}
@@ -977,10 +989,12 @@ export default function App() {
         onDeleteViolation={handleDeleteViolation}
       />
 
-      {/* Account Switch & 55 Accounts Login Modal */}
+      {/* Profile & Logout Modal */}
       <AccountSwitchModal
         isOpen={isAccountSwitchOpen}
         onClose={() => setIsAccountSwitchOpen(false)}
+        currentUser={currentUser}
+        onLogout={handleLogout}
         onAccountChanged={(user) => {
           setCurrentUser(user);
         }}

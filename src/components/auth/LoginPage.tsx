@@ -91,20 +91,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     onLoginSuccess(selectedAccount);
   };
 
-  const handleGuestLogin = () => {
-    setCurrentUserId('guest');
-    sessionStorage.setItem('bsan_active_session_unlocked', 'true');
-
-    logAudit({
-      actionType: 'LOGIN',
-      module: 'Autentikasi',
-      description: 'Masuk sebagai Tamu (Mode Tamu - Hanya Lihat Dashboard)',
-      status: 'SUCCESS',
-    });
-
-    onLoginSuccess(null);
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1E3A8A] via-[#2F4CB7] to-[#1E293B] flex flex-col justify-between p-4 sm:p-6 lg:p-8 relative overflow-hidden select-none">
       {/* Decorative background glow circles */}
@@ -135,7 +121,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
         <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-semibold">
           <ShieldCheck className="w-4 h-4 text-emerald-300" />
-          <span>DAPODIK Terintegrasi</span>
+          <span>Sistem Resmi & Terverifikasi</span>
         </div>
       </div>
 
@@ -269,9 +255,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 </button>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5 px-1">
+              <div className="text-[11px] text-slate-500 pt-0.5 px-1">
                 <span>Password default awal: <strong className="font-mono text-blue-700">1234</strong></span>
-                <span className="text-slate-400">Dapat diubah di Pengaturan</span>
               </div>
             </div>
 
@@ -285,24 +270,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <span>Masuk ke Sistem Aplikasi</span>
               </button>
             </div>
-
-            {/* Divider */}
-            <div className="relative my-3 flex items-center justify-center">
-              <div className="border-t border-slate-200 w-full"></div>
-              <span className="bg-white px-3 text-[10px] uppercase font-bold text-slate-400 absolute">
-                Atau
-              </span>
-            </div>
-
-            {/* Guest Mode Button (Locked mode) */}
-            <button
-              type="button"
-              onClick={handleGuestLogin}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer border border-slate-200"
-            >
-              <Users className="w-4 h-4 text-slate-500" />
-              <span>Masuk sebagai Tamu (Mode Tamu - Hanya Lihat Dashboard)</span>
-            </button>
           </form>
 
           {/* Footer Card Info */}
@@ -310,11 +277,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             Tahun {currentSchool.footerYear || '2026'} · Budaya Sekolah Aman dan Nyaman (BSAN)
           </div>
         </div>
-      </div>
-
-      {/* Bottom Footer Credits */}
-      <div className="relative z-10 max-w-4xl mx-auto w-full text-center text-white/70 text-xs pt-4">
-        {currentSchool.name} — Terdaftar Resmi di DAPODIK Kemendikbudristek
       </div>
     </div>
   );
