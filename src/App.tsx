@@ -191,6 +191,47 @@ export default function App() {
     };
   }, []);
 
+  // Real-time synchronization of student violation counts from actual violations ledger
+  useEffect(() => {
+    if (!violations || violations.length === 0) return;
+    setStudents((prev) => {
+      let changed = false;
+      const updated = prev.map((s) => {
+        const studentV = violations.filter(
+          (v) =>
+            v &&
+            (v.studentId === s.id ||
+              (v.studentName?.trim().toLowerCase() === s.nama?.trim().toLowerCase() && v.kelas === s.kelas) ||
+              (s.nama && v.studentName?.trim().toLowerCase() === s.nama?.trim().toLowerCase()))
+        );
+        const rCount = studentV.filter((v) => v.tingkat === 'Ringan').length;
+        const sCount = studentV.filter((v) => v.tingkat === 'Sedang').length;
+        const bCount = studentV.filter((v) => v.tingkat === 'Berat').length;
+
+        if (
+          s.totalPelanggaranRingan !== rCount ||
+          s.totalPelanggaranSedang !== sCount ||
+          s.totalPelanggaranBerat !== bCount
+        ) {
+          changed = true;
+          return {
+            ...s,
+            totalPelanggaranRingan: rCount,
+            totalPelanggaranSedang: sCount,
+            totalPelanggaranBerat: bCount,
+          };
+        }
+        return s;
+      });
+
+      if (changed) {
+        saveStudents(updated);
+        return updated;
+      }
+      return prev;
+    });
+  }, [violations]);
+
   // Security Auto-Lock: Automatically revert to Guest Mode after 15 minutes of inactivity
   useEffect(() => {
     if (!currentUser) return;
@@ -357,35 +398,53 @@ export default function App() {
       return;
     }
 
-    setViolations((prev) => [newViolation, ...prev]);
+    const nextViolations = [newViolation, ...violations];
+    setViolations(nextViolations);
+    saveViolations(nextViolations);
     // Real-time sync violation to Firestore
     syncViolationToFirestore(newViolation).catch(console.error);
 
-    let updatedTargetStudent: Student | null = null;
-
-    setStudents((prev) =>
-      prev.map((s) => {
-        if (s.id === newViolation.studentId) {
-          const isRingan = newViolation.tingkat === 'Ringan' ? 1 : 0;
-          const isSedang = newViolation.tingkat === 'Sedang' ? 1 : 0;
-          const isBerat = newViolation.tingkat === 'Berat' ? 1 : 0;
-
-          const updated = {
-            ...s,
-            totalPoinPelanggaran: (s.totalPoinPelanggaran || 0) + (newViolation.poin || 0),
-            totalPelanggaranRingan: (s.totalPelanggaranRingan || 0) + isRingan,
-            totalPelanggaranSedang: (s.totalPelanggaranSedang || 0) + isSedang,
-            totalPelanggaranBerat: (s.totalPelanggaranBerat || 0) + isBerat,
-          };
-          updatedTargetStudent = updated;
-          return updated;
-        }
-        return s;
-      })
+    const target = students.find(
+      (s) =>
+        s.id === newViolation.studentId ||
+        (s.nama?.trim().toLowerCase() === newViolation.studentName?.trim().toLowerCase() && s.kelas === newViolation.kelas)
     );
 
+    let updatedTargetStudent: Student | null = null;
+    if (target) {
+      const isRingan = newViolation.tingkat === 'Ringan' ? 1 : 0;
+      const isSedang = newViolation.tingkat === 'Sedang' ? 1 : 0;
+      const isBerat = newViolation.tingkat === 'Berat' ? 1 : 0;
+
+      updatedTargetStudent = {
+        ...target,
+        totalPoinPelanggaran: (target.totalPoinPelanggaran || 0) + (newViolation.poin || 0),
+        totalPelanggaranRingan: (target.totalPelanggaranRingan || 0) + isRingan,
+        totalPelanggaranSedang: (target.totalPelanggaranSedang || 0) + isSedang,
+        totalPelanggaranBerat: (target.totalPelanggaranBerat || 0) + isBerat,
+      };
+    }
+
+    setStudents((prev) => {
+      const updated = prev.map((s) => {
+        if (
+          s.id === newViolation.studentId ||
+          (s.nama?.trim().toLowerCase() === newViolation.studentName?.trim().toLowerCase() && s.kelas === newViolation.kelas)
+        ) {
+          return updatedTargetStudent || s;
+        }
+        return s;
+      });
+      saveStudents(updated);
+      return updated;
+    });
+
     if (updatedTargetStudent) {
-      syncStudentToFirestore(updatedTargetStudent).catch(console.error);
+      const studentObj: Student = updatedTargetStudent;
+      syncStudentToFirestore(studentObj).catch(console.error);
+      if (detailedSlipStudent && (detailedSlipStudent.id === studentObj.id || detailedSlipStudent.nama?.trim().toLowerCase() === studentObj.nama?.trim().toLowerCase())) {
+        setDetailedSlipStudent(studentObj);
+      }
     }
 
     logAudit({
@@ -502,35 +561,53 @@ export default function App() {
     const targetV = violations.find((v) => v.id === violationId);
     if (!targetV) return;
 
-    setViolations((prev) => prev.filter((v) => v.id !== violationId));
+    const nextViolations = violations.filter((v) => v.id !== violationId);
+    setViolations(nextViolations);
+    saveViolations(nextViolations);
     // Real-time delete violation from Firestore
     deleteViolationFromFirestore(violationId).catch(console.error);
 
-    // Deduct student's violation points and counts
-    let updatedTargetStudent: Student | null = null;
-    setStudents((prev) =>
-      prev.map((s) => {
-        if (s.id === targetV.studentId) {
-          const isRingan = targetV.tingkat === 'Ringan' ? 1 : 0;
-          const isSedang = targetV.tingkat === 'Sedang' ? 1 : 0;
-          const isBerat = targetV.tingkat === 'Berat' ? 1 : 0;
-
-          const updated = {
-            ...s,
-            totalPoinPelanggaran: Math.max(0, (s.totalPoinPelanggaran || 0) - (targetV.poin || 0)),
-            totalPelanggaranRingan: Math.max(0, (s.totalPelanggaranRingan || 0) - isRingan),
-            totalPelanggaranSedang: Math.max(0, (s.totalPelanggaranSedang || 0) - isSedang),
-            totalPelanggaranBerat: Math.max(0, (s.totalPelanggaranBerat || 0) - isBerat),
-          };
-          updatedTargetStudent = updated;
-          return updated;
-        }
-        return s;
-      })
+    const target = students.find(
+      (s) =>
+        s.id === targetV.studentId || 
+        (s.nama?.trim().toLowerCase() === targetV.studentName?.trim().toLowerCase() && s.kelas === targetV.kelas)
     );
 
+    let updatedTargetStudent: Student | null = null;
+    if (target) {
+      const isRingan = targetV.tingkat === 'Ringan' ? 1 : 0;
+      const isSedang = targetV.tingkat === 'Sedang' ? 1 : 0;
+      const isBerat = targetV.tingkat === 'Berat' ? 1 : 0;
+
+      updatedTargetStudent = {
+        ...target,
+        totalPoinPelanggaran: Math.max(0, (target.totalPoinPelanggaran || 0) - (targetV.poin || 0)),
+        totalPelanggaranRingan: Math.max(0, (target.totalPelanggaranRingan || 0) - isRingan),
+        totalPelanggaranSedang: Math.max(0, (target.totalPelanggaranSedang || 0) - isSedang),
+        totalPelanggaranBerat: Math.max(0, (target.totalPelanggaranBerat || 0) - isBerat),
+      };
+    }
+
+    setStudents((prev) => {
+      const updated = prev.map((s) => {
+        if (
+          s.id === targetV.studentId || 
+          (s.nama?.trim().toLowerCase() === targetV.studentName?.trim().toLowerCase() && s.kelas === targetV.kelas)
+        ) {
+          return updatedTargetStudent || s;
+        }
+        return s;
+      });
+      saveStudents(updated);
+      return updated;
+    });
+
     if (updatedTargetStudent) {
-      syncStudentToFirestore(updatedTargetStudent).catch(console.error);
+      const studentObj: Student = updatedTargetStudent;
+      syncStudentToFirestore(studentObj).catch(console.error);
+      if (detailedSlipStudent && (detailedSlipStudent.id === studentObj.id || detailedSlipStudent.nama?.trim().toLowerCase() === studentObj.nama?.trim().toLowerCase())) {
+        setDetailedSlipStudent(studentObj);
+      }
     }
 
     logAudit({
@@ -836,7 +913,12 @@ export default function App() {
               schoolConfig={schoolConfig}
               onUpdateStudentsAttendance={(updated) => {
                 setStudents(updated);
+                saveStudents(updated);
                 bulkImportStudentsToFirestore(updated).catch(console.error);
+                if (detailedSlipStudent) {
+                  const refreshed = updated.find((s) => s.id === detailedSlipStudent.id);
+                  if (refreshed) setDetailedSlipStudent(refreshed);
+                }
               }}
               onOpenAccountSwitchModal={() => setIsAccountSwitchOpen(true)}
             />

@@ -289,12 +289,17 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
     saveSingleAttendanceSheet(newSheet);
     setSaveTrigger((c) => c + 1);
 
-    // If the saved date is today, synchronize the Student database
-    const todayStr = getRealtimeDateYMD();
-    if (selectedDate === todayStr && onUpdateStudentsAttendance) {
+    try {
+      window.dispatchEvent(new CustomEvent('bsan_attendance_saved', { detail: newSheet }));
+    } catch {}
+
+    // Synchronize the Student database with the latest recorded attendance
+    if (onUpdateStudentsAttendance) {
       const updatedStudents = students.map((std) => {
         if (std.kelas === selectedKelas) {
-          const matchedEntry = entries.find((e) => e.studentId === std.id);
+          const matchedEntry = entries.find(
+            (e) => e.studentId === std.id || (e.nama && std.nama && e.nama.trim().toLowerCase() === std.nama.trim().toLowerCase())
+          );
           if (matchedEntry) {
             return {
               ...std,

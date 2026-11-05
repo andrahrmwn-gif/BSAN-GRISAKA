@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Student, ViolationRecord, SchoolProfile } from '../../types';
 import { getWhatsAppUrl, generateAttendanceMessage } from '../../utils/whatsapp';
 import { getStoredAttendanceSheets } from '../../services/attendanceStorage';
+import { getRealtimeDateYMD } from '../../utils/dateUtils';
 import { 
   X, 
   Printer, 
@@ -70,17 +71,51 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
     }
   }, []);
 
+  // Listen for real-time attendance saves or changes across tabs/windows
+  const [attendanceRefreshKey, setAttendanceRefreshKey] = useState(0);
+  useEffect(() => {
+    const handleRefresh = () => setAttendanceRefreshKey((k) => k + 1);
+    window.addEventListener('storage', handleRefresh);
+    window.addEventListener('bsan_attendance_saved', handleRefresh);
+    return () => {
+      window.removeEventListener('storage', handleRefresh);
+      window.removeEventListener('bsan_attendance_saved', handleRefresh);
+    };
+  }, []);
+
   // Filter student violations and sort newest first safely
   const studentViolations = useMemo(() => {
     if (!student) return [];
     return (violations || [])
-      .filter((v) => v && (v.studentId === student.id || (v.studentName?.toLowerCase() === student.nama?.toLowerCase() && v.kelas === student.kelas)))
+      .filter((v) => 
+        v && (
+          v.studentId === student.id || 
+          (v.studentName?.trim().toLowerCase() === student.nama?.trim().toLowerCase() && v.kelas === student.kelas) ||
+          (student.nama && v.studentName?.trim().toLowerCase() === student.nama?.trim().toLowerCase())
+        )
+      )
       .sort((a, b) => {
         const dateA = a.tanggal ? new Date(a.tanggal).getTime() : 0;
         const dateB = b.tanggal ? new Date(b.tanggal).getTime() : 0;
         return dateB - dateA;
       });
   }, [violations, student]);
+
+  // Dynamically calculate accurate violation counts from real-time studentViolations list
+  const countRingan = useMemo(() => {
+    const fromList = studentViolations.filter((v) => v.tingkat === 'Ringan').length;
+    return Math.max(fromList, student?.totalPelanggaranRingan || 0);
+  }, [studentViolations, student]);
+
+  const countSedang = useMemo(() => {
+    const fromList = studentViolations.filter((v) => v.tingkat === 'Sedang').length;
+    return Math.max(fromList, student?.totalPelanggaranSedang || 0);
+  }, [studentViolations, student]);
+
+  const countBerat = useMemo(() => {
+    const fromList = studentViolations.filter((v) => v.tingkat === 'Berat').length;
+    return Math.max(fromList, student?.totalPelanggaranBerat || 0);
+  }, [studentViolations, student]);
 
   // Extract all attendance absence records (Sakit, Izin, Alfa) for this student
   const studentAbsences = useMemo(() => {
@@ -101,26 +136,36 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
     sheets.forEach((sheet) => {
       if (!sheet || !Array.isArray(sheet.entries)) return;
       const entry = sheet.entries.find(
-        (e) => e && (e.studentId === student.id || e.nisn === student.nisn || (e.nama && e.nama.toLowerCase() === student.nama.toLowerCase()))
+        (e) => e && (
+          e.studentId === student.id || 
+          (student.nisn && e.nisn === student.nisn) || 
+          (e.nama && student.nama && e.nama.trim().toLowerCase() === student.nama.trim().toLowerCase())
+        )
       );
-      if (entry && entry.status && entry.status !== 'Hadir') {
-        const timeStr = sheet.recordedAt ? sheet.recordedAt.split('T')[1]?.substring(0, 5) || '07:30' : '07:30';
-        list.push({
-          id: `att-${sheet.id}-${student.id}`,
-          date: sheet.date,
-          time: `${timeStr} WIB`,
-          status: entry.status as 'Sakit' | 'Izin' | 'Alfa',
-          kelas: sheet.kelas,
-          keterangan: entry.keterangan || (entry.status === 'Alfa' ? 'Tanpa surat keterangan' : `Keterangan ${entry.status}`),
-          recordedBy: sheet.recordedBy || 'Wali Kelas / Guru Piket',
-        });
+      if (entry && entry.status) {
+        if (entry.status !== 'Hadir') {
+          let timeStr = '07:30';
+          if (sheet.recordedAt) {
+            const parts = sheet.recordedAt.split(' ');
+            if (parts.length > 1) timeStr = parts[1];
+          }
+          list.push({
+            id: `att-${sheet.id}-${student.id}`,
+            date: sheet.date,
+            time: timeStr.includes('WIB') ? timeStr : `${timeStr} WIB`,
+            status: entry.status as 'Sakit' | 'Izin' | 'Alfa',
+            kelas: sheet.kelas,
+            keterangan: entry.keterangan || (entry.status === 'Alfa' ? 'Tanpa surat keterangan' : `Keterangan ${entry.status}`),
+            recordedBy: sheet.recordedBy || 'Wali Kelas / Guru Piket',
+          });
+        }
         datesSeen.add(sheet.date);
       }
     });
 
     // Also check current student.statusKehadiran if not Hadir
     if (student.statusKehadiran && student.statusKehadiran !== 'Hadir') {
-      const todayYMD = new Date().toISOString().split('T')[0];
+      const todayYMD = getRealtimeDateYMD();
       if (!datesSeen.has(todayYMD)) {
         list.push({
           id: `att-today-${student.id}`,
@@ -135,7 +180,72 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
     }
 
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [student]);
+  }, [student, attendanceRefreshKey]);
+
+  // Real-time resolved attendance status for this student from attendance sheets + student record
+  const currentAttendance = useMemo(() => {
+    if (!student) return { status: 'Hadir', keterangan: 'Hadir Mengikuti KBM', dateLabel: 'Hari Ini' };
+    const todayStr = getRealtimeDateYMD();
+    const sheets = getStoredAttendanceSheets();
+
+    // 1. Check if there is an entry in today's attendance sheet for this class
+    const todaySheet = sheets.find((s) => s && s.kelas === student.kelas && s.date === todayStr);
+    if (todaySheet && Array.isArray(todaySheet.entries)) {
+      const entry = todaySheet.entries.find(
+        (e) => e && (
+          e.studentId === student.id || 
+          (student.nisn && e.nisn === student.nisn) || 
+          (e.nama && student.nama && e.nama.trim().toLowerCase() === student.nama.trim().toLowerCase())
+        )
+      );
+      if (entry && entry.status) {
+        return {
+          status: entry.status,
+          keterangan: entry.keterangan || (entry.status === 'Hadir' ? 'Hadir Mengikuti KBM' : `Keterangan ${entry.status}`),
+          dateLabel: 'Hari Ini',
+        };
+      }
+    }
+
+    // 2. Check studentAbsences (all non-Hadir entries across recorded sheets)
+    if (studentAbsences.length > 0) {
+      const todayAbs = studentAbsences.find((a) => a.date === todayStr);
+      if (todayAbs) {
+        return {
+          status: todayAbs.status,
+          keterangan: todayAbs.keterangan,
+          dateLabel: 'Hari Ini',
+        };
+      }
+      const latestAbs = studentAbsences[0];
+      const classSheets = sheets
+        .filter((s) => s && s.kelas === student.kelas && Array.isArray(s.entries))
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      if (classSheets.length > 0 && classSheets[0].date === latestAbs.date) {
+        return {
+          status: latestAbs.status,
+          keterangan: `${latestAbs.keterangan} (${latestAbs.date})`,
+          dateLabel: latestAbs.date === todayStr ? 'Hari Ini' : latestAbs.date,
+        };
+      }
+    }
+
+    // 3. Fallback to student.statusKehadiran if not Hadir
+    if (student.statusKehadiran && student.statusKehadiran !== 'Hadir') {
+      return {
+        status: student.statusKehadiran,
+        keterangan: student.keteranganKehadiran || `Status ${student.statusKehadiran}`,
+        dateLabel: 'Hari Ini',
+      };
+    }
+
+    return {
+      status: 'Hadir',
+      keterangan: student.keteranganKehadiran || 'Hadir Mengikuti KBM',
+      dateLabel: 'Hari Ini',
+    };
+  }, [student, studentAbsences, attendanceRefreshKey]);
 
   // Combined Unified Timeline (Violations + Absences)
   const unifiedTimelineEvents = useMemo(() => {
@@ -237,9 +347,9 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
 
   if (!isOpen || !student) return null;
 
-  const hasBerat = (student.totalPelanggaranBerat || 0) > 0;
-  const hasSedang = (student.totalPelanggaranSedang || 0) > 0;
-  const hasRingan = (student.totalPelanggaranRingan || 0) > 0;
+  const hasBerat = countBerat > 0;
+  const hasSedang = countSedang > 0;
+  const hasRingan = countRingan > 0;
 
   // Disciplinary status label purely based on Ringan, Sedang, Berat (No points)
   const getDisciplineStatus = () => {
@@ -478,9 +588,17 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                     <span>{discipline.label}</span>
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    Status Presensi Hari Ini:{' '}
-                    <span className={`font-bold ${student.statusKehadiran === 'Hadir' ? 'text-emerald-700' : 'text-red-700'}`}>
-                      {student.statusKehadiran}
+                    Status Presensi ({currentAttendance.dateLabel}):{' '}
+                    <span className={`font-bold ${
+                      currentAttendance.status === 'Hadir' 
+                        ? 'text-emerald-700' 
+                        : currentAttendance.status === 'Sakit'
+                        ? 'text-amber-700'
+                        : currentAttendance.status === 'Izin'
+                        ? 'text-sky-700'
+                        : 'text-red-700'
+                    }`}>
+                      {currentAttendance.status}
                     </span>
                   </div>
                 </div>
@@ -488,27 +606,37 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
 
               {/* 4 KPI Metric Cards (Zero Points) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-                <div className="bg-gradient-to-br from-emerald-700 to-teal-800 text-white p-4 rounded-2xl shadow-xs">
-                  <div className="text-[10px] uppercase font-bold tracking-wider text-emerald-200">Presensi Hari Ini</div>
-                  <div className="text-2xl font-black font-mono mt-1">{student.statusKehadiran}</div>
-                  <div className="text-[11px] text-emerald-100 truncate mt-0.5">{student.keteranganKehadiran || 'Hadir Mengikuti KBM'}</div>
+                <div className={`p-4 rounded-2xl shadow-xs text-white transition-all ${
+                  currentAttendance.status === 'Hadir'
+                    ? 'bg-gradient-to-br from-emerald-700 to-teal-800'
+                    : currentAttendance.status === 'Sakit'
+                    ? 'bg-gradient-to-br from-amber-600 to-amber-700'
+                    : currentAttendance.status === 'Izin'
+                    ? 'bg-gradient-to-br from-sky-600 to-blue-700'
+                    : 'bg-gradient-to-br from-red-600 to-rose-800'
+                }`}>
+                  <div className="text-[10px] uppercase font-bold tracking-wider text-white/80">Presensi ({currentAttendance.dateLabel})</div>
+                  <div className="text-2xl font-black font-mono mt-1">{currentAttendance.status}</div>
+                  <div className="text-[11px] text-white/90 truncate mt-0.5" title={currentAttendance.keterangan}>
+                    {currentAttendance.keterangan}
+                  </div>
                 </div>
 
                 <div className="bg-gradient-to-br from-blue-700 to-cyan-800 text-white p-4 rounded-2xl shadow-xs">
                   <div className="text-[10px] uppercase font-bold tracking-wider text-blue-200">Kasus Ringan</div>
-                  <div className="text-2xl font-black font-mono mt-1">{student.totalPelanggaranRingan}</div>
+                  <div className="text-2xl font-black font-mono mt-1">{countRingan}</div>
                   <div className="text-[11px] text-blue-100 mt-0.5">Teguran & Buku Piket</div>
                 </div>
 
                 <div className="bg-gradient-to-br from-amber-600 to-amber-700 text-white p-4 rounded-2xl shadow-xs">
                   <div className="text-[10px] uppercase font-bold tracking-wider text-amber-200">Kasus Sedang</div>
-                  <div className="text-2xl font-black font-mono mt-1">{student.totalPelanggaranSedang}</div>
+                  <div className="text-2xl font-black font-mono mt-1">{countSedang}</div>
                   <div className="text-[11px] text-amber-100 mt-0.5">Konseling Guru BK</div>
                 </div>
 
                 <div className="bg-gradient-to-br from-rose-700 to-red-900 text-white p-4 rounded-2xl shadow-xs">
                   <div className="text-[10px] uppercase font-bold tracking-wider text-rose-200">Kasus Berat</div>
-                  <div className="text-2xl font-black font-mono mt-1">{student.totalPelanggaranBerat}</div>
+                  <div className="text-2xl font-black font-mono mt-1">{countBerat}</div>
                   <div className="text-[11px] text-rose-100 mt-0.5">Kepala Sekolah & Tim Terpadu</div>
                 </div>
               </div>
@@ -1009,20 +1137,20 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                   <div className="grid grid-cols-4 text-center divide-x divide-black p-3">
                     <div>
                       <div className="text-[10px] text-slate-600 uppercase font-bold">Presensi Harian</div>
-                      <div className="text-base font-bold text-slate-900 mt-0.5">{student.statusKehadiran}</div>
+                      <div className="text-base font-bold text-slate-900 mt-0.5">{currentAttendance.status}</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-600 uppercase font-bold">Pelanggaran Ringan</div>
-                      <div className="text-base font-bold text-slate-900 mt-0.5">{student.totalPelanggaranRingan} Kasus</div>
+                      <div className="text-base font-bold text-slate-900 mt-0.5">{countRingan} Kasus</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-600 uppercase font-bold">Pelanggaran Sedang</div>
-                      <div className="text-base font-bold text-slate-900 mt-0.5">{student.totalPelanggaranSedang} Kasus</div>
+                      <div className="text-base font-bold text-slate-900 mt-0.5">{countSedang} Kasus</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-600 uppercase font-bold">Pelanggaran Berat</div>
                       <div className={`text-base font-bold mt-0.5 ${hasBerat ? 'text-red-700' : 'text-slate-900'}`}>
-                        {student.totalPelanggaranBerat} Kasus
+                        {countBerat} Kasus
                       </div>
                     </div>
                   </div>
