@@ -265,7 +265,7 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
               lineHeight: '1.15',
               overflow: 'hidden',
             }}
-            className="print-area bg-white text-black shadow-2xl border border-slate-300 font-serif leading-[1.15] select-text"
+            className="print-area bg-white text-black border border-[#d1d5db] font-serif leading-[1.15] select-text"
           >
             {/* Kop Surat Resmi Sesuai Permintaan */}
             {/* Logo Pemda Temanggung di sebelah kiri, Logo Sekolah di sebelah kanan, SMPN 1 KANDANGAN di tengah (GRISAKA dihapus) */}
@@ -363,7 +363,7 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
                   Dengan ini menyatakan dengan penuh kesadaran dan rasa tanggung jawab bahwa saya telah melakukan pelanggaran terhadap tata tertib sekolah, yaitu:
                 </p>
 
-                <div className="bg-slate-50 border border-slate-400 p-2 rounded-sm mb-2 text-[10pt] leading-[1.15]">
+                <div className="bg-[#f8fafc] border border-[#9ca3af] p-2 rounded-sm mb-2 text-[10pt] leading-[1.15]">
                   <div><strong>Pasal Tata Tertib :</strong> {violation.kodePasal} - {violation.pasalTitle}</div>
                   <div className="mt-0.5"><strong>Klasifikasi Pelanggaran :</strong> Tingkat {violation.tingkat} | <strong>Waktu & Lokasi :</strong> {violation.tanggal} pk {violation.waktu || '-'} WIB di {violation.lokasi || 'Sekolah'}</div>
                   <div className="mt-0.5"><strong>Uraian Kejadian :</strong> {violation.uraian}</div>
@@ -457,7 +457,7 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
                   </div>
                   <div className="text-right">
                     <div>Kandangan, {todayStr}</div>
-                    <div className="font-bold text-red-700">Sifat: Penting / Segera</div>
+                    <div className="font-bold text-[#b91c1c]">Sifat: Penting / Segera</div>
                   </div>
                 </div>
 
@@ -581,30 +581,30 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
                   </div>
                 </div>
 
-                <div className="border border-slate-400 rounded-sm p-3 bg-slate-50 mb-3 text-[10pt] leading-[1.15] space-y-1.5">
+                <div className="border border-[#9ca3af] rounded-sm p-3 bg-[#f8fafc] mb-3 text-[10pt] leading-[1.15] space-y-1.5">
                   <div className="flex justify-between">
                     <span>ID Slip: <strong>{violation.id}</strong></span>
                     <span>Tanggal: <strong>{violation.tanggal} {violation.waktu || ''} WIB</strong></span>
                   </div>
-                  <div className="flex justify-between border-t border-slate-300 pt-1.5">
+                  <div className="flex justify-between border-t border-[#d1d5db] pt-1.5">
                     <span>Nama Siswa: <strong>{student.nama}</strong> ({student.kelas})</span>
                     <span>NISN: <span>{student.nisn}</span></span>
                   </div>
-                  <div className="border-t border-slate-300 pt-1.5">
+                  <div className="border-t border-[#d1d5db] pt-1.5">
                     <div>Pelanggaran: <strong>{violation.kodePasal} - {violation.pasalTitle}</strong></div>
-                    <div className="text-slate-800 mt-0.5">{violation.uraian}</div>
+                    <div className="text-[#1e293b] mt-0.5">{violation.uraian}</div>
                   </div>
-                  <div className="flex justify-between border-t border-slate-300 pt-1.5">
-                    <span>Klasifikasi: <strong className="text-red-700 font-bold">Tingkat {violation.tingkat}</strong></span>
+                  <div className="flex justify-between border-t border-[#d1d5db] pt-1.5">
+                    <span>Klasifikasi: <strong className="text-[#b91c1c] font-bold">Tingkat {violation.tingkat}</strong></span>
                     <span>Riwayat Kasus: <strong>R:{student.totalPelanggaranRingan} · S:{student.totalPelanggaranSedang} · B:{student.totalPelanggaranBerat}</strong></span>
                   </div>
-                  <div className="border-t border-slate-300 pt-1.5 text-slate-800">
+                  <div className="border-t border-[#d1d5db] pt-1.5 text-[#1e293b]">
                     <div>Tahap Penanggung Jawab: <strong>{violation.tahapPembinaan}</strong></div>
                     <div>Petugas Pencatat: <strong>{violation.guruPencatat}</strong></div>
                   </div>
                 </div>
 
-                <div className="text-[9.5pt] text-slate-700 italic mb-4">
+                <div className="text-[9.5pt] text-[#334155] italic mb-4">
                   *Slip bukti kontrol ini wajib dibawa dan ditunjukkan saat proses konseling serta pembinaan tata tertib di ruang BK / Kesiswaan.
                 </div>
 

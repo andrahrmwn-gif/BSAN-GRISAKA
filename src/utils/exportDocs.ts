@@ -1420,35 +1420,120 @@ export async function exportElementToPDF(
     }
   });
 
-  // Sanitize any modern CSS color functions (like oklch) that crash html2canvas
-  const allElements = clone.querySelectorAll('*');
-  allElements.forEach((node) => {
-    const el = node as HTMLElement;
-    if (el.style) {
-      if (el.style.backgroundClip === 'text' || (el.style as any).webkitBackgroundClip === 'text') {
-        el.style.backgroundClip = 'border-box';
-        (el.style as any).webkitBackgroundClip = 'border-box';
-        el.style.color = '#1e3a8a';
+  // Attach offscreen element to active document DOM first so computed styles can be accurately inspected
+  offscreen.appendChild(clone);
+  document.body.appendChild(offscreen);
+
+  // Helper to convert any modern CSS color (oklch, color, lab, lch) to standard sRGB hex or rgb
+  const convertCssColor = (colorStr: string): string => {
+    if (!colorStr) return '';
+    const trimmed = colorStr.trim();
+    if (
+      !trimmed.includes('oklch') &&
+      !trimmed.includes('color(') &&
+      !trimmed.includes('lab(') &&
+      !trimmed.includes('lch(')
+    ) {
+      return trimmed;
+    }
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#000000';
+        ctx.fillStyle = trimmed;
+        const res = ctx.fillStyle;
+        if (
+          res &&
+          !res.includes('oklch') &&
+          !res.includes('color(') &&
+          !res.includes('lab') &&
+          !res.includes('lch')
+        ) {
+          return res;
+        }
       }
+    } catch {
+      // ignore canvas error
+    }
+
+    // Algorithmic fallback for oklch colors based on lightness
+    if (trimmed.includes('oklch')) {
+      if (trimmed.includes('/ 0') || trimmed.includes(' 0%')) return 'transparent';
+      const match = trimmed.match(/oklch\(\s*([\d.]+)/);
+      if (match) {
+        const lightness = parseFloat(match[1]);
+        if (lightness > 0.85) return '#f8fafc';
+        if (lightness < 0.3) return '#1e293b';
+        return '#64748b';
+      }
+    }
+    return '#000000';
+  };
+
+  // Thorough sanitization for html2canvas compatibility
+  const sanitizeNodeColors = (root: HTMLElement, win: Window = window) => {
+    if (!root) return;
+    const allNodes = [root, ...Array.from(root.querySelectorAll('*'))] as HTMLElement[];
+
+    const colorProps = [
+      'color',
+      'background-color',
+      'border-top-color',
+      'border-right-color',
+      'border-bottom-color',
+      'border-left-color',
+      'text-decoration-color',
+      '-webkit-text-stroke-color',
+      'fill',
+      'stroke',
+      'stop-color'
+    ];
+
+    for (let i = 0; i < allNodes.length; i++) {
+      const el = allNodes[i];
+      if (!el || !el.style) continue;
+
+      // Disable box-shadow and text-shadow (which embed oklch colors in Tailwind v4)
+      el.style.setProperty('box-shadow', 'none', 'important');
+      el.style.setProperty('text-shadow', 'none', 'important');
+
+      if (el.style.backgroundClip === 'text' || (el.style as any).webkitBackgroundClip === 'text') {
+        el.style.setProperty('background-clip', 'border-box', 'important');
+        (el.style as any).webkitBackgroundClip = 'border-box';
+        el.style.setProperty('color', '#1e3a8a', 'important');
+      }
+
       try {
-        const computed = window.getComputedStyle(el);
-        if (computed.color && computed.color.includes('oklch')) {
-          el.style.color = '#111827';
+        const computed = win.getComputedStyle(el);
+        if (!computed) continue;
+
+        for (let p = 0; p < colorProps.length; p++) {
+          const prop = colorProps[p];
+          const val = computed.getPropertyValue(prop);
+          if (
+            val &&
+            (val.includes('oklch') ||
+              val.includes('color(') ||
+              val.includes('lab(') ||
+              val.includes('lch('))
+          ) {
+            const fallback = prop.includes('background') ? '#ffffff' : '#000000';
+            const converted = convertCssColor(val) || fallback;
+            el.style.setProperty(prop, converted, 'important');
+          }
         }
-        if (computed.backgroundColor && computed.backgroundColor.includes('oklch')) {
-          el.style.backgroundColor = '#ffffff';
-        }
-        if (computed.borderColor && computed.borderColor.includes('oklch')) {
-          el.style.borderColor = '#000000';
-        }
-      } catch (e) {
+      } catch {
         // ignore style read errors
       }
     }
-  });
+  };
 
-  offscreen.appendChild(clone);
-  document.body.appendChild(offscreen);
+  // First pass: sanitize attached offscreen clone
+  sanitizeNodeColors(clone, window);
 
   // Short delay for DOM repaint
   await new Promise((r) => setTimeout(r, 60));
@@ -1468,6 +1553,29 @@ export async function exportElementToPDF(
       height: totalHeight,
       windowWidth: 794,
       windowHeight: totalHeight,
+      onclone: (clonedDoc: Document, clonedEl: HTMLElement) => {
+        // Inject style override into cloned iframe document head
+        const styleTag = clonedDoc.createElement('style');
+        styleTag.innerHTML = `
+          *, *::before, *::after {
+            box-shadow: none !important;
+            text-shadow: none !important;
+          }
+          :root, html, body {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            color-scheme: light !important;
+          }
+        `;
+        clonedDoc.head.appendChild(styleTag);
+
+        // Second pass: sanitize elements inside html2canvas's own iframe document
+        const targetWin = clonedDoc.defaultView || window;
+        if (clonedDoc.body) {
+          sanitizeNodeColors(clonedDoc.body, targetWin);
+        }
+        sanitizeNodeColors(clonedEl, targetWin);
+      },
     });
 
     if (document.body.contains(offscreen)) {

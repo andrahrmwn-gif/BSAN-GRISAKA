@@ -1031,7 +1031,7 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
               </div>
 
               {/* Printable Paper Area (A4) */}
-              <div id="student-slip-printable-area" className="print-area bg-white text-slate-900 w-full max-w-[210mm] min-h-[297mm] p-8 sm:p-10 lg:p-12 shadow-xl rounded-2xl border border-slate-300 font-serif leading-relaxed text-xs">
+              <div id="student-slip-printable-area" className="print-area bg-white text-black w-full max-w-[210mm] min-h-[297mm] p-8 sm:p-10 lg:p-12 border border-[#d1d5db] font-serif leading-relaxed text-xs">
                 {/* Official School Letterhead (Kop Surat) - PEMKAB TEMANGGUNG */}
                 <div className="border-b-[3px] border-double border-black pb-4 mb-6 text-center flex items-center justify-between gap-4">
                   <div className="w-16 h-16 shrink-0 flex items-center justify-center">
