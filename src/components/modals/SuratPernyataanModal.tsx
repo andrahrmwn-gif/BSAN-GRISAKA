@@ -3,6 +3,7 @@ import { ViolationRecord, Student, SchoolProfile } from '../../types';
 import { SCHOOL_CONFIG as DEFAULT_SCHOOL_CONFIG } from '../../data/schoolConfig';
 import { Printer, X, FileText, FileSpreadsheet, FileDown, CheckCircle2, ExternalLink, Edit3 } from 'lucide-react';
 import { exportSingleSuratToWord, exportSingleSuratToExcel, exportElementToPDF } from '../../utils/exportDocs';
+import { LOGO_TEMANGGUNG_DATA_URL, LOGO_TUTWURI_DATA_URL } from '../../data/logoAssets';
 
 interface SuratPernyataanModalProps {
   isOpen: boolean;
@@ -71,16 +72,18 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
     const el = document.getElementById('surat-printable-area');
     if (el) {
       setIsExportingPdf(true);
-      showSuccessFeedback('Sedang menyusun PDF resmi 1 halaman...');
+      showSuccessFeedback('Sedang memproses unduhan PDF resmi...');
       const cleanName = `${docType}_${student.nama.replace(/\s+/g, '_')}_${violation.id}`;
       const res = await exportElementToPDF(el, cleanName, { singlePage: true });
       setIsExportingPdf(false);
       if (res.blobUrl) {
         setPdfDownloadUrl(res.blobUrl);
       }
-      showSuccessFeedback('File PDF resmi 1 halaman berhasil diunduh!');
-    } else {
-      window.print();
+      if (res.success) {
+        showSuccessFeedback('File PDF resmi 1 halaman langsung terunduh otomatis!');
+      } else {
+        showSuccessFeedback('Pembuatan PDF terkendala. Gunakan tombol Cetak untuk opsi alternatif.');
+      }
     }
   };
 
@@ -270,7 +273,7 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
               {/* Logo Pemda Temanggung (Sebelah Kiri) */}
               <div className="w-[65px] h-[75px] shrink-0 flex items-center justify-center">
                 <img
-                  src="/assets/logo_temanggung.svg"
+                  src={LOGO_TEMANGGUNG_DATA_URL}
                   alt="Logo Pemda Temanggung"
                   className="max-h-[75px] max-w-[65px] object-contain"
                 />
@@ -298,7 +301,7 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
               {/* Logo Sekolah (Sebelah Kanan) */}
               <div className="w-[65px] h-[75px] shrink-0 flex items-center justify-center">
                 <img
-                  src={currentConfig.logoUrl || '/assets/logo_tutwuri.svg'}
+                  src={currentConfig.logoUrl || LOGO_TUTWURI_DATA_URL}
                   alt="Logo Sekolah"
                   className="max-h-[75px] max-w-[65px] object-contain"
                 />
@@ -383,7 +386,7 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
                   Demikian surat pernyataan ini saya buat dengan sebenarnya tanpa paksaan dari pihak mana pun.
                 </p>
 
-                {/* Signatures */}
+                {/* Signatures based on Category */}
                 <div className="grid grid-cols-2 gap-4 text-center text-[10.5pt] leading-[1.15]">
                   <div>
                     Mengetahui,<br />
@@ -399,20 +402,47 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 text-center text-[10.5pt] leading-[1.15] mt-3 pt-2 border-t border-slate-300">
-                  <div>
-                    Guru Piket / Pencatat,
-                    <div className="h-10"></div>
-                    <u>( {violation.guruPencatat} )</u>
+                {violation.tingkat === 'Ringan' && (
+                  <div className="text-center text-[10.5pt] leading-[1.15] mt-3">
+                    <div>
+                      Mengetahui,<br />
+                      <strong>Guru Piket / Wali Kelas</strong>
+                      <div className="h-10"></div>
+                      <u>( {violation.guruPencatat || 'Guru Piket / Wali Kelas'} )</u>
+                    </div>
                   </div>
-                  <div>
-                    Mengetahui,<br />
-                    <strong>Kepala SMPN 1 Kandangan</strong>
-                    <div className="h-10"></div>
-                    <u><strong>{currentConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'}</strong></u><br />
-                    NIP. {currentConfig.principalNip || '19740512 199802 2 003'}
+                )}
+
+                {violation.tingkat === 'Sedang' && (
+                  <div className="text-center text-[10.5pt] leading-[1.15] mt-3">
+                    <div>
+                      Mengetahui,<br />
+                      <strong>Koordinator BK / Waka Kesiswaan</strong>
+                      <div className="h-10"></div>
+                      <u><strong>{currentConfig.timKesiswaanName || currentConfig.bkName || 'Koordinator BK / Waka Kesiswaan'}</strong></u><br />
+                      NIP. {currentConfig.timKesiswaanNip || currentConfig.bkNip || '-'}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {violation.tingkat === 'Berat' && (
+                  <div className="grid grid-cols-2 gap-4 text-center text-[10.5pt] leading-[1.15] mt-3">
+                    <div>
+                      Mengetahui,<br />
+                      <strong>Waka Kesiswaan / Koordinator BK</strong>
+                      <div className="h-10"></div>
+                      <u><strong>{currentConfig.timKesiswaanName || currentConfig.bkName || 'Drs. Subagyo, M.Pd.'}</strong></u><br />
+                      NIP. {currentConfig.timKesiswaanNip || currentConfig.bkNip || '-'}
+                    </div>
+                    <div>
+                      Mengetahui,<br />
+                      <strong>Kepala SMPN 1 Kandangan</strong>
+                      <div className="h-10"></div>
+                      <u><strong>{currentConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'}</strong></u><br />
+                      NIP. {currentConfig.principalNip || '19740512 199802 2 003'}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -479,29 +509,63 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
                   Mengingat pentingnya koordinasi ini demi masa depan dan pembinaan karakter putra/putri Bapak/Ibu, kami sangat mengharapkan kehadiran Bapak/Ibu tepat pada waktunya. Atas perhatian dan kerja samanya, kami ucapkan terima kasih.
                 </p>
 
-                <div className="grid grid-cols-3 gap-3 text-center text-[10pt] leading-[1.15] mt-5">
+                {/* Signatures based on Category */}
+                <div className="grid grid-cols-2 gap-4 text-center text-[10.5pt] leading-[1.15]">
                   <div>
                     Mengetahui,<br />
-                    <strong>{currentConfig.bkTitle || 'Guru Bimbingan Konseling'}</strong>
+                    <strong>Orang Tua / Wali Siswa</strong>
                     <div className="h-10"></div>
-                    <u><strong>{currentConfig.bkName || 'Sri Wahyuni, S.Pd., M.Si.'}</strong></u><br />
-                    NIP. {currentConfig.bkNip || '19780824 200501 2 008'}
-                  </div>
-                  <div>
-                    Mengetahui,<br />
-                    <strong>{currentConfig.timKesiswaanTitle || 'Tim Kesiswaan / Ketertiban'}</strong>
-                    <div className="h-10"></div>
-                    <u><strong>{currentConfig.timKesiswaanName || currentConfig.wakasekName || 'Tim Kesiswaan'}</strong></u><br />
-                    NIP. {currentConfig.timKesiswaanNip || currentConfig.wakasekNip || '-'}
+                    <u>( {student.namaOrtu} )</u>
                   </div>
                   <div>
                     Kandangan, {todayStr}<br />
-                    <strong>Kepala SMPN 1 Kandangan</strong>
+                    <strong>Siswa yang Bersangkutan</strong>
                     <div className="h-10"></div>
-                    <u><strong>{currentConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'}</strong></u><br />
-                    NIP. {currentConfig.principalNip || '19740512 199802 2 003'}
+                    <u>( {student.nama} )</u>
                   </div>
                 </div>
+
+                {violation.tingkat === 'Ringan' && (
+                  <div className="text-center text-[10.5pt] leading-[1.15] mt-3">
+                    <div>
+                      Mengetahui,<br />
+                      <strong>Guru Piket / Wali Kelas</strong>
+                      <div className="h-10"></div>
+                      <u>( {violation.guruPencatat || 'Guru Piket / Wali Kelas'} )</u>
+                    </div>
+                  </div>
+                )}
+
+                {violation.tingkat === 'Sedang' && (
+                  <div className="text-center text-[10.5pt] leading-[1.15] mt-3">
+                    <div>
+                      Mengetahui,<br />
+                      <strong>Koordinator BK / Waka Kesiswaan</strong>
+                      <div className="h-10"></div>
+                      <u><strong>{currentConfig.timKesiswaanName || currentConfig.bkName || 'Koordinator BK / Waka Kesiswaan'}</strong></u><br />
+                      NIP. {currentConfig.timKesiswaanNip || currentConfig.bkNip || '-'}
+                    </div>
+                  </div>
+                )}
+
+                {violation.tingkat === 'Berat' && (
+                  <div className="grid grid-cols-2 gap-4 text-center text-[10.5pt] leading-[1.15] mt-3">
+                    <div>
+                      Mengetahui,<br />
+                      <strong>Waka Kesiswaan / Koordinator BK</strong>
+                      <div className="h-10"></div>
+                      <u><strong>{currentConfig.timKesiswaanName || currentConfig.bkName || 'Drs. Subagyo, M.Pd.'}</strong></u><br />
+                      NIP. {currentConfig.timKesiswaanNip || currentConfig.bkNip || '-'}
+                    </div>
+                    <div>
+                      Mengetahui,<br />
+                      <strong>Kepala SMPN 1 Kandangan</strong>
+                      <div className="h-10"></div>
+                      <u><strong>{currentConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'}</strong></u><br />
+                      NIP. {currentConfig.principalNip || '19740512 199802 2 003'}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -544,26 +608,63 @@ export const SuratPernyataanModal: React.FC<SuratPernyataanModalProps> = ({
                   *Slip bukti kontrol ini wajib dibawa dan ditunjukkan saat proses konseling serta pembinaan tata tertib di ruang BK / Kesiswaan.
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 text-center text-[10.5pt] leading-[1.15] mt-4">
+                {/* Signatures based on Category */}
+                <div className="grid grid-cols-2 gap-4 text-center text-[10.5pt] leading-[1.15]">
                   <div>
-                    Tanda Tangan Siswa,
+                    Mengetahui,<br />
+                    <strong>Orang Tua / Wali Siswa</strong>
+                    <div className="h-10"></div>
+                    <u>( {student.namaOrtu} )</u>
+                  </div>
+                  <div>
+                    Kandangan, {todayStr}<br />
+                    <strong>Tanda Tangan Siswa</strong>
                     <div className="h-10"></div>
                     <u>( {student.nama} )</u>
                   </div>
-                  <div>
-                    Guru Piket / Pembina,
-                    <div className="h-10"></div>
-                    <u>( {violation.guruPencatat} )</u>
-                  </div>
                 </div>
 
-                <div className="text-center text-[10pt] leading-[1.15] mt-6 pt-3 border-t border-slate-300">
-                  Mengetahui,<br />
-                  <strong>Kepala SMPN 1 Kandangan</strong>
-                  <div className="h-10"></div>
-                  <u><strong>{currentConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'}</strong></u><br />
-                  NIP. {currentConfig.principalNip || '19740512 199802 2 003'}
-                </div>
+                {violation.tingkat === 'Ringan' && (
+                  <div className="text-center text-[10pt] leading-[1.15] mt-3">
+                    <div>
+                      Mengetahui,<br />
+                      <strong>Guru Piket / Wali Kelas</strong>
+                      <div className="h-10"></div>
+                      <u>( {violation.guruPencatat || 'Guru Piket / Wali Kelas'} )</u>
+                    </div>
+                  </div>
+                )}
+
+                {violation.tingkat === 'Sedang' && (
+                  <div className="text-center text-[10pt] leading-[1.15] mt-3">
+                    <div>
+                      Mengetahui,<br />
+                      <strong>Koordinator BK / Waka Kesiswaan</strong>
+                      <div className="h-10"></div>
+                      <u><strong>{currentConfig.timKesiswaanName || currentConfig.bkName || 'Koordinator BK / Waka Kesiswaan'}</strong></u><br />
+                      NIP. {currentConfig.timKesiswaanNip || currentConfig.bkNip || '-'}
+                    </div>
+                  </div>
+                )}
+
+                {violation.tingkat === 'Berat' && (
+                  <div className="grid grid-cols-2 gap-4 text-center text-[10pt] leading-[1.15] mt-3">
+                    <div>
+                      Mengetahui,<br />
+                      <strong>Waka Kesiswaan / Koordinator BK</strong>
+                      <div className="h-10"></div>
+                      <u><strong>{currentConfig.timKesiswaanName || currentConfig.bkName || 'Drs. Subagyo, M.Pd.'}</strong></u><br />
+                      NIP. {currentConfig.timKesiswaanNip || currentConfig.bkNip || '-'}
+                    </div>
+                    <div>
+                      Mengetahui,<br />
+                      <strong>Kepala SMPN 1 Kandangan</strong>
+                      <div className="h-10"></div>
+                      <u><strong>{currentConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'}</strong></u><br />
+                      NIP. {currentConfig.principalNip || '19740512 199802 2 003'}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

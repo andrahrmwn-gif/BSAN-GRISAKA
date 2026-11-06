@@ -3,6 +3,7 @@ import { SCHOOL_CONFIG } from '../data/schoolConfig';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { sortByClassAndName } from './sortUtils';
+import { LOGO_TEMANGGUNG_DATA_URL, LOGO_TUTWURI_DATA_URL } from '../data/logoAssets';
 
 /**
  * Export student data or violations to clean CSV that opens directly in Excel
@@ -1035,17 +1036,41 @@ export function exportSingleSuratToWord(
             <u>( ${student.nama} )</u>
           </td>
         </tr>
-        <tr>
-          <td style="padding-top:18px; vertical-align:top;">
-            Guru Piket / Pencatat,<br><br><br><br>
-            <u>( ${violation.guruPencatat} )</u>
-          </td>
-          <td style="padding-top:18px; vertical-align:top;">
-            Mengetahui,<br><strong>Kepala SMPN 1 Kandangan</strong><br><br><br><br>
-            <u><strong>${schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'}</strong></u><br>
-            NIP. ${schoolConfig.principalNip || '-'}
-          </td>
-        </tr>
+        ${
+          violation.tingkat === 'Ringan'
+            ? `
+            <tr>
+              <td colspan="2" style="padding-top:18px; text-align:center; vertical-align:top;">
+                Mengetahui,<br><strong>Guru Piket / Wali Kelas</strong><br><br><br><br>
+                <u>( ${violation.guruPencatat || 'Guru Piket / Wali Kelas'} )</u>
+              </td>
+            </tr>
+            `
+            : violation.tingkat === 'Sedang'
+            ? `
+            <tr>
+              <td colspan="2" style="padding-top:18px; text-align:center; vertical-align:top;">
+                Mengetahui,<br><strong>Koordinator BK / Waka Kesiswaan</strong><br><br><br><br>
+                <u><strong>${schoolConfig.timKesiswaanName || schoolConfig.bkName || 'Koordinator BK / Waka Kesiswaan'}</strong></u><br>
+                NIP. ${schoolConfig.timKesiswaanNip || schoolConfig.bkNip || '-'}
+              </td>
+            </tr>
+            `
+            : `
+            <tr>
+              <td style="padding-top:18px; width:50%; vertical-align:top;">
+                Mengetahui,<br><strong>Waka Kesiswaan / Koordinator BK</strong><br><br><br><br>
+                <u><strong>${schoolConfig.timKesiswaanName || schoolConfig.bkName || 'Waka Kesiswaan / Koordinator BK'}</strong></u><br>
+                NIP. ${schoolConfig.timKesiswaanNip || schoolConfig.bkNip || '-'}
+              </td>
+              <td style="padding-top:18px; width:50%; vertical-align:top;">
+                Mengetahui,<br><strong>Kepala SMPN 1 Kandangan</strong><br><br><br><br>
+                <u><strong>${schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'}</strong></u><br>
+                NIP. ${schoolConfig.principalNip || '-'}
+              </td>
+            </tr>
+            `
+        }
       </table>
     `;
   } else if (type === 'panggilan_ortu') {
@@ -1078,23 +1103,59 @@ export function exportSingleSuratToWord(
       <p style="text-align:justify; font-size:10.5pt; margin:6px 0;">Mengingat pentingnya pertemuan ini demi masa depan dan pembinaan karakter ananda, kami sangat mengharapkan kehadiran Bapak/Ibu tepat waktu. Atas perhatian dan kerja samanya, kami ucapkan terima kasih.</p>
 
       <table style="width:100%; margin-top:20px; text-align:center; font-size:10pt; border:none; border-collapse:collapse;">
-        <tr>
-          <td style="width:33%; vertical-align:top;">
-            Mengetahui,<br><strong>${schoolConfig.bkTitle || 'Guru Bimbingan Konseling'}</strong><br><br><br><br>
-            <u><strong>${schoolConfig.bkName || 'Sri Wahyuni, S.Pd., M.Si.'}</strong></u><br>
-            NIP. ${schoolConfig.bkNip || '-'}
-          </td>
-          <td style="width:33%; vertical-align:top;">
-            Mengetahui,<br><strong>${schoolConfig.timKesiswaanTitle || 'Tim Kesiswaan / Ketertiban'}</strong><br><br><br><br>
-            <u><strong>${schoolConfig.timKesiswaanName || schoolConfig.wakasekName || 'Tim Kesiswaan'}</strong></u><br>
-            NIP. ${schoolConfig.timKesiswaanNip || schoolConfig.wakasekNip || '-'}
-          </td>
-          <td style="width:33%; vertical-align:top;">
-            Kandangan, ${dateStr}<br><strong>Kepala SMPN 1 Kandangan</strong><br><br><br><br>
-            <u><strong>${schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'}</strong></u><br>
-            NIP. ${schoolConfig.principalNip || '-'}
-          </td>
-        </tr>
+        ${
+          violation.tingkat === 'Ringan'
+            ? `
+            <tr>
+              <td style="width:50%; vertical-align:top;">
+                Mengetahui,<br><strong>Orang Tua / Wali Siswa</strong><br><br><br><br>
+                <u>( ${student.namaOrtu} )</u>
+              </td>
+              <td style="width:50%; vertical-align:top;">
+                Kandangan, ${dateStr}<br><strong>Guru Piket / Wali Kelas</strong><br><br><br><br>
+                <u>( ${violation.guruPencatat || 'Guru Piket / Wali Kelas'} )</u>
+              </td>
+            </tr>
+            `
+            : violation.tingkat === 'Sedang'
+            ? `
+            <tr>
+              <td style="width:50%; vertical-align:top;">
+                Mengetahui,<br><strong>Orang Tua / Wali Siswa</strong><br><br><br><br>
+                <u>( ${student.namaOrtu} )</u>
+              </td>
+              <td style="width:50%; vertical-align:top;">
+                Kandangan, ${dateStr}<br><strong>Koordinator BK / Waka Kesiswaan</strong><br><br><br><br>
+                <u><strong>${schoolConfig.timKesiswaanName || schoolConfig.bkName || 'Koordinator BK / Waka Kesiswaan'}</strong></u><br>
+                NIP. ${schoolConfig.timKesiswaanNip || schoolConfig.bkNip || '-'}
+              </td>
+            </tr>
+            `
+            : `
+            <tr>
+              <td style="width:50%; vertical-align:top;">
+                Mengetahui,<br><strong>Orang Tua / Wali Siswa</strong><br><br><br><br>
+                <u>( ${student.namaOrtu} )</u>
+              </td>
+              <td style="width:50%; vertical-align:top;">
+                Kandangan, ${dateStr}<br><strong>Siswa yang Bersangkutan</strong><br><br><br><br>
+                <u>( ${student.nama} )</u>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-top:18px; width:50%; vertical-align:top;">
+                Mengetahui,<br><strong>Waka Kesiswaan / Koordinator BK</strong><br><br><br><br>
+                <u><strong>${schoolConfig.timKesiswaanName || schoolConfig.bkName || 'Waka Kesiswaan / Koordinator BK'}</strong></u><br>
+                NIP. ${schoolConfig.timKesiswaanNip || schoolConfig.bkNip || '-'}
+              </td>
+              <td style="padding-top:18px; width:50%; vertical-align:top;">
+                Mengetahui,<br><strong>Kepala SMPN 1 Kandangan</strong><br><br><br><br>
+                <u><strong>${schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'}</strong></u><br>
+                NIP. ${schoolConfig.principalNip || '-'}
+              </td>
+            </tr>
+            `
+        }
       </table>
     `;
   } else {
@@ -1119,10 +1180,44 @@ export function exportSingleSuratToWord(
 
       <table style="width:100%; margin-top:18px; text-align:center; font-size:10pt; border:none; border-collapse:collapse;">
         <tr>
-          <td style="width:33%; vertical-align:top;">Siswa Terkait,<br><br><br><br><u>( ${student.nama} )</u></td>
-          <td style="width:33%; vertical-align:top;">Guru Piket,<br><br><br><br><u>( ${violation.guruPencatat} )</u></td>
-          <td style="width:33%; vertical-align:top;">Wali Kelas / BK,<br><br><br><br><u>( ${schoolConfig.bkName || 'Guru BK'} )</u></td>
+          <td style="width:50%; vertical-align:top;">Mengetahui,<br><strong>Orang Tua / Wali Siswa</strong><br><br><br><br><u>( ${student.namaOrtu} )</u></td>
+          <td style="width:50%; vertical-align:top;">Kandangan, ${dateStr}<br><strong>Siswa Terkait</strong><br><br><br><br><u>( ${student.nama} )</u></td>
         </tr>
+        ${
+          violation.tingkat === 'Ringan'
+            ? `
+            <tr>
+              <td colspan="2" style="padding-top:16px; text-align:center; vertical-align:top;">
+                Mengetahui,<br><strong>Guru Piket / Wali Kelas</strong><br><br><br><br>
+                <u>( ${violation.guruPencatat || 'Guru Piket / Wali Kelas'} )</u>
+              </td>
+            </tr>
+            `
+            : violation.tingkat === 'Sedang'
+            ? `
+            <tr>
+              <td colspan="2" style="padding-top:16px; text-align:center; vertical-align:top;">
+                Mengetahui,<br><strong>Koordinator BK / Waka Kesiswaan</strong><br><br><br><br>
+                <u><strong>${schoolConfig.timKesiswaanName || schoolConfig.bkName || 'Koordinator BK / Waka Kesiswaan'}</strong></u><br>
+                NIP. ${schoolConfig.timKesiswaanNip || schoolConfig.bkNip || '-'}
+              </td>
+            </tr>
+            `
+            : `
+            <tr>
+              <td style="padding-top:16px; width:50%; vertical-align:top;">
+                Mengetahui,<br><strong>Waka Kesiswaan / Koordinator BK</strong><br><br><br><br>
+                <u><strong>${schoolConfig.timKesiswaanName || schoolConfig.bkName || 'Waka Kesiswaan / Koordinator BK'}</strong></u><br>
+                NIP. ${schoolConfig.timKesiswaanNip || schoolConfig.bkNip || '-'}
+              </td>
+              <td style="padding-top:16px; width:50%; vertical-align:top;">
+                Mengetahui,<br><strong>Kepala SMPN 1 Kandangan</strong><br><br><br><br>
+                <u><strong>${schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'}</strong></u><br>
+                NIP. ${schoolConfig.principalNip || '-'}
+              </td>
+            </tr>
+            `
+        }
       </table>
     `;
   }
@@ -1146,7 +1241,7 @@ export function exportSingleSuratToWord(
       <table class="kop-table">
         <tr>
           <td style="width: 70px; text-align: left;">
-            <img src="/assets/logo_temanggung.svg" width="60" height="70" alt="Logo Pemda Temanggung" />
+            <img src="${LOGO_TEMANGGUNG_DATA_URL}" width="60" height="70" alt="Logo Pemda Temanggung" />
           </td>
           <td style="text-align: center;">
             <div class="kop-instansi">PEMERINTAH KABUPATEN TEMANGGUNG</div>
@@ -1156,7 +1251,7 @@ export function exportSingleSuratToWord(
             <div class="kop-alamat">Telepon: ${schoolConfig.phone || '(0293) 490123'} · Email: ${schoolConfig.email || 'smpn1kandangan@temanggungkab.go.id'} · Laman: ${schoolConfig.website || 'smpn1kandangan-tmg.sch.id'}</div>
           </td>
           <td style="width: 70px; text-align: right;">
-            <img src="${schoolConfig.logoUrl || '/assets/logo_tutwuri.svg'}" width="60" height="70" alt="Logo Sekolah" />
+            <img src="${schoolConfig.logoUrl || LOGO_TUTWURI_DATA_URL}" width="60" height="70" alt="Logo Sekolah" />
           </td>
         </tr>
       </table>
@@ -1224,17 +1319,19 @@ export function triggerFileDownload(blobOrUrl: Blob | string, filename: string):
     const link = document.createElement('a');
     link.href = url;
     link.download = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
-    link.setAttribute('target', '_blank');
+    // Do NOT set target="_blank" so the browser immediately downloads the file directly without opening preview tabs or dialogs
     link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
 
     setTimeout(() => {
-      document.body.removeChild(link);
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
       if (typeof blobOrUrl !== 'string') {
         URL.revokeObjectURL(url);
       }
-    }, 2000);
+    }, 1500);
   } catch (err) {
     console.error('Failed triggering file download', err);
   }
@@ -1286,6 +1383,10 @@ export async function exportElementToPDF(
   offscreen.style.pointerEvents = 'none';
 
   const clone = element.cloneNode(true) as HTMLElement;
+  // Crucial: remove print-area class so clone never triggers duplicate print pages
+  clone.classList.remove('print-area');
+  clone.classList.add('pdf-render-clone');
+
   clone.style.width = '794px';
   clone.style.maxWidth = '794px';
   clone.style.minWidth = '794px';
@@ -1358,7 +1459,7 @@ export async function exportElementToPDF(
     const canvas = await html2canvas(clone, {
       scale: options?.scale || 2,
       useCORS: true,
-      allowTaint: true,
+      allowTaint: false,
       logging: false,
       backgroundColor: '#ffffff',
       scrollX: 0,
@@ -1406,6 +1507,7 @@ export async function exportElementToPDF(
 
     const blob = pdf.output('blob');
     const blobUrl = URL.createObjectURL(blob);
+    // Direct, automated download without popup dialogs
     triggerFileDownload(blob, cleanFilename);
 
     return { success: true, blobUrl };
@@ -1413,8 +1515,8 @@ export async function exportElementToPDF(
     if (document.body.contains(offscreen)) {
       document.body.removeChild(offscreen);
     }
-    console.error('PDF canvas direct generation error, triggering window.print fallback...', err);
-    window.print();
+    console.error('PDF direct generation failed:', err);
+    // Do NOT trigger window.print() here to prevent unexpected print dialog popups
     return { success: false };
   }
 }

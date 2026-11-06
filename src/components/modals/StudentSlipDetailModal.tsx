@@ -31,6 +31,7 @@ import {
   exportStudentSlipToExcel, 
   exportStudentSlipToPDF 
 } from '../../utils/exportDocs';
+import { LOGO_TEMANGGUNG_DATA_URL, LOGO_TUTWURI_DATA_URL } from '../../data/logoAssets';
 
 interface StudentSlipDetailModalProps {
   isOpen: boolean;
@@ -1035,7 +1036,7 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                 <div className="border-b-[3px] border-double border-black pb-4 mb-6 text-center flex items-center justify-between gap-4">
                   <div className="w-16 h-16 shrink-0 flex items-center justify-center">
                     <img
-                      src="/assets/logo_temanggung.svg"
+                      src={LOGO_TEMANGGUNG_DATA_URL}
                       alt="Logo Pemda Temanggung"
                       className="max-h-16 max-w-16 object-contain"
                     />
@@ -1060,7 +1061,7 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
 
                   <div className="w-16 h-16 shrink-0 flex items-center justify-center">
                     <img
-                      src={schoolConfig.logoUrl || '/assets/logo_tutwuri.svg'}
+                      src={schoolConfig.logoUrl || LOGO_TUTWURI_DATA_URL}
                       alt="Logo Sekolah"
                       className="max-h-16 max-w-16 object-contain"
                     />
