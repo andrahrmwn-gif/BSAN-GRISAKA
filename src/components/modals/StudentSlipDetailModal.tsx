@@ -1034,42 +1034,36 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                 {/* Official School Letterhead (Kop Surat) - PEMKAB TEMANGGUNG */}
                 <div className="border-b-[3px] border-double border-black pb-4 mb-6 text-center flex items-center justify-between gap-4">
                   <div className="w-16 h-16 shrink-0 flex items-center justify-center">
-                    {schoolConfig.logoUrl ? (
-                      <img
-                        src={schoolConfig.logoUrl}
-                        alt="Logo Sekolah"
-                        className="max-h-16 max-w-16 object-contain"
-                      />
-                    ) : (
-                      <div className="w-14 h-14 rounded-full border-2 border-slate-900 flex flex-col items-center justify-center font-serif font-black text-slate-900 bg-slate-50 text-[10px] leading-tight">
-                        <span className="font-sans font-extrabold text-[9px] text-[#1E3A8A]">KAB</span>
-                        <span>TMG</span>
-                      </div>
-                    )}
+                    <img
+                      src="/assets/logo_temanggung.svg"
+                      alt="Logo Pemda Temanggung"
+                      className="max-h-16 max-w-16 object-contain"
+                    />
                   </div>
 
                   <div className="flex-1 text-center font-serif">
                     <div className="text-xs uppercase tracking-wider font-bold text-black">PEMERINTAH KABUPATEN TEMANGGUNG</div>
                     <div className="text-xs uppercase tracking-wider font-bold text-black">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
                     <div className="text-lg sm:text-xl font-black uppercase tracking-wide text-black mt-0.5">
-                      {schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'} ({schoolConfig.shortName || 'GRISAKA'})
+                      SMPN 1 KANDANGAN
                     </div>
                     <div className="text-[11px] text-black mt-0.5 font-sans">
                       NPSN: {schoolConfig.npsn || '20321456'} · Status Akreditasi: {schoolConfig.accreditation || 'A'}
                     </div>
                     <div className="text-[10.5px] text-black">
-                      {schoolConfig.address || 'Jl. Raya Kandangan'}, {schoolConfig.city || 'Kabupaten Temanggung'} · Jawa Tengah {schoolConfig.postalCode || '56281'}
+                      {schoolConfig.address || 'Jl. Raya Kandangan - Temanggung, Kec. Kandangan'}, {schoolConfig.city || 'Kabupaten Temanggung'} · Jawa Tengah {schoolConfig.postalCode || '56281'}
                     </div>
                     <div className="text-[9.5px] text-black font-sans">
-                      Telp: {schoolConfig.phone || '-'} · Website: {schoolConfig.website || '-'} · Email: {schoolConfig.email || '-'}
+                      Telp: {schoolConfig.phone || '(0293) 490123'} · Website: {schoolConfig.website || 'smpn1kandangan-tmg.sch.id'} · Email: {schoolConfig.email || 'smpn1kandangan@temanggungkab.go.id'}
                     </div>
                   </div>
 
                   <div className="w-16 h-16 shrink-0 flex items-center justify-center">
-                    <div className="w-14 h-14 rounded-full border-2 border-slate-900 flex flex-col items-center justify-center font-serif font-black text-slate-900 bg-slate-50 text-[9px] leading-tight text-center">
-                      <span className="font-sans text-[8px] text-[#1E3A8A] font-bold">BSAN</span>
-                      <span className="text-[10px]">GRISAKA</span>
-                    </div>
+                    <img
+                      src={schoolConfig.logoUrl || '/assets/logo_tutwuri.svg'}
+                      alt="Logo Sekolah"
+                      className="max-h-16 max-w-16 object-contain"
+                    />
                   </div>
                 </div>
 

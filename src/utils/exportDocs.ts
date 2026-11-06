@@ -240,7 +240,7 @@ export function exportViolationsToWord(
           <td>
             <div class="kop-instansi">PEMERINTAH KABUPATEN TEMANGGUNG</div>
             <div class="kop-instansi">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
-            <div class="kop-sekolah">${schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'} (${schoolConfig.shortName || 'GRISAKA'})</div>
+            <div class="kop-sekolah">SMPN 1 KANDANGAN</div>
             <div class="kop-alamat">NPSN: ${schoolConfig.npsn || '20321456'} · ${schoolConfig.address || 'Kec. Kandangan'}, ${schoolConfig.city || 'Kabupaten Temanggung'} · Kode Pos: 56281</div>
             <div class="kop-alamat">Telp: ${schoolConfig.phone || '-'} · Email: ${schoolConfig.email || '-'}</div>
           </td>
@@ -365,7 +365,7 @@ export function exportViolationsToPrintPDF(
       <div class="kop-table">
         <div class="kop-instansi">PEMERINTAH KABUPATEN TEMANGGUNG</div>
         <div class="kop-instansi">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
-        <div class="kop-sekolah">${schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'} (${schoolConfig.shortName || 'GRISAKA'})</div>
+        <div class="kop-sekolah">SMPN 1 KANDANGAN</div>
         <div class="kop-alamat">NPSN: ${schoolConfig.npsn || '20321456'} · ${schoolConfig.address || 'Kec. Kandangan'}, ${schoolConfig.city || 'Kabupaten Temanggung'} · Jawa Tengah 56281</div>
         <div class="kop-alamat">Telp: ${schoolConfig.phone || '-'} · Email: ${schoolConfig.email || '-'}</div>
       </div>
@@ -517,7 +517,7 @@ export function exportStudentSlipToWord(
           <td>
             <div class="kop-instansi">PEMERINTAH KABUPATEN TEMANGGUNG</div>
             <div class="kop-instansi">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
-            <div class="kop-sekolah">${schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'} (${schoolConfig.shortName || 'GRISAKA'})</div>
+            <div class="kop-sekolah">SMPN 1 KANDANGAN</div>
             <div class="kop-sub">NPSN: ${schoolConfig.npsn || '20321456'} · Status Akreditasi: ${schoolConfig.accreditation || 'A'}</div>
             <div class="kop-sub">${schoolConfig.address || 'Jl. Raya Kandangan'}, ${schoolConfig.city || 'Kabupaten Temanggung'}, ${schoolConfig.province || 'Jawa Tengah'} ${schoolConfig.postalCode || '56281'}</div>
             <div class="kop-sub">Telp: ${schoolConfig.phone || '-'} · Email: ${schoolConfig.email || '-'} · Website: ${schoolConfig.website || '-'}</div>
@@ -809,7 +809,7 @@ export async function exportStudentSlipToPDF(
     <div style="border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 14px; text-align: center;">
       <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">PEMERINTAH KABUPATEN TEMANGGUNG</div>
       <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
-      <div style="font-size: 15pt; font-weight: bold; color: #1E3A8A; margin: 2px 0;">${schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'} (${schoolConfig.shortName || 'GRISAKA'})</div>
+      <div style="font-size: 15pt; font-weight: bold; color: #000; margin: 2px 0;">SMPN 1 KANDANGAN</div>
       <div style="font-size: 9pt;">NPSN: ${schoolConfig.npsn || '20321456'} · Status Akreditasi: ${schoolConfig.accreditation || 'A'}</div>
       <div style="font-size: 9pt;">${schoolConfig.address || 'Jl. Raya Kandangan'}, ${schoolConfig.city || 'Kabupaten Temanggung'} · Jawa Tengah 56281</div>
       <div style="font-size: 8.5pt;">Telp: ${schoolConfig.phone || '-'} · Email: ${schoolConfig.email || '-'} · Website: ${schoolConfig.website || '-'}</div>
@@ -962,13 +962,22 @@ export function exportSingleSuratToWord(
   type: 'surat_pernyataan' | 'panggilan_ortu' | 'slip_pelanggaran',
   student: Student,
   violation: ViolationRecord,
-  schoolConfig: any = SCHOOL_CONFIG
+  schoolConfig: any = SCHOOL_CONFIG,
+  customNomorSurat?: string
 ): void {
   const dateStr = new Intl.DateTimeFormat('id-ID', {
     day: 'numeric',
     month: 'long',
     year: 'numeric'
   }).format(new Date(violation.tanggal || Date.now()));
+
+  const defaultNomor = type === 'surat_pernyataan'
+    ? `Nomor: 421.3 / ${violation.id.replace('viol-', '')} / KES / ${new Date().getFullYear()}`
+    : type === 'panggilan_ortu'
+    ? `Nomor : 421.3 / ${violation.id.replace('viol-', '')} / BK / ${new Date().getFullYear()}`
+    : `Nomor : 421.3 / ${violation.id.replace('viol-', '')} / KTR / ${new Date().getFullYear()}`;
+
+  const effectiveNomor = customNomorSurat || defaultNomor;
 
   const docTitle = type === 'surat_pernyataan'
     ? 'SURAT PERNYATAAN KEDISIPLINAN SISWA'
@@ -980,58 +989,59 @@ export function exportSingleSuratToWord(
 
   if (type === 'surat_pernyataan') {
     bodyContent = `
-      <h2 style="text-align:center; text-transform:uppercase; font-size:14pt; margin:16px 0 2px 0;">SURAT PERNYATAAN SISWA</h2>
-      <div style="text-align:center; font-size:10pt; margin-bottom:16px;">Nomor: 421.3 / ${violation.id.replace('viol-', '')} / SP-TATIB / ${new Date().getFullYear()}</div>
+      <div style="text-align:center; margin-bottom:12px;">
+        <h2 style="text-align:center; text-transform:uppercase; font-size:12pt; text-decoration:underline; margin:0 0 4px 0;">SURAT PERNYATAAN SISWA</h2>
+        <div style="text-align:center; font-size:10.5pt; font-family:'Times New Roman', serif;">${effectiveNomor.startsWith('Nomor') ? effectiveNomor : `Nomor: ${effectiveNomor}`}</div>
+      </div>
       
-      <p>Yang bertanda tangan di bawah ini:</p>
-      <table style="width:100%; font-size:11pt; margin-bottom:14px; border:none;">
-        <tr><td style="width:180px; padding:3px 0;">Nama Lengkap Siswa</td><td>: <strong>${student.nama}</strong></td></tr>
-        <tr><td style="padding:3px 0;">Nomor Induk Siswa (NISN)</td><td>: ${student.nisn}</td></tr>
-        <tr><td style="padding:3px 0;">Kelas / Rombel</td><td>: ${student.kelas}</td></tr>
-        <tr><td style="padding:3px 0;">Jenis Kelamin</td><td>: ${student.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</td></tr>
-        <tr><td style="padding:3px 0;">Nama Orang Tua / Wali</td><td>: ${student.namaOrtu}</td></tr>
-        <tr><td style="padding:3px 0;">No. WhatsApp Wali</td><td>: ${student.noWaOrtu}</td></tr>
-        <tr><td style="padding:3px 0;">Alamat Rumah</td><td>: ${student.alamat}</td></tr>
+      <p style="margin:4px 0;">Yang bertanda tangan di bawah ini, saya siswa SMPN 1 Kandangan:</p>
+      <table style="width:100%; font-size:10.5pt; margin-bottom:8px; border:none; border-collapse:collapse;">
+        <tr><td style="width:180px; padding:2px 0;">Nama Lengkap Siswa</td><td style="width:10px;">:</td><td><strong>${student.nama}</strong></td></tr>
+        <tr><td style="padding:2px 0;">Nomor Induk Siswa (NISN)</td><td>:</td><td>${student.nisn}</td></tr>
+        <tr><td style="padding:2px 0;">Kelas / Rombel</td><td>:</td><td>Kelas ${student.kelas} (Jenjang ${student.jenjang})</td></tr>
+        <tr><td style="padding:2px 0;">Jenis Kelamin</td><td>:</td><td>${student.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</td></tr>
+        <tr><td style="padding:2px 0;">Nama Orang Tua / Wali</td><td>:</td><td>${student.namaOrtu}</td></tr>
+        <tr><td style="padding:2px 0;">No. WhatsApp Wali</td><td>:</td><td>${student.noWaOrtu}</td></tr>
+        <tr><td style="padding:2px 0;">Alamat Rumah</td><td>:</td><td>${student.alamat}</td></tr>
       </table>
 
-      <p style="text-align:justify;">Dengan ini menyatakan dengan penuh kesadaran dan rasa tanggung jawab bahwa saya telah melakukan pelanggaran terhadap tata tertib sekolah, yaitu:</p>
+      <p style="text-align:justify; margin:4px 0;">Dengan ini menyatakan dengan penuh kesadaran dan rasa tanggung jawab bahwa saya telah melakukan pelanggaran terhadap tata tertib sekolah, yaitu:</p>
       
-      <div style="background-color:#f8f9fa; border:1px solid #999; padding:10px; margin:10px 0; font-size:10.5pt;">
-        <div><strong>Pasal Tata Tertib:</strong> ${violation.kodePasal} - ${violation.pasalTitle}</div>
-        <div style="margin-top:4px;"><strong>Klasifikasi:</strong> Tingkat ${violation.tingkat}</div>
-        <div style="margin-top:4px;"><strong>Uraian Kejadian:</strong> ${violation.uraian}</div>
-        <div style="margin-top:4px;"><strong>Waktu & Lokasi:</strong> ${violation.tanggal} pk ${violation.waktu || ''} WIB di ${violation.lokasi}</div>
-        ${violation.catatanKhusus ? `<div style="margin-top:4px;"><strong>Catatan Tambahan:</strong> ${violation.catatanKhusus}</div>` : ''}
+      <div style="background-color:#f8f9fa; border:1px solid #666; padding:8px; margin:6px 0; font-size:10pt;">
+        <div><strong>Pasal Tata Tertib :</strong> ${violation.kodePasal} - ${violation.pasalTitle}</div>
+        <div style="margin-top:2px;"><strong>Klasifikasi Pelanggaran :</strong> Tingkat ${violation.tingkat} | <strong>Waktu & Lokasi :</strong> ${violation.tanggal} pk ${violation.waktu || '-'} WIB di ${violation.lokasi || 'Sekolah'}</div>
+        <div style="margin-top:2px;"><strong>Uraian Kejadian :</strong> ${violation.uraian}</div>
+        ${violation.catatanKhusus ? `<div style="margin-top:2px;"><strong>Catatan Tambahan :</strong> ${violation.catatanKhusus}</div>` : ''}
       </div>
 
-      <p style="text-align:justify;">Atas pelanggaran tersebut, saya berjanji dengan sungguh-sungguh:</p>
-      <ol style="margin-left:20px; line-height:1.4; font-size:10.5pt;">
-        <li>Tidak akan mengulangi perbuatan pelanggaran tata tertib tersebut maupun tata tertib lainnya di ${schoolConfig.name || 'SMP Negeri 1 Kandangan'}.</li>
-        <li>Sanggup menaati seluruh tata tertib dan norma Budaya Sekolah Aman dan Nyaman (BSAN).</li>
+      <p style="text-align:justify; margin:4px 0;">Sehubungan dengan pelanggaran tersebut, saya berjanji dengan sungguh-sungguh:</p>
+      <ol style="margin-left:20px; line-height:1.15; font-size:10.5pt; margin-top:2px; margin-bottom:6px;">
+        <li>Tidak akan mengulangi perbuatan pelanggaran tata tertib tersebut maupun tata tertib lainnya di SMPN 1 Kandangan.</li>
+        <li>Sanggup menaati seluruh tata tertib dan norma Budaya Sekolah Aman dan Nyaman (BSAN) dengan penuh kedisiplinan.</li>
         <li>Bersedia menerima sanksi yang lebih berat apabila mengulangi perbuatan yang melanggar ketentuan sekolah.</li>
         <li>Sanggup menjalankan penugasan pembinaan positif dari <strong>${violation.tahapPembinaan}</strong>.</li>
       </ol>
 
-      <p style="text-align:justify; margin-top:14px;">Demikian surat pernyataan ini saya buat dengan sebenarnya tanpa paksaan dari pihak mana pun.</p>
+      <p style="text-align:justify; margin:6px 0;">Demikian surat pernyataan ini saya buat dengan sebenarnya tanpa paksaan dari pihak mana pun.</p>
 
-      <table style="width:100%; margin-top:30px; text-align:center; font-size:10.5pt; border:none;">
+      <table style="width:100%; margin-top:16px; text-align:center; font-size:10.5pt; border:none; border-collapse:collapse;">
         <tr>
-          <td style="width:50%;">
-            Mengetahui,<br>Orang Tua / Wali Siswa<br><br><br><br>
+          <td style="width:50%; vertical-align:top;">
+            Mengetahui,<br><strong>Orang Tua / Wali Siswa</strong><br><br><br><br>
             <u>( ${student.namaOrtu} )</u>
           </td>
-          <td style="width:50%;">
-            Kandangan, ${dateStr}<br>Siswa yang Membuat Pernyataan<br><br><br><br>
+          <td style="width:50%; vertical-align:top;">
+            Kandangan, ${dateStr}<br><strong>Siswa yang Membuat Pernyataan</strong><br><br><br><br>
             <u>( ${student.nama} )</u>
           </td>
         </tr>
         <tr>
-          <td style="padding-top:24px;">
+          <td style="padding-top:18px; vertical-align:top;">
             Guru Piket / Pencatat,<br><br><br><br>
             <u>( ${violation.guruPencatat} )</u>
           </td>
-          <td style="padding-top:24px;">
-            Mengetahui,<br><strong>Kepala ${schoolConfig.name || 'SMPN 1 Kandangan'}</strong><br><br><br><br>
+          <td style="padding-top:18px; vertical-align:top;">
+            Mengetahui,<br><strong>Kepala SMPN 1 Kandangan</strong><br><br><br><br>
             <u><strong>${schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'}</strong></u><br>
             NIP. ${schoolConfig.principalNip || '-'}
           </td>
@@ -1040,9 +1050,9 @@ export function exportSingleSuratToWord(
     `;
   } else if (type === 'panggilan_ortu') {
     bodyContent = `
-      <div style="display:flex; justify-content:space-between; margin-bottom:14px; font-size:11pt;">
+      <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:10.5pt;">
         <div>
-          <div>Nomor : 421.3 / ${violation.id.replace('viol-', '')} / PGL-BK / ${new Date().getFullYear()}</div>
+          <div>${effectiveNomor.startsWith('Nomor') ? effectiveNomor : `Nomor : ${effectiveNomor}`}</div>
           <div>Lampiran : -</div>
           <div>Perihal : <strong>Panggilan Orang Tua / Wali Siswa</strong></div>
         </div>
@@ -1052,35 +1062,35 @@ export function exportSingleSuratToWord(
         </div>
       </div>
 
-      <p style="font-size:11pt;">Kepada Yth.<br>Bapak/Ibu Orang Tua/Wali dari:<br><strong>${student.nama}</strong> (Kelas ${student.kelas})<br>di Tempat</p>
+      <p style="font-size:10.5pt; margin:4px 0;">Kepada Yth.<br>Bapak/Ibu Orang Tua/Wali dari:<br><strong>${student.nama}</strong> (Kelas ${student.kelas})<br>di Tempat</p>
 
-      <p style="text-align:justify; font-size:11pt;">Dengan hormat,</p>
-      <p style="text-align:justify; font-size:11pt;">Sehubungan dengan monitoring Budaya Sekolah Aman dan Nyaman (BSAN) serta tindak lanjut tata tertib siswa di ${schoolConfig.name || 'SMP Negeri 1 Kandangan'}, kami mengharap kehadiran Bapak/Ibu Orang Tua/Wali murid pada:</p>
+      <p style="text-align:justify; font-size:10.5pt; margin:4px 0;">Dengan hormat,</p>
+      <p style="text-align:justify; font-size:10.5pt; margin:4px 0;">Sehubungan dengan monitoring Budaya Sekolah Aman dan Nyaman (BSAN) serta tindak lanjut tata tertib siswa di SMPN 1 Kandangan, kami mengharap kehadiran Bapak/Ibu Orang Tua/Wali murid pada:</p>
 
-      <table style="width:100%; font-size:11pt; margin-left:14px; margin-bottom:14px; border:none;">
-        <tr><td style="width:140px; padding:3px 0;"><strong>Hari, Tanggal</strong></td><td>: <strong>Menyesuaikan Jadwal Terlampir</strong></td></tr>
-        <tr><td style="padding:3px 0;"><strong>Waktu</strong></td><td>: 08.00 WIB - Selesai</td></tr>
-        <tr><td style="padding:3px 0;"><strong>Tempat</strong></td><td>: Ruang Bimbingan Konseling (BK) / Kesiswaan</td></tr>
-        <tr><td style="padding:3px 0;"><strong>Menemui</strong></td><td>: ${violation.tahapPembinaan}</td></tr>
-        <tr><td style="padding:3px 0;"><strong>Keperluan</strong></td><td>: Koordinasi Pembinaan Kedisiplinan (${violation.kodePasal} - Tingkat ${violation.tingkat})</td></tr>
+      <table style="width:100%; font-size:10.5pt; margin-left:14px; margin-bottom:8px; border:none; border-collapse:collapse;">
+        <tr><td style="width:140px; padding:2px 0;"><strong>Hari, Tanggal</strong></td><td style="width:10px;">:</td><td><strong>Menyesuaikan Jadwal Terlampir</strong></td></tr>
+        <tr><td style="padding:2px 0;"><strong>Waktu</strong></td><td>:</td><td>08.00 WIB - Selesai</td></tr>
+        <tr><td style="padding:2px 0;"><strong>Tempat</strong></td><td>:</td><td>Ruang Bimbingan Konseling (BK) / Kesiswaan</td></tr>
+        <tr><td style="padding:2px 0;"><strong>Menemui</strong></td><td>:</td><td>${violation.tahapPembinaan}</td></tr>
+        <tr><td style="padding:2px 0;"><strong>Keperluan</strong></td><td>:</td><td>Koordinasi Pembinaan Kedisiplinan (${violation.kodePasal} - Tingkat ${violation.tingkat})</td></tr>
       </table>
 
-      <p style="text-align:justify; font-size:11pt;">Mengingat pentingnya pertemuan ini demi masa depan ananda, kami sangat mengharapkan kehadiran Bapak/Ibu tepat waktu. Atas perhatian dan kerja samanya, kami ucapkan terima kasih.</p>
+      <p style="text-align:justify; font-size:10.5pt; margin:6px 0;">Mengingat pentingnya pertemuan ini demi masa depan dan pembinaan karakter ananda, kami sangat mengharapkan kehadiran Bapak/Ibu tepat waktu. Atas perhatian dan kerja samanya, kami ucapkan terima kasih.</p>
 
-      <table style="width:100%; margin-top:30px; text-align:center; font-size:10.5pt; border:none;">
+      <table style="width:100%; margin-top:20px; text-align:center; font-size:10pt; border:none; border-collapse:collapse;">
         <tr>
-          <td style="width:33%;">
+          <td style="width:33%; vertical-align:top;">
             Mengetahui,<br><strong>${schoolConfig.bkTitle || 'Guru Bimbingan Konseling'}</strong><br><br><br><br>
             <u><strong>${schoolConfig.bkName || 'Sri Wahyuni, S.Pd., M.Si.'}</strong></u><br>
             NIP. ${schoolConfig.bkNip || '-'}
           </td>
-          <td style="width:33%;">
+          <td style="width:33%; vertical-align:top;">
             Mengetahui,<br><strong>${schoolConfig.timKesiswaanTitle || 'Tim Kesiswaan / Ketertiban'}</strong><br><br><br><br>
             <u><strong>${schoolConfig.timKesiswaanName || schoolConfig.wakasekName || 'Tim Kesiswaan'}</strong></u><br>
             NIP. ${schoolConfig.timKesiswaanNip || schoolConfig.wakasekNip || '-'}
           </td>
-          <td style="width:33%;">
-            Kandangan, ${dateStr}<br><strong>Kepala Sekolah</strong><br><br><br><br>
+          <td style="width:33%; vertical-align:top;">
+            Kandangan, ${dateStr}<br><strong>Kepala SMPN 1 Kandangan</strong><br><br><br><br>
             <u><strong>${schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'}</strong></u><br>
             NIP. ${schoolConfig.principalNip || '-'}
           </td>
@@ -1090,26 +1100,28 @@ export function exportSingleSuratToWord(
   } else {
     // slip_pelanggaran
     bodyContent = `
-      <h2 style="text-align:center; text-transform:uppercase; font-size:13pt; margin:14px 0 2px 0;">SLIP BUKTI KONTROL PELANGGARAN TATA TERTIB</h2>
-      <div style="text-align:center; font-size:10pt; margin-bottom:14px;">Registrasi No: ${violation.id}</div>
+      <div style="text-align:center; margin-bottom:10px;">
+        <h2 style="text-align:center; text-transform:uppercase; font-size:12pt; text-decoration:underline; margin:0 0 4px 0;">SLIP BUKTI KONTROL PELANGGARAN TATA TERTIB</h2>
+        <div style="text-align:center; font-size:10pt;">${effectiveNomor.startsWith('Nomor') ? effectiveNomor : `Nomor : ${effectiveNomor}`}</div>
+      </div>
 
-      <table style="width:100%; border-collapse:collapse; font-size:10.5pt; margin-bottom:14px;">
-        <tr><td style="border:1px solid #333; padding:6px; width:30%; background:#f0f0f0;"><strong>Nama Siswa</strong></td><td style="border:1px solid #333; padding:6px; font-weight:bold;">${student.nama}</td></tr>
-        <tr><td style="border:1px solid #333; padding:6px; background:#f0f0f0;"><strong>NISN / Kelas</strong></td><td style="border:1px solid #333; padding:6px;">${student.nisn} / Kelas ${student.kelas}</td></tr>
-        <tr><td style="border:1px solid #333; padding:6px; background:#f0f0f0;"><strong>Pasal Tata Tertib</strong></td><td style="border:1px solid #333; padding:6px;"><strong>${violation.kodePasal}</strong> - ${violation.pasalTitle}</td></tr>
-        <tr><td style="border:1px solid #333; padding:6px; background:#f0f0f0;"><strong>Tingkat Klasifikasi</strong></td><td style="border:1px solid #333; padding:6px; font-weight:bold; color:${violation.tingkat === 'Berat' ? '#DC2626' : violation.tingkat === 'Sedang' ? '#D97706' : '#16A34A'};">Tingkat ${violation.tingkat}</td></tr>
-        <tr><td style="border:1px solid #333; padding:6px; background:#f0f0f0;"><strong>Uraian Kejadian</strong></td><td style="border:1px solid #333; padding:6px;">${violation.uraian}</td></tr>
-        <tr><td style="border:1px solid #333; padding:6px; background:#f0f0f0;"><strong>Waktu & Lokasi</strong></td><td style="border:1px solid #333; padding:6px;">${violation.tanggal} pk ${violation.waktu || ''} WIB di ${violation.lokasi}</td></tr>
-        <tr><td style="border:1px solid #333; padding:6px; background:#f0f0f0;"><strong>Tahap Penanganan</strong></td><td style="border:1px solid #333; padding:6px;">${violation.tahapPembinaan}</td></tr>
-        <tr><td style="border:1px solid #333; padding:6px; background:#f0f0f0;"><strong>Petugas Pencatat</strong></td><td style="border:1px solid #333; padding:6px;">${violation.guruPencatat}</td></tr>
-        <tr><td style="border:1px solid #333; padding:6px; background:#f0f0f0;"><strong>Wali / No. WA</strong></td><td style="border:1px solid #333; padding:6px;">${student.namaOrtu} (${student.noWaOrtu})</td></tr>
+      <table style="width:100%; border-collapse:collapse; font-size:10pt; margin-bottom:10px;">
+        <tr><td style="border:1px solid #333; padding:4px 6px; width:30%; background:#f0f0f0;"><strong>Nama Siswa</strong></td><td style="border:1px solid #333; padding:4px 6px; font-weight:bold;">${student.nama}</td></tr>
+        <tr><td style="border:1px solid #333; padding:4px 6px; background:#f0f0f0;"><strong>NISN / Kelas</strong></td><td style="border:1px solid #333; padding:4px 6px;">${student.nisn} / Kelas ${student.kelas}</td></tr>
+        <tr><td style="border:1px solid #333; padding:4px 6px; background:#f0f0f0;"><strong>Pasal Tata Tertib</strong></td><td style="border:1px solid #333; padding:4px 6px;"><strong>${violation.kodePasal}</strong> - ${violation.pasalTitle}</td></tr>
+        <tr><td style="border:1px solid #333; padding:4px 6px; background:#f0f0f0;"><strong>Tingkat Klasifikasi</strong></td><td style="border:1px solid #333; padding:4px 6px; font-weight:bold; color:${violation.tingkat === 'Berat' ? '#DC2626' : violation.tingkat === 'Sedang' ? '#D97706' : '#16A34A'};">Tingkat ${violation.tingkat}</td></tr>
+        <tr><td style="border:1px solid #333; padding:4px 6px; background:#f0f0f0;"><strong>Uraian Kejadian</strong></td><td style="border:1px solid #333; padding:4px 6px;">${violation.uraian}</td></tr>
+        <tr><td style="border:1px solid #333; padding:4px 6px; background:#f0f0f0;"><strong>Waktu & Lokasi</strong></td><td style="border:1px solid #333; padding:4px 6px;">${violation.tanggal} pk ${violation.waktu || ''} WIB di ${violation.lokasi}</td></tr>
+        <tr><td style="border:1px solid #333; padding:4px 6px; background:#f0f0f0;"><strong>Tahap Penanganan</strong></td><td style="border:1px solid #333; padding:4px 6px;">${violation.tahapPembinaan}</td></tr>
+        <tr><td style="border:1px solid #333; padding:4px 6px; background:#f0f0f0;"><strong>Petugas Pencatat</strong></td><td style="border:1px solid #333; padding:4px 6px;">${violation.guruPencatat}</td></tr>
+        <tr><td style="border:1px solid #333; padding:4px 6px; background:#f0f0f0;"><strong>Wali / No. WA</strong></td><td style="border:1px solid #333; padding:4px 6px;">${student.namaOrtu} (${student.noWaOrtu})</td></tr>
       </table>
 
-      <table style="width:100%; margin-top:24px; text-align:center; font-size:10pt; border:none;">
+      <table style="width:100%; margin-top:18px; text-align:center; font-size:10pt; border:none; border-collapse:collapse;">
         <tr>
-          <td style="width:33%;">Siswa Terkait,<br><br><br><br><u>( ${student.nama} )</u></td>
-          <td style="width:33%;">Guru Piket,<br><br><br><br><u>( ${violation.guruPencatat} )</u></td>
-          <td style="width:33%;">Wali Kelas / BK,<br><br><br><br><u>( ${schoolConfig.bkName || 'Guru BK'} )</u></td>
+          <td style="width:33%; vertical-align:top;">Siswa Terkait,<br><br><br><br><u>( ${student.nama} )</u></td>
+          <td style="width:33%; vertical-align:top;">Guru Piket,<br><br><br><br><u>( ${violation.guruPencatat} )</u></td>
+          <td style="width:33%; vertical-align:top;">Wali Kelas / BK,<br><br><br><br><u>( ${schoolConfig.bkName || 'Guru BK'} )</u></td>
         </tr>
       </table>
     `;
@@ -1121,23 +1133,30 @@ export function exportSingleSuratToWord(
       <meta charset='utf-8'>
       <title>${docTitle}</title>
       <style>
-        body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.3; color: #000; margin: 15mm; }
-        .kop-table { width: 100%; border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 16px; }
-        .kop-table td { text-align: center; }
-        .kop-instansi { font-size: 11pt; font-weight: bold; text-transform: uppercase; }
-        .kop-sekolah { font-size: 15pt; font-weight: bold; letter-spacing: 0.5px; color: #1E3A8A; }
-        .kop-alamat { font-size: 9pt; font-style: italic; }
+        @page { size: A4 portrait; margin: 1.5cm; }
+        body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.15; color: #000; margin: 1.5cm; }
+        .kop-table { width: 100%; border-bottom: 3px double #000; padding-bottom: 6px; margin-bottom: 12px; }
+        .kop-table td { text-align: center; vertical-align: middle; }
+        .kop-instansi { font-size: 11pt; font-weight: bold; text-transform: uppercase; margin: 0; }
+        .kop-sekolah { font-size: 14pt; font-weight: bold; letter-spacing: 0.5px; color: #000; text-transform: uppercase; margin: 2px 0; }
+        .kop-alamat { font-size: 9pt; margin: 1px 0; }
       </style>
     </head>
     <body>
       <table class="kop-table">
         <tr>
-          <td>
+          <td style="width: 70px; text-align: left;">
+            <img src="/assets/logo_temanggung.svg" width="60" height="70" alt="Logo Pemda Temanggung" />
+          </td>
+          <td style="text-align: center;">
             <div class="kop-instansi">PEMERINTAH KABUPATEN TEMANGGUNG</div>
             <div class="kop-instansi">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
-            <div class="kop-sekolah">${schoolConfig.name || 'SMP NEGERI 1 KANDANGAN'} (${schoolConfig.shortName || 'GRISAKA'})</div>
-            <div class="kop-alamat">NPSN: ${schoolConfig.npsn || '20321456'} · ${schoolConfig.address || 'Kec. Kandangan'}, ${schoolConfig.city || 'Kabupaten Temanggung'} · Jawa Tengah 56281</div>
-            <div class="kop-alamat">Telp: ${schoolConfig.phone || '-'} | Website: ${schoolConfig.website || '-'} | Email: ${schoolConfig.email || '-'}</div>
+            <div class="kop-sekolah">SMPN 1 KANDANGAN</div>
+            <div class="kop-alamat">Alamat: ${schoolConfig.address || 'Jl. Raya Kandangan - Temanggung, Kec. Kandangan'}, ${schoolConfig.city || 'Kabupaten Temanggung'} ${schoolConfig.postalCode || '56281'}</div>
+            <div class="kop-alamat">Telepon: ${schoolConfig.phone || '(0293) 490123'} · Email: ${schoolConfig.email || 'smpn1kandangan@temanggungkab.go.id'} · Laman: ${schoolConfig.website || 'smpn1kandangan-tmg.sch.id'}</div>
+          </td>
+          <td style="width: 70px; text-align: right;">
+            <img src="${schoolConfig.logoUrl || '/assets/logo_tutwuri.svg'}" width="60" height="70" alt="Logo Sekolah" />
           </td>
         </tr>
       </table>
@@ -1228,7 +1247,7 @@ export function triggerFileDownload(blobOrUrl: Blob | string, filename: string):
 export async function exportElementToPDF(
   element: HTMLElement,
   filename: string,
-  options?: { landscape?: boolean; scale?: number }
+  options?: { landscape?: boolean; scale?: number; singlePage?: boolean }
 ): Promise<{ success: boolean; blobUrl?: string }> {
   const cleanFilename = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
 
@@ -1241,6 +1260,13 @@ export async function exportElementToPDF(
     // ignore
   }
 
+  const isSinglePage = Boolean(
+    options?.singlePage || 
+    cleanFilename.includes('surat_pernyataan') || 
+    cleanFilename.includes('panggilan_ortu') || 
+    cleanFilename.includes('slip_pelanggaran')
+  );
+
   // Create isolated offscreen container with exact A4 dimensions
   const offscreen = document.createElement('div');
   offscreen.id = 'pdf-render-canvas-holder';
@@ -1248,6 +1274,11 @@ export async function exportElementToPDF(
   offscreen.style.left = '0';
   offscreen.style.top = '0';
   offscreen.style.width = '794px'; // Standard A4 width @ 96 DPI
+  if (isSinglePage) {
+    offscreen.style.height = '1123px';
+    offscreen.style.maxHeight = '1123px';
+    offscreen.style.overflow = 'hidden';
+  }
   offscreen.style.backgroundColor = '#ffffff';
   offscreen.style.color = '#000000';
   offscreen.style.zIndex = '-99999';
@@ -1258,15 +1289,23 @@ export async function exportElementToPDF(
   clone.style.width = '794px';
   clone.style.maxWidth = '794px';
   clone.style.minWidth = '794px';
-  clone.style.minHeight = 'auto';
-  clone.style.height = 'auto';
-  clone.style.overflow = 'visible';
+  if (isSinglePage) {
+    clone.style.height = '1123px';
+    clone.style.maxHeight = '1123px';
+    clone.style.padding = '57px'; // Exact 1.5 cm margins (15mm = 56.7px @ 96DPI)
+    clone.style.boxSizing = 'border-box';
+    clone.style.overflow = 'hidden';
+  } else {
+    clone.style.minHeight = 'auto';
+    clone.style.height = 'auto';
+    clone.style.overflow = 'visible';
+    clone.style.padding = '32px';
+  }
   clone.style.transform = 'none';
   clone.style.boxShadow = 'none';
   clone.style.borderRadius = '0';
   clone.style.border = 'none';
   clone.style.margin = '0';
-  clone.style.padding = '32px';
   clone.style.backgroundColor = '#ffffff';
   clone.style.color = '#000000';
   clone.style.display = 'block';
@@ -1275,7 +1314,6 @@ export async function exportElementToPDF(
   // Remove any interactive or no-print buttons
   const noPrintItems = clone.querySelectorAll('.no-print, .exclude-pdf, button');
   noPrintItems.forEach((btn) => {
-    // keep non-button items, but remove any UI action buttons
     if (btn.classList.contains('no-print') || btn.tagName === 'BUTTON') {
       btn.remove();
     }
@@ -1286,7 +1324,6 @@ export async function exportElementToPDF(
   allElements.forEach((node) => {
     const el = node as HTMLElement;
     if (el.style) {
-      // Prevent background-clip: text crashes in html2canvas
       if (el.style.backgroundClip === 'text' || (el.style as any).webkitBackgroundClip === 'text') {
         el.style.backgroundClip = 'border-box';
         (el.style as any).webkitBackgroundClip = 'border-box';
@@ -1316,7 +1353,7 @@ export async function exportElementToPDF(
   await new Promise((r) => setTimeout(r, 60));
 
   try {
-    const totalHeight = Math.max(clone.scrollHeight, clone.offsetHeight, 1050);
+    const totalHeight = isSinglePage ? 1123 : Math.max(clone.scrollHeight, clone.offsetHeight, 1050);
 
     const canvas = await html2canvas(clone, {
       scale: options?.scale || 2,
@@ -1346,20 +1383,25 @@ export async function exportElementToPDF(
 
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pdfWidth;
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-    let heightLeft = imgHeight;
-    let position = 0;
+    if (isSinglePage) {
+      // Strictly 1 single page - exactly 1 copy, no 2nd page ever generated!
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+    } else {
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
 
-    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pdfHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
       pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
       heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
     }
 
     const blob = pdf.output('blob');
@@ -1508,7 +1550,7 @@ export function exportAttendanceToWord(
       <div class="kop-table">
         <div class="kop-instansi">PEMERINTAH KABUPATEN TEMANGGUNG</div>
         <div class="kop-instansi">DINAS PENDIDIKAN, KEPEMUDAAN DAN OLAHRAGA</div>
-        <div class="kop-sekolah">${schoolConfig.name} (${schoolConfig.shortName})</div>
+        <div class="kop-sekolah">SMPN 1 KANDANGAN</div>
         <div class="kop-sub">NPSN: ${schoolConfig.npsn} | Status Akreditasi: ${schoolConfig.accreditation}</div>
         <div class="kop-sub">${schoolConfig.address}, ${schoolConfig.city}, ${schoolConfig.province} ${schoolConfig.postalCode}</div>
         <div class="kop-sub">Telp: ${schoolConfig.phone} | Website: ${schoolConfig.website} | Email: ${schoolConfig.email}</div>

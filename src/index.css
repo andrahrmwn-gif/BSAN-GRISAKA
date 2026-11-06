@@ -23,13 +23,21 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 100% !important;
+    width: 210mm !important;
+    max-width: 210mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
     margin: 0 !important;
-    padding: 15mm 20mm !important;
+    padding: 15mm !important; /* Exactly 1.5 cm margins: top, bottom, left, right */
+    box-sizing: border-box !important;
     background: white !important;
     color: black !important;
     box-shadow: none !important;
     border: none !important;
+    overflow: hidden !important;
+    page-break-after: avoid !important;
+    page-break-inside: avoid !important;
+    break-after: avoid !important;
   }
   .no-print {
     display: none !important;
@@ -44,6 +52,6 @@
   }
   @page {
     size: A4 portrait;
-    margin: 12mm 15mm;
+    margin: 0; /* Zero page margin so 15mm padding yields exactly 1.5cm on all sides */
   }
 }
