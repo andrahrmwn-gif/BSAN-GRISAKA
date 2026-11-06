@@ -768,7 +768,38 @@ export const updateAccount = (id: string, updates: Partial<UserAccount>): { succ
   const updatedAcc = { ...accounts[index], ...updates };
   accounts[index] = updatedAcc;
   saveAccounts(accounts);
-  syncAccountToFirestore(updatedAcc).catch(console.error);
+  syncAccountToFirestore(updatedAcc).catch((err) => {
+    console.error('Failed syncing updated account to Firestore', err);
+  });
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('bsan_accounts_changed', { detail: accounts }));
+  }
+
+  return { success: true, message: 'Perubahan akun berhasil disimpan' };
+};
+
+export const updateAccountAsync = async (id: string, updates: Partial<UserAccount>): Promise<{ success: boolean; message: string }> => {
+  const accounts = getStoredAccounts();
+  const index = accounts.findIndex(a => a.id === id);
+  if (index === -1) {
+    return { success: false, message: 'Akun tidak ditemukan' };
+  }
+
+  const updatedAcc = { ...accounts[index], ...updates };
+  accounts[index] = updatedAcc;
+  saveAccounts(accounts);
+
+  try {
+    await syncAccountToFirestore(updatedAcc);
+  } catch (err) {
+    console.error('Failed syncing updated account to Firestore', err);
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('bsan_accounts_changed', { detail: accounts }));
+  }
+
   return { success: true, message: 'Perubahan akun berhasil disimpan' };
 };
 

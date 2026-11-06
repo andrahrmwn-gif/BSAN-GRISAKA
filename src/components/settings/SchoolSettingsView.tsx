@@ -35,7 +35,7 @@ import {
 import { User } from 'firebase/auth';
 import { AccountManager } from './AccountManager';
 import { AuditLogTable } from './AuditLogTable';
-import { isGuestMode, getCurrentUser, updateAccount } from '../../services/authService';
+import { isGuestMode, getCurrentUser, updateAccount, updateAccountAsync } from '../../services/authService';
 import { logAudit } from '../../services/auditLogger';
 import { UserAccount } from '../../types/auth';
 import { Users, Shield, History, Lock, Key, Eye, EyeOff } from 'lucide-react';
@@ -159,7 +159,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
 
   const currentUser = getCurrentUser();
 
-  const handleChangePasswordSubmit = (e: React.FormEvent) => {
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
     setPasswordSuccess(null);
@@ -188,7 +188,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
     }
 
     const newPin = passwordForm.newPassword.trim();
-    const res = updateAccount(currentUser.id, { pin: newPin });
+    const res = await updateAccountAsync(currentUser.id, { pin: newPin });
     if (res.success) {
       const updatedUser: UserAccount = { ...currentUser, pin: newPin };
       if (onUserUpdated) {

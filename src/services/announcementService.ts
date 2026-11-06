@@ -89,28 +89,14 @@ function generateDefaultActivities(): SchoolActivity[] {
 }
 
 export function isAnnouncementsInitialized(): boolean {
-  try {
-    return localStorage.getItem(INITIALIZED_KEY) === 'true';
-  } catch {
-    return false;
-  }
+  return true;
 }
 
 export function getStoredActivities(): SchoolActivity[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    const initialized = localStorage.getItem(INITIALIZED_KEY) === 'true';
-
-    // If never initialized before and no storage, seed defaults once
-    if (raw === null && !initialized) {
-      const defaults = generateDefaultActivities();
-      localStorage.setItem(INITIALIZED_KEY, 'true');
-      saveActivities(defaults);
-      return defaults;
-    }
-
-    // If initialized but empty or null, return empty array - NEVER re-seed deleted activities!
-    if (raw === null || raw.trim() === '' || raw === '[]') {
+    // If empty or null or empty array string, return [] - NEVER generate default dummy activities!
+    if (!raw || raw.trim() === '' || raw === '[]') {
       return [];
     }
 

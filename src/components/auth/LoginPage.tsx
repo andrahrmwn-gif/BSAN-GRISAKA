@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserAccount } from '../../types/auth';
 import { SchoolProfile } from '../../types';
 import { SCHOOL_CONFIG } from '../../data/schoolConfig';
-import { getStoredAccounts, setCurrentUserId } from '../../services/authService';
+import { getStoredAccounts, saveAccounts, setCurrentUserId } from '../../services/authService';
+import { subscribeToAccounts, getAccountDirectlyFromFirestore } from '../../services/firebase';
 import { logAudit } from '../../services/auditLogger';
 import { 
   LogIn, 
@@ -28,13 +29,36 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   schoolConfig = SCHOOL_CONFIG,
   onLoginSuccess,
 }) => {
-  const [accounts] = useState<UserAccount[]>(() => getStoredAccounts());
+  const [accounts, setAccounts] = useState<UserAccount[]>(() => getStoredAccounts());
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [pin, setPin] = useState<string>('');
   const [showPin, setShowPin] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const [isVerifying, setIsVerifying] = useState<boolean>(false);
+
+  // Subscribe to real-time accounts and listen to changes
+  useEffect(() => {
+    const unsub = subscribeToAccounts((liveAccounts) => {
+      if (liveAccounts && liveAccounts.length > 0) {
+        setAccounts(liveAccounts);
+        saveAccounts(liveAccounts);
+      }
+    });
+
+    const handleLocalAccountsChanged = (e: any) => {
+      if (e.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+        setAccounts(e.detail);
+      }
+    };
+    window.addEventListener('bsan_accounts_changed', handleLocalAccountsChanged);
+
+    return () => {
+      unsub();
+      window.removeEventListener('bsan_accounts_changed', handleLocalAccountsChanged);
+    };
+  }, []);
 
   const currentSchool = schoolConfig || SCHOOL_CONFIG;
 
@@ -51,7 +75,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -65,30 +89,55 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
-    const expectedPin = selectedAccount.pin || '1234';
+    const enteredPin = pin.trim();
+    let verifiedAccount: UserAccount | null = null;
+    const localExpectedPin = selectedAccount.pin || '1234';
 
-    if (pin.trim() !== expectedPin) {
+    if (enteredPin === localExpectedPin) {
+      verifiedAccount = selectedAccount;
+    } else {
+      // Cross-device password verification: query Firestore directly in case password was changed on another device
+      setIsVerifying(true);
+      try {
+        const cloudAccount = await getAccountDirectlyFromFirestore(selectedAccount.id);
+        if (cloudAccount && (cloudAccount.pin || '1234') === enteredPin) {
+          verifiedAccount = cloudAccount;
+          // Synchronize local accounts cache with cloud account
+          setAccounts((prev) => {
+            const updated = prev.map((a) => (a.id === cloudAccount.id ? cloudAccount : a));
+            saveAccounts(updated);
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.warn('Direct Firestore verification error', err);
+      } finally {
+        setIsVerifying(false);
+      }
+    }
+
+    if (!verifiedAccount) {
       setErrorMsg('Password / PIN yang Anda masukkan salah. Password default awal adalah 1234.');
       return;
     }
 
     // Success login
-    setCurrentUserId(selectedAccount.id);
+    setCurrentUserId(verifiedAccount.id);
     sessionStorage.setItem('bsan_active_session_unlocked', 'true');
 
     logAudit({
       actionType: 'LOGIN',
       module: 'Autentikasi',
-      description: `Login sukses petugas: ${selectedAccount.name} (${selectedAccount.role})`,
+      description: `Login sukses petugas: ${verifiedAccount.name} (${verifiedAccount.role})`,
       status: 'SUCCESS',
       forcedUser: {
-        id: selectedAccount.id,
-        name: selectedAccount.name,
-        role: selectedAccount.role,
+        id: verifiedAccount.id,
+        name: verifiedAccount.name,
+        role: verifiedAccount.role,
       },
     });
 
-    onLoginSuccess(selectedAccount);
+    onLoginSuccess(verifiedAccount);
   };
 
   return (
@@ -264,10 +313,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <div className="pt-2">
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white text-xs font-bold shadow-lg shadow-blue-900/20 transition-all active:scale-98 cursor-pointer"
+                disabled={isVerifying}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white text-xs font-bold shadow-lg shadow-blue-900/20 transition-all active:scale-98 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                <LogIn className="w-4 h-4" />
-                <span>Masuk ke Sistem Aplikasi</span>
+                {isVerifying ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Memverifikasi Akun...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="w-4 h-4" />
+                    <span>Masuk ke Sistem Aplikasi</span>
+                  </>
+                )}
               </button>
             </div>
           </form>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserAccount } from '../../types/auth';
-import { getCurrentUser, updateAccount } from '../../services/authService';
+import { getCurrentUser, updateAccount, updateAccountAsync } from '../../services/authService';
 import { logAudit } from '../../services/auditLogger';
 import { 
   User, 
@@ -51,7 +51,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
     }
   };
 
-  const handleChangePasswordSubmit = (e: React.FormEvent) => {
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -75,7 +75,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
       return;
     }
 
-    const res = updateAccount(activeUser.id, { pin: newPin.trim() });
+    const res = await updateAccountAsync(activeUser.id, { pin: newPin.trim() });
     if (res.success) {
       setSuccessMsg('Password akun berhasil diperbarui! Gunakan password baru ini untuk login berikutnya.');
       logAudit({

@@ -147,36 +147,19 @@ export default function App() {
     });
 
     const unsubActivities = subscribeToActivities((remoteActivities) => {
-      const initialized = localStorage.getItem('bsan_grisaka_announcements_initialized_v2') === 'true';
-      if (remoteActivities.length > 0) {
-        try {
-          localStorage.setItem('bsan_grisaka_announcements_v1', JSON.stringify(remoteActivities));
-          localStorage.setItem('bsan_grisaka_announcements_initialized_v2', 'true');
-          window.dispatchEvent(new CustomEvent('bsan_activities_changed', { detail: remoteActivities }));
-        } catch {}
-      } else if (!initialized) {
-        // Only seed once on brand-new fresh system installation
-        const defaults = getStoredActivities();
-        if (defaults.length > 0) {
-          bulkSyncActivitiesToFirestore(defaults).catch(console.error);
-        }
-      } else {
-        // Cloud is empty because activities were deleted by user; keep empty! Never re-seed deleted activities!
-        try {
-          localStorage.setItem('bsan_grisaka_announcements_v1', JSON.stringify([]));
-          window.dispatchEvent(new CustomEvent('bsan_activities_changed', { detail: [] }));
-        } catch {}
-      }
+      try {
+        localStorage.setItem('bsan_grisaka_announcements_v1', JSON.stringify(remoteActivities || []));
+        localStorage.setItem('bsan_grisaka_announcements_initialized_v2', 'true');
+        window.dispatchEvent(new CustomEvent('bsan_activities_changed', { detail: remoteActivities || [] }));
+      } catch {}
     });
 
     const unsubAccounts = subscribeToAccounts((remoteAccounts) => {
-      if (remoteAccounts.length > 0) {
+      if (remoteAccounts && remoteAccounts.length > 0) {
         try {
           localStorage.setItem('bsan_grisaka_accounts_dapodik_v3', JSON.stringify(remoteAccounts));
+          window.dispatchEvent(new CustomEvent('bsan_accounts_changed', { detail: remoteAccounts }));
         } catch {}
-      } else {
-        const defaults = getStoredAccounts();
-        bulkSyncAccountsToFirestore(defaults).catch(console.error);
       }
     });
 

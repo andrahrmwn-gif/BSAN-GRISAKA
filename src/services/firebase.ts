@@ -7,6 +7,7 @@ import {
   setDoc, 
   deleteDoc, 
   getDocFromServer,
+  getDoc,
   onSnapshot, 
   writeBatch,
   getDocs
@@ -460,6 +461,33 @@ export const bulkSyncAccountsToFirestore = async (accounts: UserAccount[]): Prom
     await batch.commit();
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, COLLECTIONS.ACCOUNTS);
+  }
+};
+
+/**
+ * Direct fetch of a single user account from Firestore
+ * Guarantees cross-device password verification succeeds even before real-time sync completes
+ */
+export const getAccountDirectlyFromFirestore = async (accountId: string): Promise<UserAccount | null> => {
+  try {
+    const docRef = doc(db, COLLECTIONS.ACCOUNTS, accountId);
+    const snap = await getDocFromServer(docRef);
+    if (snap.exists()) {
+      return snap.data() as UserAccount;
+    }
+    return null;
+  } catch (err) {
+    console.warn('Direct fetch from server failed, falling back to cache or null', err);
+    try {
+      const docRef = doc(db, COLLECTIONS.ACCOUNTS, accountId);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        return snap.data() as UserAccount;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 };
 
