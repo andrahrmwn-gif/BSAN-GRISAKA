@@ -52,6 +52,8 @@ import { RecordViolationModal } from './components/modals/RecordViolationModal';
 import { SuratPernyataanModal } from './components/modals/SuratPernyataanModal';
 import { StudentSlipDetailModal } from './components/modals/StudentSlipDetailModal';
 import { AccountSwitchModal } from './components/modals/AccountSwitchModal';
+import { LogoutConfirmModal } from './components/modals/LogoutConfirmModal';
+import { SessionTimeoutModal } from './components/modals/SessionTimeoutModal';
 import { LoginPage } from './components/auth/LoginPage';
 import { generateViolationMessage } from './utils/whatsapp';
 import { RotateCcw, AlertTriangle, CheckCircle2, X, ShieldAlert, Menu } from 'lucide-react';
@@ -75,6 +77,11 @@ export default function App() {
   // User Authentication & Guest Mode state
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
   const [isAccountSwitchOpen, setIsAccountSwitchOpen] = useState(false);
+
+  // Security: Logout Confirmation & Session Inactivity Timeout states
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showSessionTimeoutWarning, setShowSessionTimeoutWarning] = useState(false);
+  const [sessionWarningSeconds, setSessionWarningSeconds] = useState(60);
 
   // Mobile sidebar drawer state
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -215,36 +222,47 @@ export default function App() {
     });
   }, [violations]);
 
-  // Security Auto-Lock: Automatically revert to Guest Mode after 15 minutes of inactivity
+  // Security Auto-Lock / Session Inactivity Timeout (14 min active + 60s countdown warning)
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !isSessionUnlocked) return;
 
-    let timeoutId: any;
-    const INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 minutes
+    let warnTimeoutId: any;
+    let countdownIntervalId: any;
+    const INACTIVITY_WARN_MS = 14 * 60 * 1000; // 14 minutes
+
+    const startCountdown = () => {
+      setShowSessionTimeoutWarning(true);
+      setSessionWarningSeconds(60);
+
+      countdownIntervalId = setInterval(() => {
+        setSessionWarningSeconds((prev) => {
+          if (prev <= 1) {
+            clearInterval(countdownIntervalId);
+            executeLogout('Sesi diakhiri otomatis karena tidak ada aktivitas selama 15 menit (Auto-Timeout Keamanan)');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    };
 
     const resetInactivityTimer = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        setCurrentUserId('guest');
-        setCurrentUser(null);
-        logAudit({
-          actionType: 'LOGOUT',
-          module: 'Autentikasi',
-          description: 'Sesi otomatis terkunci kembali ke Mode Tamu karena tidak ada aktivitas selama 15 menit (Auto-Lock Keamanan)',
-          status: 'SUCCESS',
-        });
-      }, INACTIVITY_LIMIT_MS);
+      if (showSessionTimeoutWarning) return;
+      if (warnTimeoutId) clearTimeout(warnTimeoutId);
+      if (countdownIntervalId) clearInterval(countdownIntervalId);
+      warnTimeoutId = setTimeout(startCountdown, INACTIVITY_WARN_MS);
     };
 
-    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
     events.forEach((ev) => window.addEventListener(ev, resetInactivityTimer, { passive: true }));
-    resetInactivityTimer();
+    warnTimeoutId = setTimeout(startCountdown, INACTIVITY_WARN_MS);
 
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
+      if (warnTimeoutId) clearTimeout(warnTimeoutId);
+      if (countdownIntervalId) clearInterval(countdownIntervalId);
       events.forEach((ev) => window.removeEventListener(ev, resetInactivityTimer));
     };
-  }, [currentUser]);
+  }, [currentUser, isSessionUnlocked, showSessionTimeoutWarning]);
 
   // Sync to local storage
   useEffect(() => {
@@ -769,12 +787,28 @@ export default function App() {
     }
   }, [currentUser, currentView]);
 
-  const handleLogout = () => {
+  const requestLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const executeLogout = (reason: string = 'Pengguna melakukan logout') => {
+    setShowLogoutConfirm(false);
+    setShowSessionTimeoutWarning(false);
     sessionStorage.removeItem('bsan_active_session_unlocked');
     setCurrentUserId('guest');
     setCurrentUser(null);
     setIsSessionUnlocked(false);
     setCurrentView('dashboard');
+    logAudit({
+      actionType: 'LOGOUT',
+      module: 'Autentikasi',
+      description: reason,
+      status: 'SUCCESS',
+    });
+  };
+
+  const handleLogout = () => {
+    requestLogout();
   };
 
   // Requirement 6: First view when opening the link/url is the dedicated Login Page
@@ -977,10 +1011,17 @@ export default function App() {
           )}
         </main>
 
-        {/* Footer Matching Gambar 2 */}
+        {/* Footer Matching Professional Standards */}
         <footer className="no-print mt-auto py-3.5 px-6 lg:px-8 border-t border-slate-200/90 bg-white text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-center sm:text-left">
-            <span>© {schoolConfig.footerYear || '2026'} {schoolConfig.name || 'SMPN 1 Kandangan'}. All rights reserved.</span>
+          <div className="flex items-center gap-2 text-center sm:text-left flex-wrap">
+            <span className="font-semibold text-slate-700">BSAN Enterprise Edition</span>
+            <span>·</span>
+            <span>© {schoolConfig.footerYear || '2026'} {schoolConfig.name || 'SMPN 1 Kandangan'}</span>
+            <span>·</span>
+            <span className="inline-flex items-center gap-1 text-emerald-700 font-medium bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 text-[10px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Penyimpanan Terproteksi & Terenkripsi
+            </span>
             <span>·</span>
             <button
               onClick={handleTriggerResetData}
@@ -992,8 +1033,8 @@ export default function App() {
             </button>
           </div>
 
-          <div className="text-[11px] font-mono text-slate-500">
-            Versi 1.0.0
+          <div className="text-[11px] font-mono text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+            v2.5.0 Enterprise
           </div>
         </footer>
       </div>
@@ -1064,6 +1105,27 @@ export default function App() {
           setCurrentUser(user);
         }}
       />
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <LogoutConfirmModal
+          user={currentUser}
+          onConfirm={() => executeLogout('Petugas mengonfirmasi logout dari sistem')}
+          onCancel={() => setShowLogoutConfirm(false)}
+        />
+      )}
+
+      {/* Session Inactivity Timeout Modal */}
+      {showSessionTimeoutWarning && (
+        <SessionTimeoutModal
+          remainingSeconds={sessionWarningSeconds}
+          onStayLoggedIn={() => {
+            setShowSessionTimeoutWarning(false);
+            setSessionWarningSeconds(60);
+          }}
+          onLogoutNow={() => executeLogout('Petugas memilih logout dari modal peringatan sesi')}
+        />
+      )}
 
       {/* In-App Confirmation Modal for Clean & Reset Database */}
       {isResetConfirmModalOpen && (

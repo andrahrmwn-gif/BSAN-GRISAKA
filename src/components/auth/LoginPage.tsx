@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { UserAccount } from '../../types/auth';
 import { SchoolProfile } from '../../types';
 import { SCHOOL_CONFIG } from '../../data/schoolConfig';
-import { getStoredAccounts, saveAccounts, setCurrentUserId } from '../../services/authService';
+import { getStoredAccounts, saveAccounts, setCurrentUserId, isDefaultPassword } from '../../services/authService';
 import { subscribeToAccounts, getAccountDirectlyFromFirestore } from '../../services/firebase';
 import { logAudit } from '../../services/auditLogger';
+import { ForcePasswordChangeModal } from './ForcePasswordChangeModal';
 import { 
   LogIn, 
   Lock, 
@@ -37,6 +38,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
+  const [pendingChangeUser, setPendingChangeUser] = useState<UserAccount | null>(null);
 
   // Subscribe to real-time accounts and listen to changes
   useEffect(() => {
@@ -74,6 +76,25 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   });
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+
+  const completeLogin = (verifiedAccount: UserAccount) => {
+    setCurrentUserId(verifiedAccount.id);
+    sessionStorage.setItem('bsan_active_session_unlocked', 'true');
+
+    logAudit({
+      actionType: 'LOGIN',
+      module: 'Autentikasi',
+      description: `Login sukses petugas: ${verifiedAccount.name} (${verifiedAccount.role})`,
+      status: 'SUCCESS',
+      forcedUser: {
+        id: verifiedAccount.id,
+        name: verifiedAccount.name,
+        role: verifiedAccount.role,
+      },
+    });
+
+    onLoginSuccess(verifiedAccount);
+  };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,27 +138,41 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
 
     if (!verifiedAccount) {
-      setErrorMsg('Password / PIN yang Anda masukkan salah. Password default awal adalah 1234.');
+      setErrorMsg('Password / PIN yang Anda masukkan tidak sesuai. Silakan periksa kembali.');
+      return;
+    }
+
+    // Security check: Force user to update default password '1234' on first login
+    if (isDefaultPassword(verifiedAccount.pin) || verifiedAccount.mustChangePassword) {
+      setPendingChangeUser(verifiedAccount);
       return;
     }
 
     // Success login
-    setCurrentUserId(verifiedAccount.id);
-    sessionStorage.setItem('bsan_active_session_unlocked', 'true');
+    completeLogin(verifiedAccount);
+  };
+
+  const handlePasswordChangeSuccess = (updatedUser: UserAccount) => {
+    setPendingChangeUser(null);
+    setAccounts((prev) => {
+      const updated = prev.map((a) => (a.id === updatedUser.id ? updatedUser : a));
+      saveAccounts(updated);
+      return updated;
+    });
 
     logAudit({
-      actionType: 'LOGIN',
+      actionType: 'UPDATE',
       module: 'Autentikasi',
-      description: `Login sukses petugas: ${verifiedAccount.name} (${verifiedAccount.role})`,
+      description: `Petugas ${updatedUser.name} memperbarui password awal akun ke kredensial terproteksi.`,
       status: 'SUCCESS',
       forcedUser: {
-        id: verifiedAccount.id,
-        name: verifiedAccount.name,
-        role: verifiedAccount.role,
+        id: updatedUser.id,
+        name: updatedUser.name,
+        role: updatedUser.role,
       },
     });
 
-    onLoginSuccess(verifiedAccount);
+    completeLogin(updatedUser);
   };
 
   return (
@@ -303,10 +338,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-
-              <div className="text-[11px] text-slate-500 pt-0.5 px-1">
-                <span>Password default awal: <strong className="font-mono text-blue-700">1234</strong></span>
-              </div>
             </div>
 
             {/* Login Submit Button */}
@@ -337,6 +368,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Force Password Change Modal (Shown if user still has default '1234' PIN) */}
+      {pendingChangeUser && (
+        <ForcePasswordChangeModal
+          user={pendingChangeUser}
+          onSuccess={handlePasswordChangeSuccess}
+          onCancel={() => setPendingChangeUser(null)}
+        />
+      )}
     </div>
   );
 };

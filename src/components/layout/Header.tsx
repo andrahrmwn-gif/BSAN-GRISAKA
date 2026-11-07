@@ -164,8 +164,8 @@ export const Header: React.FC<HeaderProps> = ({
                     {userName}
                   </span>
                   {currentUser?.pin === '1234' && (
-                    <span className="inline-flex items-center px-1.5 py-0.2 rounded-full bg-amber-100 border border-amber-300 text-amber-900 text-[9px] font-bold" title="PIN akun masih bawaan (1234). Disarankan segera ganti PIN.">
-                      ⚠️ Ganti PIN
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-900 text-[9px] font-bold" title="Password akun masih bawaan. Harap segera memperbarui password di profil akun Anda.">
+                      ⚠️ Ganti Password
                     </span>
                   )}
                 </div>

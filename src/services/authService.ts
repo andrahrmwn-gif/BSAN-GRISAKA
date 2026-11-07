@@ -1,5 +1,6 @@
 import { UserAccount, UserRole, OFFICIAL_JABATAN_LIST } from '../types/auth';
 import { syncAccountToFirestore, deleteAccountFromFirestore, bulkSyncAccountsToFirestore } from './firebase';
+import { secureStorage } from './secureStorage';
 
 const STORAGE_KEYS = {
   ACCOUNTS: 'bsan_grisaka_accounts_dapodik_v3',
@@ -646,17 +647,12 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
 
 export const getStoredAccounts = (): UserAccount[] => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-    if (!raw) {
+    const data = secureStorage.getItem<UserAccount[]>(STORAGE_KEYS.ACCOUNTS, []);
+    if (!Array.isArray(data) || data.length === 0) {
       saveAccounts(DEFAULT_ACCOUNTS);
       return DEFAULT_ACCOUNTS;
     }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      saveAccounts(DEFAULT_ACCOUNTS);
-      return DEFAULT_ACCOUNTS;
-    }
-    return parsed;
+    return data;
   } catch (err) {
     console.error('Failed reading user accounts', err);
     return DEFAULT_ACCOUNTS;
@@ -669,7 +665,7 @@ export const saveAccounts = (accounts: UserAccount[]): boolean => {
       console.warn(`Cannot save more than ${MAX_ACCOUNTS} accounts! Truncating.`);
       accounts = accounts.slice(0, MAX_ACCOUNTS);
     }
-    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(accounts));
+    secureStorage.setItem(STORAGE_KEYS.ACCOUNTS, accounts);
     return true;
   } catch (err) {
     console.error('Failed saving accounts', err);
@@ -818,4 +814,61 @@ export const deleteAccount = (id: string): { success: boolean; message: string }
   }
 
   return { success: true, message: `Akun berhasil dihapus. Tersisa ${updated.length}/${MAX_ACCOUNTS} akun.` };
+};
+
+/**
+ * Security: Checks whether a PIN is the default factory initial password ('1234')
+ */
+export const isDefaultPassword = (pin?: string): boolean => {
+  return !pin || pin.trim() === '1234';
+};
+
+export type UserRoleCategory = 'kepala_sekolah' | 'waka' | 'guru_bk' | 'wali_kelas' | 'tata_usaha' | 'guru' | 'tamu';
+
+export const getUserRoleCategory = (user: UserAccount | null): UserRoleCategory => {
+  if (!user) return 'tamu';
+  const role = (user.role || '').toLowerCase();
+  if (role.includes('kepala sekolah') && !role.includes('wakil')) return 'kepala_sekolah';
+  if (role.includes('wakil') || role.includes('waka')) return 'waka';
+  if (role.includes('bk') || role.includes('bimbingan')) return 'guru_bk';
+  if (role.includes('tata usaha') || role.includes('tu')) return 'tata_usaha';
+  if (role.includes('wali kelas')) return 'wali_kelas';
+  return 'guru';
+};
+
+export const canManageStudents = (user: UserAccount | null): boolean => {
+  if (!user || !user.isActive) return false;
+  return user.canEdit;
+};
+
+export const canRecordViolations = (user: UserAccount | null): boolean => {
+  if (!user || !user.isActive) return false;
+  return user.canEdit;
+};
+
+export const canDeleteRecords = (user: UserAccount | null): boolean => {
+  if (!user || !user.isActive) return false;
+  return !!user.canDelete;
+};
+
+export const canAccessSettings = (user: UserAccount | null): boolean => {
+  if (!user || !user.isActive) return false;
+  return !!user.canManageSettings;
+};
+
+export const getRoleBadge = (role: string): { label: string; bg: string; text: string; border: string } => {
+  const r = (role || '').toLowerCase();
+  if (r.includes('kepala sekolah') && !r.includes('wakil')) {
+    return { label: 'Pimpinan / KS', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' };
+  }
+  if (r.includes('wakil') || r.includes('waka')) {
+    return { label: 'Wakil Kepala', bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' };
+  }
+  if (r.includes('bk') || r.includes('bimbingan')) {
+    return { label: 'Guru BK', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' };
+  }
+  if (r.includes('tata usaha') || r.includes('tu')) {
+    return { label: 'Tata Usaha', bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200' };
+  }
+  return { label: 'Tenaga Pendidik', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' };
 };

@@ -1,7 +1,8 @@
 import { Student, ViolationRecord, WhatsAppMessageLog, SchoolProfile } from '../types';
 import { INITIAL_STUDENTS, INITIAL_VIOLATIONS, INITIAL_WA_LOGS } from '../data/initialStudents';
 import { SCHOOL_CONFIG } from '../data/schoolConfig';
-import { resetAttendanceToClean, clearAllAttendanceSheets } from './attendanceStorage';
+import { clearAllAttendanceSheets } from './attendanceStorage';
+import { secureStorage } from './secureStorage';
 
 const STORAGE_KEYS = {
   STUDENTS: 'bsan_grisaka_students_v1',
@@ -12,17 +13,11 @@ const STORAGE_KEYS = {
 
 export const getStoredStudents = (): Student[] => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.STUDENTS);
-    if (raw === null) {
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
+    const data = secureStorage.getItem<Student[]>(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
+    if (!Array.isArray(data) || data.length === 0) {
       return INITIAL_STUDENTS;
     }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      // If empty array in local storage, fallback to INITIAL_STUDENTS
-      return INITIAL_STUDENTS;
-    }
-    return parsed;
+    return data;
   } catch (err) {
     console.error('Failed reading students storage', err);
     return INITIAL_STUDENTS;
@@ -31,7 +26,7 @@ export const getStoredStudents = (): Student[] => {
 
 export const saveStudents = (students: Student[]): void => {
   try {
-    localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
+    secureStorage.setItem(STORAGE_KEYS.STUDENTS, students);
   } catch (err) {
     console.error('Failed saving students', err);
   }
@@ -39,12 +34,8 @@ export const saveStudents = (students: Student[]): void => {
 
 export const getStoredViolations = (): ViolationRecord[] => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.VIOLATIONS);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.VIOLATIONS, JSON.stringify(INITIAL_VIOLATIONS));
-      return INITIAL_VIOLATIONS;
-    }
-    return JSON.parse(raw);
+    const data = secureStorage.getItem<ViolationRecord[]>(STORAGE_KEYS.VIOLATIONS, INITIAL_VIOLATIONS);
+    return Array.isArray(data) ? data : INITIAL_VIOLATIONS;
   } catch (err) {
     console.error('Failed reading violations storage', err);
     return INITIAL_VIOLATIONS;
@@ -53,7 +44,7 @@ export const getStoredViolations = (): ViolationRecord[] => {
 
 export const saveViolations = (violations: ViolationRecord[]): void => {
   try {
-    localStorage.setItem(STORAGE_KEYS.VIOLATIONS, JSON.stringify(violations));
+    secureStorage.setItem(STORAGE_KEYS.VIOLATIONS, violations);
   } catch (err) {
     console.error('Failed saving violations', err);
   }
@@ -61,12 +52,8 @@ export const saveViolations = (violations: ViolationRecord[]): void => {
 
 export const getStoredWaLogs = (): WhatsAppMessageLog[] => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.WA_LOGS);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.WA_LOGS, JSON.stringify(INITIAL_WA_LOGS));
-      return INITIAL_WA_LOGS;
-    }
-    return JSON.parse(raw);
+    const data = secureStorage.getItem<WhatsAppMessageLog[]>(STORAGE_KEYS.WA_LOGS, INITIAL_WA_LOGS);
+    return Array.isArray(data) ? data : INITIAL_WA_LOGS;
   } catch (err) {
     console.error('Failed reading wa logs storage', err);
     return INITIAL_WA_LOGS;
@@ -75,7 +62,7 @@ export const getStoredWaLogs = (): WhatsAppMessageLog[] => {
 
 export const saveWaLogs = (logs: WhatsAppMessageLog[]): void => {
   try {
-    localStorage.setItem(STORAGE_KEYS.WA_LOGS, JSON.stringify(logs));
+    secureStorage.setItem(STORAGE_KEYS.WA_LOGS, logs);
   } catch (err) {
     console.error('Failed saving wa logs', err);
   }
@@ -83,12 +70,7 @@ export const saveWaLogs = (logs: WhatsAppMessageLog[]): void => {
 
 export const getStoredSchoolConfig = (): SchoolProfile => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.SCHOOL_CONFIG);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.SCHOOL_CONFIG, JSON.stringify(SCHOOL_CONFIG));
-      return SCHOOL_CONFIG;
-    }
-    const parsed = JSON.parse(raw);
+    const parsed = secureStorage.getItem<SchoolProfile>(STORAGE_KEYS.SCHOOL_CONFIG, SCHOOL_CONFIG);
     if (parsed.timKesiswaanName && parsed.timKesiswaanName.includes('Subagyo')) {
       parsed.timKesiswaanName = 'Tim Kesiswaan';
     }
@@ -107,7 +89,7 @@ export const getStoredSchoolConfig = (): SchoolProfile => {
 
 export const saveSchoolConfig = (config: SchoolProfile): void => {
   try {
-    localStorage.setItem(STORAGE_KEYS.SCHOOL_CONFIG, JSON.stringify(config));
+    secureStorage.setItem(STORAGE_KEYS.SCHOOL_CONFIG, config);
   } catch (err) {
     console.error('Failed saving school config', err);
   }
@@ -124,10 +106,10 @@ export const resetToDefaultData = (): {
   const cleanViolations: ViolationRecord[] = [];
   const cleanLogs: WhatsAppMessageLog[] = [];
 
-  localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(cleanStudents));
-  localStorage.setItem(STORAGE_KEYS.VIOLATIONS, JSON.stringify(cleanViolations));
-  localStorage.setItem(STORAGE_KEYS.WA_LOGS, JSON.stringify(cleanLogs));
-  localStorage.setItem(STORAGE_KEYS.SCHOOL_CONFIG, JSON.stringify(SCHOOL_CONFIG));
+  secureStorage.setItem(STORAGE_KEYS.STUDENTS, cleanStudents);
+  secureStorage.setItem(STORAGE_KEYS.VIOLATIONS, cleanViolations);
+  secureStorage.setItem(STORAGE_KEYS.WA_LOGS, cleanLogs);
+  secureStorage.setItem(STORAGE_KEYS.SCHOOL_CONFIG, SCHOOL_CONFIG);
 
   // Clear all attendance sheets so attendance menu has no dummy student names
   clearAllAttendanceSheets();
@@ -146,10 +128,10 @@ export const loadDemoData = (): {
   logs: WhatsAppMessageLog[];
   config: SchoolProfile;
 } => {
-  localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
-  localStorage.setItem(STORAGE_KEYS.VIOLATIONS, JSON.stringify(INITIAL_VIOLATIONS));
-  localStorage.setItem(STORAGE_KEYS.WA_LOGS, JSON.stringify(INITIAL_WA_LOGS));
-  localStorage.setItem(STORAGE_KEYS.SCHOOL_CONFIG, JSON.stringify(SCHOOL_CONFIG));
+  secureStorage.setItem(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
+  secureStorage.setItem(STORAGE_KEYS.VIOLATIONS, INITIAL_VIOLATIONS);
+  secureStorage.setItem(STORAGE_KEYS.WA_LOGS, INITIAL_WA_LOGS);
+  secureStorage.setItem(STORAGE_KEYS.SCHOOL_CONFIG, SCHOOL_CONFIG);
 
   return {
     students: INITIAL_STUDENTS,

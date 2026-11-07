@@ -36,6 +36,8 @@ export interface UserAccount {
   canDelete: boolean;
   canManageSettings: boolean;
   avatarColor?: string;
+  mustChangePassword?: boolean;
+  lastPasswordChange?: string;
 }
 
 export type AuditActionType = 

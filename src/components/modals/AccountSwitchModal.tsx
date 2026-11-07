@@ -160,7 +160,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
 
                 <div className="flex items-center gap-1.5 mt-3 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-emerald-800 text-[11px] font-semibold">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Sesi Terautentikasi & Aktif</span>
+                  <span>Sesi Terautentikasi & Terproteksi</span>
                 </div>
               </div>
 
@@ -169,7 +169,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs flex items-start gap-2.5">
                   <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-bold">Password Masih Bawaan:</span> Akun Anda saat ini masih memakai password default (<code className="font-bold">1234</code>). Anda dapat mengganti password pribadi di bawah ini.
+                    <span className="font-bold">Perhatian Keamanan:</span> Akun Anda masih menggunakan password bawaan. Silakan ganti password pribadi Anda untuk meningkatkan keamanan.
                   </div>
                 </div>
               )}
@@ -217,7 +217,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                         required
                         value={oldPin}
                         onChange={(e) => setOldPin(e.target.value)}
-                        placeholder="Masukkan password saat ini (default: 1234)"
+                        placeholder="Masukkan password saat ini"
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-hidden font-mono"
                       />
                     </div>

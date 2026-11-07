@@ -70,19 +70,17 @@ export const generateCleanTodayAttendanceSheets = (currentStudents?: Student[]):
   return sheets;
 };
 
+import { secureStorage } from './secureStorage';
+
 export const getStoredAttendanceSheets = (): AttendanceSheet[] => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.ATTENDANCE);
-    if (raw === null) {
+    const data = secureStorage.getItem<AttendanceSheet[]>(STORAGE_KEYS.ATTENDANCE, []);
+    if (!Array.isArray(data) || data.length === 0) {
       const clean = generateCleanTodayAttendanceSheets();
-      localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(clean));
+      secureStorage.setItem(STORAGE_KEYS.ATTENDANCE, clean);
       return clean;
     }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed;
+    return data;
   } catch (err) {
     console.error('Failed reading attendance storage', err);
     return [];
@@ -91,7 +89,7 @@ export const getStoredAttendanceSheets = (): AttendanceSheet[] => {
 
 export const clearAllAttendanceSheets = (): void => {
   try {
-    localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify([]));
+    secureStorage.setItem(STORAGE_KEYS.ATTENDANCE, []);
   } catch (err) {
     console.error('Failed clearing attendance sheets', err);
   }
@@ -103,10 +101,9 @@ export const resetAttendanceToClean = (currentStudents?: Student[]): AttendanceS
   return clean;
 };
 
-
 export const saveAttendanceSheets = (sheets: AttendanceSheet[]): void => {
   try {
-    localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(sheets));
+    secureStorage.setItem(STORAGE_KEYS.ATTENDANCE, sheets);
     bulkSyncAttendanceSheets(sheets).catch(console.error);
   } catch (err) {
     console.error('Failed saving attendance sheets', err);
@@ -126,7 +123,7 @@ export const saveSingleAttendanceSheet = (sheet: AttendanceSheet): AttendanceShe
   }
 
   try {
-    localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(updated));
+    secureStorage.setItem(STORAGE_KEYS.ATTENDANCE, updated);
     syncAttendanceSheetToFirestore(sheet).catch(console.error);
   } catch (err) {
     console.error('Failed saving attendance sheet', err);
