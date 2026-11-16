@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ViewMode, Student, ViolationRecord, WhatsAppMessageLog, SchoolProfile } from './types';
 import { UserAccount } from './types/auth';
 import { 
@@ -103,6 +103,43 @@ export default function App() {
 
   // Sharpened Individual Student Slip Detail Modal
   const [detailedSlipStudent, setDetailedSlipStudent] = useState<Student | null>(null);
+
+  // Mobile Hardware Back Button Navigation Stack & Info Toast
+  const viewHistoryRef = useRef<ViewMode[]>(['dashboard']);
+  const [navInfoToast, setNavInfoToast] = useState<string | null>(null);
+  const navToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showNavToast = useCallback((msg: string) => {
+    setNavInfoToast(msg);
+    if (navToastTimerRef.current) clearTimeout(navToastTimerRef.current);
+    navToastTimerRef.current = setTimeout(() => {
+      setNavInfoToast(null);
+    }, 2500);
+  }, []);
+
+  const navigateToView = useCallback((view: ViewMode) => {
+    if (isGuestMode() && view !== 'dashboard') {
+      setResetErrorToast('Akses Dibatasi: Mode Tamu hanya berhak melihat Dashboard.');
+      setTimeout(() => setResetErrorToast(null), 4000);
+      return;
+    }
+    setCurrentView((prev) => {
+      if (prev !== view) {
+        const nextHistory = [...viewHistoryRef.current, view];
+        if (nextHistory.length > 30) {
+          nextHistory.shift();
+        }
+        viewHistoryRef.current = nextHistory;
+      }
+      return view;
+    });
+    if (typeof window !== 'undefined') {
+      if (!window.history.state || !window.history.state.bsanGuard) {
+        window.history.pushState({ bsanGuard: true }, '', window.location.href);
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
 
   // Real-time synchronization across accounts & devices via Firestore onSnapshot
   useEffect(() => {
@@ -780,9 +817,154 @@ export default function App() {
     }
   };
 
+  // Keep latest state ref for hardware Back button handler (popstate)
+  const latestNavStateRef = useRef({
+    isSessionUnlocked,
+    currentView,
+    isMobileSidebarOpen,
+    isAccountSwitchOpen,
+    isRecordModalOpen,
+    activeSuratViolation,
+    detailedSlipStudent,
+    isResetConfirmModalOpen,
+    showLogoutConfirm,
+    showSessionTimeoutWarning,
+  });
+
+  useEffect(() => {
+    latestNavStateRef.current = {
+      isSessionUnlocked,
+      currentView,
+      isMobileSidebarOpen,
+      isAccountSwitchOpen,
+      isRecordModalOpen,
+      activeSuratViolation,
+      detailedSlipStudent,
+      isResetConfirmModalOpen,
+      showLogoutConfirm,
+      showSessionTimeoutWarning,
+    };
+  }, [
+    isSessionUnlocked,
+    currentView,
+    isMobileSidebarOpen,
+    isAccountSwitchOpen,
+    isRecordModalOpen,
+    activeSuratViolation,
+    detailedSlipStudent,
+    isResetConfirmModalOpen,
+    showLogoutConfirm,
+    showSessionTimeoutWarning,
+  ]);
+
+  // Mobile / Browser Hardware Back Button Handler (prevents exiting app; closes modals or goes to previous page)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const ensureHistoryGuard = () => {
+      try {
+        if (!window.history.state || !window.history.state.bsanGuard) {
+          window.history.replaceState({ bsanRoot: true }, '', window.location.href);
+          window.history.pushState({ bsanGuard: true }, '', window.location.href);
+        }
+      } catch {
+        // Ignore SecurityError in restricted environments
+      }
+    };
+
+    ensureHistoryGuard();
+
+    const handlePopState = () => {
+      // Immediately re-arm history guard so pressing Back never exits the application
+      try {
+        window.history.pushState({ bsanGuard: true }, '', window.location.href);
+      } catch {
+        // Ignore
+      }
+
+      const s = latestNavStateRef.current;
+
+      // On LoginPage: allow any child dialog to close, otherwise remain on LoginPage
+      if (!s.isSessionUnlocked) {
+        window.dispatchEvent(new CustomEvent('bsan_hardware_back', { cancelable: true }));
+        return;
+      }
+
+      // Do not dismiss security timeout countdown via back button
+      if (s.showSessionTimeoutWarning) {
+        return;
+      }
+
+      // Priority 1: Close topmost open App-level modal or mobile drawer
+      if (s.showLogoutConfirm) {
+        setShowLogoutConfirm(false);
+        return;
+      }
+      if (s.isResetConfirmModalOpen) {
+        setIsResetConfirmModalOpen(false);
+        return;
+      }
+      if (s.activeSuratViolation) {
+        setActiveSuratViolation(null);
+        setActiveSuratStudent(null);
+        return;
+      }
+      if (s.isRecordModalOpen) {
+        setIsRecordModalOpen(false);
+        setPreselectedStudentId('');
+        return;
+      }
+      if (s.detailedSlipStudent) {
+        setDetailedSlipStudent(null);
+        return;
+      }
+      if (s.isAccountSwitchOpen) {
+        setIsAccountSwitchOpen(false);
+        return;
+      }
+      if (s.isMobileSidebarOpen) {
+        setIsMobileSidebarOpen(false);
+        return;
+      }
+
+      // Priority 2: Allow active child view modals/panels to intercept Back press first
+      const backEvent = new CustomEvent('bsan_hardware_back', { cancelable: true });
+      window.dispatchEvent(backEvent);
+      if (backEvent.defaultPrevented) {
+        return;
+      }
+
+      // Priority 3: Navigate back to previous page in view history stack
+      if (viewHistoryRef.current.length > 1) {
+        viewHistoryRef.current.pop();
+        const prevView = viewHistoryRef.current[viewHistoryRef.current.length - 1];
+        setCurrentView(prevView);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      // Priority 4: Fallback to Dashboard if not already there
+      if (s.currentView !== 'dashboard') {
+        viewHistoryRef.current = ['dashboard'];
+        setCurrentView('dashboard');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      // Priority 5: Already at home (Dashboard) — prevent exit & inform user
+      showNavToast('Anda berada di halaman utama (Dashboard).');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [showNavToast]);
+
   // Guard: In guest mode, force view to stay on dashboard (Requirement 3)
   useEffect(() => {
     if (isGuestMode() && currentView !== 'dashboard') {
+      viewHistoryRef.current = ['dashboard'];
       setCurrentView('dashboard');
     }
   }, [currentUser, currentView]);
@@ -798,6 +980,7 @@ export default function App() {
     setCurrentUserId('guest');
     setCurrentUser(null);
     setIsSessionUnlocked(false);
+    viewHistoryRef.current = ['dashboard'];
     setCurrentView('dashboard');
     logAudit({
       actionType: 'LOGOUT',
@@ -819,7 +1002,13 @@ export default function App() {
         onLoginSuccess={(user) => {
           setCurrentUser(user);
           setIsSessionUnlocked(true);
+          viewHistoryRef.current = ['dashboard'];
           setCurrentView('dashboard');
+          try {
+            if (!window.history.state || !window.history.state.bsanGuard) {
+              window.history.pushState({ bsanGuard: true }, '', window.location.href);
+            }
+          } catch {}
         }}
       />
     );
@@ -858,16 +1047,17 @@ export default function App() {
         </div>
       )}
 
+      {navInfoToast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[999] bg-slate-900/90 backdrop-blur-md text-white px-4 py-2.5 rounded-full shadow-xl text-xs font-semibold border border-white/15 animate-in fade-in slide-in-from-bottom-3 whitespace-nowrap">
+          {navInfoToast}
+        </div>
+      )}
+
       {/* Sidebar Navigation (with Mobile Drawer support & Royal Blue Theme) */}
       <Sidebar
         currentView={currentView}
         onSelectView={(view) => {
-          if (isGuestMode() && view !== 'dashboard') {
-            setResetErrorToast('Akses Dibatasi: Mode Tamu hanya berhak melihat Dashboard.');
-            setTimeout(() => setResetErrorToast(null), 4000);
-            return;
-          }
-          setCurrentView(view);
+          navigateToView(view);
           setIsMobileSidebarOpen(false);
         }}
         activeViolationsCount={violations.filter((v) => v.statusSurat !== 'Selesai').length}
@@ -891,10 +1081,7 @@ export default function App() {
           searchQuery={searchQuery}
           schoolConfig={schoolConfig}
           onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
-          onNavigate={(view) => {
-            if (isGuestMode() && view !== 'dashboard') return;
-            setCurrentView(view);
-          }}
+          onNavigate={(view) => navigateToView(view)}
         />
 
         {/* Viewport Content with clean mobile padding & responsive spacing */}
@@ -904,7 +1091,7 @@ export default function App() {
               students={students}
               violations={violations}
               schoolConfig={schoolConfig}
-              onNavigate={(view) => setCurrentView(view)}
+              onNavigate={(view) => navigateToView(view)}
               onOpenQuickViolation={() => handleTriggerQuickViolation()}
               onSelectStudentProfile={(student) => {
                 setDetailedSlipStudent(student);
@@ -1062,7 +1249,7 @@ export default function App() {
         preselectedStudentId={preselectedStudentId}
         onSaveViolation={handleSaveViolation}
         onOpenSurat={(v) => handleOpenSuratModal(v)}
-        onOpenWa={(s, v) => setCurrentView('whatsapp')}
+        onOpenWa={(s, v) => navigateToView('whatsapp')}
       />
 
       {/* Surat Pernyataan & Slip Modal */}

@@ -53,6 +53,27 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
   const [deletingViolationId, setDeletingViolationId] = useState<string | null>(null);
   const [isConfirmClearAllOpen, setIsConfirmClearAllOpen] = useState(false);
 
+  React.useEffect(() => {
+    const handleHardwareBack = (e: Event) => {
+      if (isConfirmClearAllOpen) {
+        e.preventDefault();
+        setIsConfirmClearAllOpen(false);
+        return;
+      }
+      if (deletingViolationId) {
+        e.preventDefault();
+        setDeletingViolationId(null);
+        return;
+      }
+      if (isPdfModalOpen) {
+        e.preventDefault();
+        setIsPdfModalOpen(false);
+      }
+    };
+    window.addEventListener('bsan_hardware_back', handleHardwareBack);
+    return () => window.removeEventListener('bsan_hardware_back', handleHardwareBack);
+  }, [isConfirmClearAllOpen, deletingViolationId, isPdfModalOpen]);
+
   // Realtime date tracker with automatic midnight rollover and past date exploration
   const {
     todayStr,

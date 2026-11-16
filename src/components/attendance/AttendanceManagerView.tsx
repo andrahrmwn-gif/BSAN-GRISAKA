@@ -122,6 +122,22 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  useEffect(() => {
+    const handleHardwareBack = (e: Event) => {
+      if (isResetModalOpen) {
+        e.preventDefault();
+        setIsResetModalOpen(false);
+        return;
+      }
+      if (isPrintModalOpen) {
+        e.preventDefault();
+        setIsPrintModalOpen(false);
+      }
+    };
+    window.addEventListener('bsan_hardware_back', handleHardwareBack);
+    return () => window.removeEventListener('bsan_hardware_back', handleHardwareBack);
+  }, [isResetModalOpen, isPrintModalOpen]);
+
   // Filter students belonging to the currently selected class, sorted alphabetically (urut absen A-Z)
   const classStudents = useMemo(() => {
     const filtered = students.filter((s) => s.kelas === selectedKelas);

@@ -54,6 +54,28 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
   const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
   const [profileStudent, setProfileStudent] = useState<Student | null>(null);
 
+  React.useEffect(() => {
+    const handleHardwareBack = (e: Event) => {
+      if (deletingStudent) {
+        e.preventDefault();
+        setDeletingStudent(null);
+        return;
+      }
+      if (isAddModalOpen || editingStudent) {
+        e.preventDefault();
+        setIsAddModalOpen(false);
+        setEditingStudent(null);
+        return;
+      }
+      if (profileStudent) {
+        e.preventDefault();
+        setProfileStudent(null);
+      }
+    };
+    window.addEventListener('bsan_hardware_back', handleHardwareBack);
+    return () => window.removeEventListener('bsan_hardware_back', handleHardwareBack);
+  }, [deletingStudent, isAddModalOpen, editingStudent, profileStudent]);
+
   // Form State
   const initialForm: Omit<Student, 'id' | 'totalPoinPelanggaran' | 'totalPelanggaranRingan' | 'totalPelanggaranSedang' | 'totalPelanggaranBerat'> = {
     nisn: '',

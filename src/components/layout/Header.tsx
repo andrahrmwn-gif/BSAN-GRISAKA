@@ -54,6 +54,23 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, []);
 
+  // Intercept mobile hardware back press when Header modals/panels are open
+  useEffect(() => {
+    const handleHardwareBack = (e: Event) => {
+      if (isHelpModalOpen) {
+        e.preventDefault();
+        setIsHelpModalOpen(false);
+        return;
+      }
+      if (isNotificationOpen) {
+        e.preventDefault();
+        setIsNotificationOpen(false);
+      }
+    };
+    window.addEventListener('bsan_hardware_back', handleHardwareBack);
+    return () => window.removeEventListener('bsan_hardware_back', handleHardwareBack);
+  }, [isHelpModalOpen, isNotificationOpen]);
+
   const getViewTitle = () => {
     switch (currentView) {
       case 'dashboard':

@@ -109,6 +109,27 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
     description: '',
   });
 
+  React.useEffect(() => {
+    const handleHardwareBack = (e: Event) => {
+      if (batchDeleteModal.open) {
+        e.preventDefault();
+        setBatchDeleteModal((prev) => ({ ...prev, open: false }));
+        return;
+      }
+      if (deletingLogId) {
+        e.preventDefault();
+        setDeletingLogId(null);
+        return;
+      }
+      if (editingLog) {
+        e.preventDefault();
+        setEditingLog(null);
+      }
+    };
+    window.addEventListener('bsan_hardware_back', handleHardwareBack);
+    return () => window.removeEventListener('bsan_hardware_back', handleHardwareBack);
+  }, [batchDeleteModal.open, deletingLogId, editingLog]);
+
   // Local state to track deleted/dismissed message cards in Presensi and Pelanggaran tabs
   const [dismissedAttendanceIds, setDismissedAttendanceIds] = useState<string[]>(() => {
     try {
