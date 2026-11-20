@@ -16,7 +16,7 @@ import {
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Student, ViolationRecord, WhatsAppMessageLog, SchoolProfile, AttendanceSheet, AttendanceStatus } from '../types';
 import { SchoolActivity } from './announcementService';
-import { UserAccount } from '../types/auth';
+import { UserAccount, AuditLogEntry } from '../types/auth';
 import { sortByClassAndName } from '../utils/sortUtils';
 
 // Initialize Firebase App
@@ -134,6 +134,7 @@ const COLLECTIONS = {
   SETTINGS: 'school_config',
   ACTIVITIES: 'activities',
   ACCOUNTS: 'accounts',
+  AUDIT_LOGS: 'audit_logs',
 };
 
 export interface SystemMeta {
@@ -356,6 +357,67 @@ export const subscribeToAccounts = (onUpdate: (accounts: UserAccount[]) => void)
       logFirestoreListenerError(err, OperationType.GET, COLLECTIONS.ACCOUNTS);
     }
   );
+};
+
+/**
+ * Subscribe to real-time System Audit Logs across all devices & accounts
+ */
+export const subscribeToAuditLogs = (
+  onUpdate: (logs: AuditLogEntry[], meta: { fromCache: boolean; empty: boolean }) => void
+) => {
+  const colRef = collection(db, COLLECTIONS.AUDIT_LOGS);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      if (snapshot.metadata.fromCache && snapshot.empty) {
+        return;
+      }
+      const list: AuditLogEntry[] = [];
+      snapshot.forEach((d) => {
+        list.push(d.data() as AuditLogEntry);
+      });
+      list.sort((a, b) => {
+        const cmp = (b.isoTimestamp || '').localeCompare(a.isoTimestamp || '');
+        return cmp !== 0 ? cmp : (b.id || '').localeCompare(a.id || '');
+      });
+      onUpdate(list, {
+        fromCache: snapshot.metadata.fromCache,
+        empty: snapshot.empty,
+      });
+    },
+    (err) => {
+      logFirestoreListenerError(err, OperationType.GET, COLLECTIONS.AUDIT_LOGS);
+    }
+  );
+};
+
+/**
+ * Fetch latest System Audit Logs directly from Firestore server
+ */
+export const fetchAuditLogsFromServer = async (): Promise<AuditLogEntry[]> => {
+  const colRef = collection(db, COLLECTIONS.AUDIT_LOGS);
+  const snap = await getDocsFromServer(colRef).catch(() => getDocs(colRef));
+  const list: AuditLogEntry[] = [];
+  snap.forEach((d) => {
+    list.push(d.data() as AuditLogEntry);
+  });
+  list.sort((a, b) => {
+    const cmp = (b.isoTimestamp || '').localeCompare(a.isoTimestamp || '');
+    return cmp !== 0 ? cmp : (b.id || '').localeCompare(a.id || '');
+  });
+  return list;
+};
+
+/**
+ * Save a single System Audit Log entry to Firestore
+ */
+export const syncAuditLogToFirestore = async (entry: AuditLogEntry): Promise<void> => {
+  const path = `${COLLECTIONS.AUDIT_LOGS}/${entry.id}`;
+  try {
+    await setDoc(doc(db, COLLECTIONS.AUDIT_LOGS, entry.id), sanitizeForFirestore(entry), { merge: true });
+  } catch (err) {
+    logFirestoreListenerError(err, OperationType.WRITE, path);
+  }
 };
 
 /* =========================================================================
@@ -700,11 +762,12 @@ export const bulkImportStudentsToFirestore = async (students: Student[]): Promis
  * Safely delete all documents in a single Firestore collection using chunked batches (<500 limit)
  */
 export const clearCollectionFromFirestore = async (
-  colName: 'students' | 'violations' | 'wa_logs' | 'attendance_sheets' | 'activities'
+  colName: 'students' | 'violations' | 'wa_logs' | 'attendance_sheets' | 'activities' | 'audit_logs'
 ): Promise<void> => {
   const CHUNK_SIZE = 350;
   try {
-    const snap = await getDocs(collection(db, colName));
+    const colRef = collection(db, colName);
+    const snap = await getDocsFromServer(colRef).catch(() => getDocs(colRef));
     if (snap.empty) return;
     const docs = snap.docs;
     for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
@@ -719,18 +782,26 @@ export const clearCollectionFromFirestore = async (
 };
 
 /**
+ * Clear all audit logs from Firestore so every device & account receives empty state in real time
+ */
+export const clearAuditLogsFromFirestore = async (): Promise<void> => {
+  await clearCollectionFromFirestore('audit_logs');
+};
+
+/**
  * COMPLETELY CLEAN & RESET FIRESTORE
- * Deletes all documents in students, violations, wa_logs, attendance_sheets, activities
+ * Deletes all documents in students, violations, wa_logs, attendance_sheets, activities, audit_logs
  * using chunked batches, and records `isCleanReset: true` so other devices NEVER re-seed dummy data.
  */
 export const clearAllFirestoreData = async (): Promise<void> => {
   try {
-    const collectionsToClear: Array<'students' | 'violations' | 'wa_logs' | 'attendance_sheets' | 'activities'> = [
+    const collectionsToClear: Array<'students' | 'violations' | 'wa_logs' | 'attendance_sheets' | 'activities' | 'audit_logs'> = [
       'students',
       'violations',
       'wa_logs',
       'attendance_sheets',
       'activities',
+      'audit_logs',
     ];
 
     for (const colName of collectionsToClear) {

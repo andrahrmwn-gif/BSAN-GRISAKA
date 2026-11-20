@@ -1,44 +1,126 @@
-import React, { useState, useMemo } from 'react';
-import { AuditLogEntry, AuditActionType, AuditModule } from '../../types/auth';
-import { getAuditLogs, exportAuditLogsToExcel, clearAuditLogs } from '../../services/auditLogger';
-import { getStoredAccounts } from '../../services/authService';
+import React, { useState, useMemo, useEffect } from 'react';
+import { AuditLogEntry, AuditActionType, UserAccount } from '../../types/auth';
+import {
+  getAuditLogs,
+  exportAuditLogsToExcel,
+  clearAuditLogsAsync,
+  refreshAuditLogsFromCloud,
+} from '../../services/auditLogger';
+import { getStoredAccounts, getCurrentUser, isAdminUser } from '../../services/authService';
 import { getRealtimeDateYMD } from '../../utils/dateUtils';
 import { 
   ShieldCheck, 
   Search, 
-  Filter, 
-  Download, 
   Trash2, 
   RefreshCw, 
-  User, 
-  Calendar, 
   AlertTriangle,
   Clock,
   Activity,
-  Layers,
   CheckCircle2,
   Lock,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Eye
 } from 'lucide-react';
 
-export const AuditLogTable: React.FC = () => {
+interface AuditLogTableProps {
+  currentUser?: UserAccount | null;
+}
+
+export const AuditLogTable: React.FC<AuditLogTableProps> = ({ currentUser: propUser }) => {
   const [logs, setLogs] = useState<AuditLogEntry[]>(() => getAuditLogs());
+  const [accounts, setAccounts] = useState<UserAccount[]>(() => getStoredAccounts());
+  const [activeUser, setActiveUser] = useState<UserAccount | null>(() => propUser || getCurrentUser());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUserFilter, setSelectedUserFilter] = useState<string>('all');
   const [selectedActionFilter, setSelectedActionFilter] = useState<string>('all');
   const [selectedModuleFilter, setSelectedModuleFilter] = useState<string>('all');
   const [isExporting, setIsExporting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [actionToast, setActionToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  const accounts = useMemo(() => getStoredAccounts(), []);
+  useEffect(() => {
+    setActiveUser(propUser || getCurrentUser());
+  }, [propUser]);
 
-  const handleRefresh = () => {
-    setLogs(getAuditLogs());
+  const isAdmin = isAdminUser(activeUser);
+
+  // Real-time listeners for audit logs and staff accounts across all devices & accounts
+  useEffect(() => {
+    const handleAuditChanged = (e: Event) => {
+      const custom = e as CustomEvent<AuditLogEntry[]>;
+      if (custom.detail && Array.isArray(custom.detail)) {
+        setLogs(custom.detail);
+      } else {
+        setLogs(getAuditLogs());
+      }
+    };
+
+    const handleAccountsChanged = (e: Event) => {
+      const custom = e as CustomEvent<UserAccount[]>;
+      if (custom.detail && Array.isArray(custom.detail)) {
+        setAccounts(custom.detail);
+      } else {
+        setAccounts(getStoredAccounts());
+      }
+      if (!propUser) {
+        setActiveUser(getCurrentUser());
+      }
+    };
+
+    window.addEventListener('bsan_audit_logs_changed', handleAuditChanged);
+    window.addEventListener('bsan_accounts_changed', handleAccountsChanged);
+
+    // Fetch latest cloud state on mount so tab always matches server
+    refreshAuditLogsFromCloud().then((fresh) => {
+      setLogs(fresh);
+    }).catch(() => {});
+
+    return () => {
+      window.removeEventListener('bsan_audit_logs_changed', handleAuditChanged);
+      window.removeEventListener('bsan_accounts_changed', handleAccountsChanged);
+    };
+  }, [propUser]);
+
+  // Mobile hardware back press closes confirmation modal
+  useEffect(() => {
+    const handleHardwareBack = (e: Event) => {
+      if (isClearModalOpen && !isClearing) {
+        e.preventDefault();
+        setIsClearModalOpen(false);
+      }
+    };
+    window.addEventListener('bsan_hardware_back', handleHardwareBack);
+    return () => window.removeEventListener('bsan_hardware_back', handleHardwareBack);
+  }, [isClearModalOpen, isClearing]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const fresh = await refreshAuditLogsFromCloud();
+      setLogs(fresh);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
-  const handleClear = () => {
-    if (window.confirm('PERINGATAN KEAMANAN: Anda yakin ingin mengosongkan riwayat audit log? Tindakan ini akan dicatat dalam log baru.')) {
-      clearAuditLogs();
-      setLogs(getAuditLogs());
+  const handleConfirmClear = async () => {
+    if (!isAdmin) return;
+    setIsClearing(true);
+    setActionToast(null);
+    try {
+      const res = await clearAuditLogsAsync();
+      setIsClearModalOpen(false);
+      if (res.success) {
+        setLogs([]);
+        setActionToast({ text: res.message, type: 'success' });
+      } else {
+        setActionToast({ text: res.message, type: 'error' });
+      }
+      setTimeout(() => setActionToast(null), 5000);
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -95,14 +177,37 @@ export const AuditLogTable: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {actionToast && (
+        <div
+          className={`p-4 rounded-2xl text-xs font-bold border flex items-center gap-2 ${
+            actionToast.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              : 'bg-rose-50 text-rose-800 border-rose-200'
+          }`}
+        >
+          {actionToast.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+          )}
+          <span>{actionToast.text}</span>
+        </div>
+      )}
+
       {/* Top Banner & Audit Log Identity */}
       <div className="bg-gradient-to-r from-[#1E3A8A] via-[#3451B2] to-[#3B5BDB] text-white p-6 rounded-3xl border border-white/20 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <ShieldCheck className="w-5 h-5 text-white" />
             <h3 className="font-extrabold text-base tracking-tight text-white">
-              System Audit Log & Jejak Keamanan 20 Akun Petugas
+              System Audit Log &amp; Jejak Keamanan 55 Akun Petugas
             </h3>
+            {!isAdmin && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/15 text-blue-100 border border-white/20">
+                <Eye className="w-3 h-3" />
+                <span>Hanya Lihat</span>
+              </span>
+            )}
           </div>
           <p className="text-xs text-blue-100 max-w-2xl leading-relaxed">
             Merekam seluruh riwayat aktivitas secara real-time (input pelanggaran, pembaruan data siswa, penghapusan, reset data, dan pergantian sesi login) untuk menjamin akuntabilitas serta integritas data sekolah.
@@ -113,11 +218,12 @@ export const AuditLogTable: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
             onClick={handleRefresh}
-            className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl border border-white/20 transition-all cursor-pointer"
-            title="Segarkan Log"
+            disabled={isRefreshing}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-60 text-white text-xs font-semibold rounded-xl border border-white/20 transition-all cursor-pointer"
+            title="Segarkan Log dari Server Cloud"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-white" />
-            <span>Segarkan</span>
+            <RefreshCw className={`w-3.5 h-3.5 text-white ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Menyegarkan...' : 'Segarkan'}</span>
           </button>
 
           <button
@@ -130,14 +236,17 @@ export const AuditLogTable: React.FC = () => {
             <span>{isExporting ? 'Mengekspor...' : 'Ekspor Log (Excel)'}</span>
           </button>
 
-          <button
-            onClick={handleClear}
-            className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 hover:text-white text-xs font-semibold rounded-xl border border-rose-400/30 transition-all cursor-pointer"
-            title="Kosongkan Riwayat Log (Hanya Administrator)"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-rose-300" />
-            <span>Bersihkan</span>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setIsClearModalOpen(true)}
+              disabled={logs.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2 bg-rose-500/20 hover:bg-rose-500/35 disabled:opacity-40 text-rose-100 hover:text-white text-xs font-semibold rounded-xl border border-rose-400/30 transition-all cursor-pointer"
+              title="Kosongkan Riwayat Log secara Real-Time (Khusus Administrator)"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-200" />
+              <span>Bersihkan</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -297,8 +406,14 @@ export const AuditLogTable: React.FC = () => {
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-500">
                     <ShieldCheck className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                    <div className="font-semibold text-sm text-slate-700">Tidak Ada Log Yang Sesuai</div>
-                    <div className="text-xs text-slate-400 mt-0.5">Coba ubah kata kunci atau bersihkan filter pencarian.</div>
+                    <div className="font-semibold text-sm text-slate-700">
+                      {logs.length === 0 ? 'Belum Ada Catatan Audit Log' : 'Tidak Ada Log Yang Sesuai'}
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      {logs.length === 0
+                        ? 'Riwayat audit log saat ini bersih dan tersinkronisasi secara real-time di seluruh perangkat.'
+                        : 'Coba ubah kata kunci atau bersihkan filter pencarian.'}
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -373,13 +488,52 @@ export const AuditLogTable: React.FC = () => {
         <div className="p-4 bg-slate-50 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Audit trail aktif otomatis untuk seluruh 20 akun petugas SMPN 1 Kandangan.</span>
+            <span>Audit trail real-time cloud aktif untuk seluruh 55 akun petugas SMPN 1 Kandangan.</span>
           </div>
           <span className="font-mono text-[11px]">
             Kapasitas: {logs.length} / 300 Catatan
           </span>
         </div>
       </div>
+
+      {/* Confirmation Modal for Clearing Audit Logs (Admin Only) */}
+      {isAdmin && isClearModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6 stroke-[2.5]" />
+            </div>
+
+            <div>
+              <h3 className="font-bold text-base text-slate-900">
+                Bersihkan Seluruh Audit Log?
+              </h3>
+              <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                Tindakan ini akan menghapus seluruh catatan di <strong>System Audit Log &amp; Keamanan</strong> secara permanen dari server cloud. Saat akun atau perangkat lain membukanya, data audit log juga langsung bersih secara real-time.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isClearing}
+                onClick={() => setIsClearModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isClearing}
+                onClick={handleConfirmClear}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+              >
+                {isClearing ? 'Membersihkan...' : 'Ya, Bersihkan Sekarang'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

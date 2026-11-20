@@ -1137,7 +1137,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
 
       {/* TAB 3: SYSTEM AUDIT LOG & KEAMANAN */}
       {activeSettingsTab === 'audit_log' && (
-        <AuditLogTable />
+        <AuditLogTable currentUser={currentUser} />
       )}
 
       {/* TAB 4: UBAH USERNAME & PASSWORD AKUN SAYA */}

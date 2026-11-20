@@ -20,6 +20,7 @@ import {
   subscribeToAttendanceSheets,
   subscribeToActivities,
   subscribeToAccounts,
+  subscribeToAuditLogs,
   syncStudentToFirestore,
   updateStudentFieldsInFirestore,
   batchUpdateStudentsAttendanceInFirestore,
@@ -54,7 +55,7 @@ import {
   DEFAULT_ACCOUNTS, 
   setCurrentUserId 
 } from './services/authService';
-import { logAudit } from './services/auditLogger';
+import { logAudit, saveAuditLogsLocalOnly } from './services/auditLogger';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { ExecutiveDashboard } from './components/dashboard/ExecutiveDashboard';
@@ -260,6 +261,12 @@ export default function App() {
       }
     });
 
+    const unsubAuditLogs = subscribeToAuditLogs((remoteLogs, meta) => {
+      if (isCancelled) return;
+      if (meta.fromCache && meta.empty) return;
+      saveAuditLogsLocalOnly(remoteLogs || []);
+    });
+
     return () => {
       isCancelled = true;
       unsubStudents();
@@ -269,6 +276,7 @@ export default function App() {
       unsubAttendance();
       unsubActivities();
       unsubAccounts();
+      unsubAuditLogs();
     };
   }, []);
 
@@ -1216,6 +1224,7 @@ export default function App() {
           {currentView === 'students' && (
             <StudentCentralHub
               students={students}
+              currentUser={currentUser}
               onAddStudent={handleAddStudent}
               onUpdateStudent={handleUpdateStudent}
               onDeleteStudent={handleDeleteStudent}

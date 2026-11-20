@@ -125,6 +125,25 @@
         "avatarColor": { "type": "string" }
       },
       "required": ["id", "name", "role", "username"]
+    },
+    "AuditLogEntry": {
+      "title": "AuditLogEntry",
+      "description": "Real-time system audit and security activity log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "isoTimestamp": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userRole": { "type": "string" },
+        "actionType": { "type": "string" },
+        "module": { "type": "string" },
+        "description": { "type": "string" },
+        "details": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "isoTimestamp", "userId", "actionType", "module", "description"]
     }
   },
   "firestore": {
@@ -155,6 +174,10 @@
     "/accounts/{accountId}": {
       "schema": "UserAccount",
       "description": "Staff user credentials and role definitions"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLogEntry",
+      "description": "Real-time system audit and security logs across all devices"
     }
   }
 }

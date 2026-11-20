@@ -105,13 +105,18 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   const [statusSearchQuery, setStatusSearchQuery] = useState('');
   const [statusClassFilter, setStatusClassFilter] = useState<string>('all');
 
+  const getClockSnapshot = () => {
+    const now = new Date();
+    return {
+      day: new Intl.DateTimeFormat('id-ID', { weekday: 'long' }).format(now),
+      date: new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(now),
+      time: new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(now),
+      seconds: String(now.getSeconds()).padStart(2, '0'),
+    };
+  };
+
   // Real-time large clock state for home executive dashboard KPI matching Gambar 2
-  const [timeState, setTimeState] = useState({
-    day: '',
-    date: '',
-    time: '',
-    seconds: '',
-  });
+  const [timeState, setTimeState] = useState(getClockSnapshot);
 
   // School Activities / Announcements state & sound notifications (H-5 s/d Hari H)
   const [activities, setActivities] = useState<SchoolActivity[]>(() => getStoredActivities());
@@ -167,17 +172,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
   useEffect(() => {
     const updateTime = () => {
-      const now = new Date();
-      const day = new Intl.DateTimeFormat('id-ID', { weekday: 'long' }).format(now);
-      const date = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(now);
-      const hoursMinutes = new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(now);
-
-      setTimeState({
-        day,
-        date,
-        time: hoursMinutes,
-        seconds: String(now.getSeconds()).padStart(2, '0'),
-      });
+      setTimeState(getClockSnapshot());
     };
 
     updateTime();
@@ -492,16 +487,13 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         <div className="absolute -bottom-10 left-1/3 w-80 h-80 bg-cyan-400/10 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-5 lg:gap-6 items-center">
-          {/* Left Block: Hari, Tanggal & Real-Time Digital Clock */}
+          {/* Left Block: Real-Time Day, Date & Digital Clock */}
           <div className="md:col-span-3 bg-black/25 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/10 flex flex-col justify-center">
-            <span className="text-[11px] font-semibold text-blue-200 uppercase tracking-wider">
-              Hari, Tanggal
-            </span>
-            <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-              {timeState.day || 'Selasa'}
+            <div className="text-xl sm:text-2xl font-black text-white leading-tight">
+              {timeState.day}
             </div>
-            <div className="text-xs text-blue-100 font-medium">
-              {timeState.date || '20 Mei 2025'}
+            <div className="text-xs text-blue-100 font-medium mt-0.5">
+              {timeState.date}
             </div>
 
             <div className="mt-3 pt-3 border-t border-white/15 flex items-baseline gap-2">

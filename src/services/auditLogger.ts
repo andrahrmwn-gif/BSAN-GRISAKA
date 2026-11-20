@@ -1,99 +1,52 @@
 import { AuditLogEntry, AuditActionType, AuditModule } from '../types/auth';
-import { getCurrentUser, isGuestMode } from './authService';
+import { getCurrentUser, isGuestMode, isAdminUser } from './authService';
 import { exportToCSV } from '../utils/exportDocs';
+import {
+  syncAuditLogToFirestore,
+  clearAuditLogsFromFirestore,
+  fetchAuditLogsFromServer,
+} from './firebase';
 
 const STORAGE_KEY = 'bsan_grisaka_audit_logs_v1';
 const MAX_LOGS = 300;
 
-export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
-  {
-    id: 'log-001',
-    timestamp: '28 Okt 2026, 07:15:20 WIB',
-    isoTimestamp: '2026-10-28T07:15:20.000Z',
-    userId: 'usr-001',
-    userName: 'Yuliana Dewi Marithawati, S.Pd., M.Pd.',
-    userRole: 'Kepala Sekolah',
-    actionType: 'LOGIN',
-    module: 'Autentikasi',
-    description: 'Login sesi pimpinan sekolah ke Portal BSAN',
-    status: 'SUCCESS',
-  },
-  {
-    id: 'log-002',
-    timestamp: '28 Okt 2026, 07:22:45 WIB',
-    isoTimestamp: '2026-10-28T07:22:45.000Z',
-    userId: 'usr-003',
-    userName: 'Sri Wahyuni, S.Pd., M.Si.',
-    userRole: 'Guru BK',
-    actionType: 'LOGIN',
-    module: 'Autentikasi',
-    description: 'Login sesi Petugas Bimbingan Konseling',
-    status: 'SUCCESS',
-  },
-  {
-    id: 'log-003',
-    timestamp: '28 Okt 2026, 07:30:10 WIB',
-    isoTimestamp: '2026-10-28T07:30:10.000Z',
-    userId: 'usr-009',
-    userName: 'Siti Aminah, S.Pd.',
-    userRole: 'Guru Piket',
-    actionType: 'CREATE',
-    module: 'Pelanggaran',
-    description: 'Pencatatan pelanggaran Ringan: Atribut seragam tidak lengkap (Kelas 7A)',
-    details: 'Pasal 1 Ayat 1 · Pembinaan lisan di pos piket',
-    status: 'SUCCESS',
-  },
-  {
-    id: 'log-004',
-    timestamp: '28 Okt 2026, 07:45:00 WIB',
-    isoTimestamp: '2026-10-28T07:45:00.000Z',
-    userId: 'usr-002',
-    userName: 'Andi Prasetyo, S.Pd.',
-    userRole: 'Wakasek Kesiswaan',
-    actionType: 'UPDATE',
-    module: 'Pelanggaran',
-    description: 'Verifikasi & peningkatan status surat SP-1 menjadi Diterbitkan',
-    details: 'Dokumen administrasi siap cetak & dikirim ke wali murid',
-    status: 'SUCCESS',
-  },
-  {
-    id: 'log-005',
-    timestamp: '28 Okt 2026, 08:00:12 WIB',
-    isoTimestamp: '2026-10-28T08:00:12.000Z',
-    userId: 'usr-018',
-    userName: 'Kurniawan Dwi, A.Md.',
-    userRole: 'Tata Usaha (Admin)',
-    actionType: 'SYNC',
-    module: 'Pengaturan',
-    description: 'Sinkronisasi data ke Google Sheets & Google Drive Database',
-    status: 'SUCCESS',
-  },
-];
+export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [];
+
+const emitAuditLogsChanged = (logs: AuditLogEntry[]): void => {
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent('bsan_audit_logs_changed', { detail: logs }));
+    } catch {
+      // Ignore event dispatch error
+    }
+  }
+};
 
 export const getAuditLogs = (): AuditLogEntry[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_AUDIT_LOGS));
-      return INITIAL_AUDIT_LOGS;
+      return [];
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : INITIAL_AUDIT_LOGS;
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     console.error('Failed reading audit logs', err);
-    return INITIAL_AUDIT_LOGS;
+    return [];
   }
 };
 
-export const saveAuditLogs = (logs: AuditLogEntry[]): void => {
+export const saveAuditLogsLocalOnly = (logs: AuditLogEntry[]): void => {
   try {
-    // Keep max logs to prevent quota overflow
     const trimmed = logs.slice(0, MAX_LOGS);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    emitAuditLogsChanged(trimmed);
   } catch (err) {
     console.error('Failed saving audit logs', err);
   }
 };
+
+export const saveAuditLogs = saveAuditLogsLocalOnly;
 
 export const logAudit = (params: {
   actionType: AuditActionType;
@@ -129,32 +82,57 @@ export const logAudit = (params: {
     actionType: params.actionType,
     module: params.module,
     description: params.description,
-    details: params.details,
+    ...(params.details ? { details: params.details } : {}),
     status: params.status || 'SUCCESS',
   };
 
   const updated = [newEntry, ...currentLogs];
-  saveAuditLogs(updated);
+  saveAuditLogsLocalOnly(updated);
+  syncAuditLogToFirestore(newEntry).catch(console.error);
 
   return newEntry;
 };
 
+export const clearAuditLogsAsync = async (): Promise<{ success: boolean; message: string }> => {
+  if (!isAdminUser(getCurrentUser())) {
+    return {
+      success: false,
+      message: 'Akses Ditolak: Hanya akun Administrator (admin) yang berhak membersihkan audit log sistem.',
+    };
+  }
+
+  saveAuditLogsLocalOnly([]);
+  try {
+    await clearAuditLogsFromFirestore();
+    return {
+      success: true,
+      message: 'Seluruh riwayat audit log berhasil dibersihkan secara real-time di semua akun dan perangkat.',
+    };
+  } catch (err) {
+    console.error('Failed clearing audit logs in Firestore', err);
+    return {
+      success: false,
+      message: 'Gagal membersihkan riwayat audit log di server cloud. Silakan coba lagi.',
+    };
+  }
+};
+
 export const clearAuditLogs = (): void => {
-  const resetLogs: AuditLogEntry[] = [
-    {
-      id: `log-${Date.now()}`,
-      timestamp: new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date()) + ' WIB',
-      isoTimestamp: new Date().toISOString(),
-      userId: getCurrentUser()?.id || 'admin',
-      userName: getCurrentUser()?.name || 'Administrator',
-      userRole: getCurrentUser()?.role || 'Admin',
-      actionType: 'DELETE',
-      module: 'Sistem',
-      description: 'Pembersihan riwayat audit log sistem oleh Administrator',
-      status: 'SUCCESS',
-    }
-  ];
-  saveAuditLogs(resetLogs);
+  if (!isAdminUser(getCurrentUser())) {
+    return;
+  }
+  clearAuditLogsAsync().catch(console.error);
+};
+
+export const refreshAuditLogsFromCloud = async (): Promise<AuditLogEntry[]> => {
+  try {
+    const serverLogs = await fetchAuditLogsFromServer();
+    saveAuditLogsLocalOnly(serverLogs);
+    return serverLogs;
+  } catch (err) {
+    console.warn('Failed refreshing audit logs from server, using local cache', err);
+    return getAuditLogs();
+  }
 };
 
 export const exportAuditLogsToExcel = (logs: AuditLogEntry[]): void => {

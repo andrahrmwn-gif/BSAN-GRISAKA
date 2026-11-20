@@ -21,10 +21,12 @@ import {
   Layers,
   Lock
 } from 'lucide-react';
-import { isGuestMode } from '../../services/authService';
+import { isGuestMode, isAdminUser, getCurrentUser } from '../../services/authService';
+import { UserAccount } from '../../types/auth';
 
 interface StudentCentralHubProps {
   students: Student[];
+  currentUser?: UserAccount | null;
   onAddStudent: (student: Student) => void;
   onUpdateStudent: (student: Student) => void;
   onDeleteStudent: (studentId: string) => void;
@@ -35,6 +37,7 @@ interface StudentCentralHubProps {
 
 export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
   students,
+  currentUser: propCurrentUser,
   onAddStudent,
   onUpdateStudent,
   onDeleteStudent,
@@ -42,6 +45,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
   onOpenRecordViolation,
   onSelectStudentProfile,
 }) => {
+  const isAdmin = isAdminUser(propCurrentUser || getCurrentUser());
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [jenjangFilter, setJenjangFilter] = useState<string>('all');
@@ -161,8 +165,13 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
     });
   };
 
-  // CSV Import handler
+  // CSV Import handler (Khusus Admin)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isAdmin) {
+      alert('Akses Ditolak: Fitur Import Massal hanya tersedia untuk akun Administrator (admin).');
+      e.target.value = '';
+      return;
+    }
     if (isGuestMode()) {
       alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 55 akun petugas resmi yang berhak mengimpor data siswa.');
       e.target.value = '';
@@ -232,6 +241,10 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
   };
 
   const handleExportAll = () => {
+    if (!isAdmin) {
+      alert('Akses Ditolak: Fitur Ekspor Data hanya tersedia untuk akun Administrator (admin).');
+      return;
+    }
     const exportData = filteredStudents.map((s) => ({
       NISN: s.nisn,
       Nama_Lengkap: s.nama,
@@ -266,35 +279,39 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
           </p>
         </div>
 
-        {/* Buttons: Template, Upload, Export, Add */}
+        {/* Buttons: Admin sees Template, Upload, Export, Add; Regular user only sees Tambah Siswa Manual */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={downloadStudentTemplate}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl transition-colors"
-            title="Download Template Format CSV/Excel"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Unduh Template</span>
-          </button>
+          {isAdmin && (
+            <>
+              <button
+                onClick={downloadStudentTemplate}
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl transition-colors cursor-pointer"
+                title="Download Template Format CSV/Excel (Khusus Admin)"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Unduh Template</span>
+              </button>
 
-          <label className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl cursor-pointer transition-colors">
-            <Upload className="w-3.5 h-3.5" />
-            <span>Import Massal</span>
-            <input
-              type="file"
-              accept=".csv, .txt, .xlsx"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-          </label>
+              <label className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl cursor-pointer transition-colors">
+                <Upload className="w-3.5 h-3.5" />
+                <span>Import Massal</span>
+                <input
+                  type="file"
+                  accept=".csv, .txt, .xlsx"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
 
-          <button
-            onClick={handleExportAll}
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-medium rounded-xl border border-emerald-200 transition-colors"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-            <span>Ekspor Data</span>
-          </button>
+              <button
+                onClick={handleExportAll}
+                className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-medium rounded-xl border border-emerald-200 transition-colors cursor-pointer"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Ekspor Data</span>
+              </button>
+            </>
+          )}
 
           <button
             onClick={() => {
@@ -493,7 +510,9 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
                     </p>
                     <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
                       {students.length === 0
-                        ? 'Data contoh telah dibersihkan secara tuntas. Silakan klik "Tambah Siswa" atau "Impor Excel" untuk memasukkan data siswa riil sekolah.'
+                        ? isAdmin
+                          ? 'Data contoh telah dibersihkan secara tuntas. Silakan klik "Tambah Siswa Manual" atau "Import Massal" untuk memasukkan data siswa riil sekolah.'
+                          : 'Data siswa saat ini masih kosong. Silakan klik "Tambah Siswa Manual" untuk memasukkan data siswa.'
                         : 'Tidak ada data siswa yang cocok dengan kriteria pencarian atau filter saat ini.'}
                     </p>
                   </td>
