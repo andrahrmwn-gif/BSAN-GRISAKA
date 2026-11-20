@@ -191,23 +191,29 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
             const nama = cols[1] || 'Siswa Baru';
             const kelas = cols[2] || '7A';
             const gender = (cols[4] === 'P' ? 'P' : 'L') as Gender;
+            const existingMatch = students.find(
+              (s) => s.nisn && nisn && s.nisn.trim() === nisn.trim()
+            );
 
             newStudents.push({
-              id: `std-imp-${Date.now()}-${i}`,
+              id: existingMatch
+                ? existingMatch.id
+                : `std-imp-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
               nisn,
               nama,
               kelas,
               jenjang: parseInt(kelas.charAt(0)) || 7,
               gender,
-              noHpSiswa: cols[5] || '081234567890',
-              namaOrtu: cols[6] || 'Orang Tua Siswa',
-              noWaOrtu: cols[7] || '6281234567890',
-              alamat: cols[8] || 'Kec. Kandangan, Kediri',
-              statusKehadiran: 'Hadir',
-              totalPoinPelanggaran: 0,
-              totalPelanggaranRingan: 0,
-              totalPelanggaranSedang: 0,
-              totalPelanggaranBerat: 0,
+              noHpSiswa: cols[5] || existingMatch?.noHpSiswa || '081234567890',
+              namaOrtu: cols[6] || existingMatch?.namaOrtu || 'Orang Tua Siswa',
+              noWaOrtu: cols[7] || existingMatch?.noWaOrtu || '6281234567890',
+              alamat: cols[8] || existingMatch?.alamat || 'Kec. Kandangan, Temanggung',
+              statusKehadiran: existingMatch?.statusKehadiran || 'Hadir',
+              keteranganKehadiran: existingMatch?.keteranganKehadiran || '',
+              totalPoinPelanggaran: existingMatch?.totalPoinPelanggaran || 0,
+              totalPelanggaranRingan: existingMatch?.totalPelanggaranRingan || 0,
+              totalPelanggaranSedang: existingMatch?.totalPelanggaranSedang || 0,
+              totalPelanggaranBerat: existingMatch?.totalPelanggaranBerat || 0,
             });
           }
         }

@@ -35,7 +35,7 @@ import {
 import { User } from 'firebase/auth';
 import { AccountManager } from './AccountManager';
 import { AuditLogTable } from './AuditLogTable';
-import { isGuestMode, getCurrentUser, updateAccount, updateAccountAsync } from '../../services/authService';
+import { isGuestMode, isAdminUser, getCurrentUser, updateAccount, updateAccountAsync } from '../../services/authService';
 import { logAudit } from '../../services/auditLogger';
 import { UserAccount } from '../../types/auth';
 import { Users, Shield, History, Lock, Key, Eye, EyeOff } from 'lucide-react';
@@ -44,6 +44,7 @@ interface SchoolSettingsViewProps {
   schoolConfig: SchoolProfile;
   students?: Student[];
   violations?: ViolationRecord[];
+  currentUser?: UserAccount | null;
   onUpdateSchoolConfig: (newConfig: SchoolProfile) => void;
   onPullDataFromSheets?: (
     newStudents: Student[], 
@@ -58,6 +59,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
   schoolConfig,
   students = [],
   violations = [],
+  currentUser: propCurrentUser,
   onUpdateSchoolConfig,
   onPullDataFromSheets,
   onResetData,
@@ -157,7 +159,8 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
 
-  const currentUser = getCurrentUser();
+  const currentUser = propCurrentUser || getCurrentUser();
+  const isAdmin = isAdminUser(currentUser);
 
   const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -642,22 +645,22 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
           </div>
         </div>
 
-        {/* SECTION: BERSIHKAN & RESET DATA CONTOH */}
-        <div className="bg-white p-6 rounded-3xl border border-rose-200/90 shadow-xs space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold shrink-0">
-                <RotateCcw className="w-5 h-5" />
+        {/* SECTION: BERSIHKAN & RESET DATA CONTOH (HANYA UNTUK ADMIN) */}
+        {isAdmin && onResetData && (
+          <div className="bg-white p-6 rounded-3xl border border-rose-200/90 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold shrink-0">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">Bersihkan & Reset Data Contoh (Clean Database)</h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Kembalikan database ke kondisi awal bersih: 0 kasus pelanggaran, seluruh murid 24 rombel berstatus Hadir, dan log notifikasi dikosongkan.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h4 className="font-bold text-sm text-slate-900">Bersihkan & Reset Data Contoh (Clean Database)</h4>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Kembalikan database ke kondisi awal bersih: 0 kasus pelanggaran, seluruh murid 24 rombel berstatus Hadir, dan log notifikasi dikosongkan.
-                </p>
-              </div>
-            </div>
 
-            {onResetData && (
               <button
                 type="button"
                 onClick={onResetData}
@@ -666,9 +669,9 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                 <RotateCcw className="w-4 h-4" />
                 <span>Reset Data Sekarang</span>
               </button>
-            )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">

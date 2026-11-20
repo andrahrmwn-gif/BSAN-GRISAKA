@@ -48,6 +48,17 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
   useEffect(() => {
     setAccounts(getStoredAccounts());
     setCurrentId(getCurrentUserId());
+
+    const handleAccountsChanged = (e: Event) => {
+      const custom = e as CustomEvent<UserAccount[]>;
+      if (custom.detail && Array.isArray(custom.detail)) {
+        setAccounts(custom.detail);
+      } else {
+        setAccounts(getStoredAccounts());
+      }
+    };
+    window.addEventListener('bsan_accounts_changed', handleAccountsChanged);
+    return () => window.removeEventListener('bsan_accounts_changed', handleAccountsChanged);
   }, []);
 
   const handleSwitchAccount = (id: string) => {
@@ -277,10 +288,15 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                       {acc.name.charAt(0)}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="font-bold text-slate-900 text-sm leading-tight">
                           {acc.name}
                         </h4>
+                        {acc.id === 'usr-admin' && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-slate-900 text-white uppercase tracking-wider">
+                            Admin Utama
+                          </span>
+                        )}
                         {isCurrent && (
                           <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-[#3B5BDB] text-white uppercase tracking-wider">
                             Akun Aktif
@@ -325,7 +341,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                   >
                     <Edit3 className="w-4 h-4" />
                   </button>
-                  {accounts.length > 1 && (
+                  {accounts.length > 1 && acc.id !== 'usr-admin' && (
                     <button
                       onClick={() => handleDelete(acc)}
                       className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"

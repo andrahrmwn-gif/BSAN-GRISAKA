@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { UserAccount } from '../../types/auth';
 import { SchoolProfile } from '../../types';
 import { SCHOOL_CONFIG } from '../../data/schoolConfig';
-import { getStoredAccounts, saveAccounts, setCurrentUserId, isDefaultPassword } from '../../services/authService';
-import { subscribeToAccounts, getAccountDirectlyFromFirestore } from '../../services/firebase';
+import { getStoredAccounts, saveAccounts, setCurrentUserId, isDefaultPassword, ensureAdminAccount, ADMIN_ACCOUNT } from '../../services/authService';
+import { subscribeToAccounts, getAccountDirectlyFromFirestore, syncAccountToFirestore } from '../../services/firebase';
 import { logAudit } from '../../services/auditLogger';
 import { ForcePasswordChangeModal } from './ForcePasswordChangeModal';
 import { 
@@ -44,8 +44,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   useEffect(() => {
     const unsub = subscribeToAccounts((liveAccounts) => {
       if (liveAccounts && liveAccounts.length > 0) {
-        setAccounts(liveAccounts);
-        saveAccounts(liveAccounts);
+        const { accounts: merged, addedAdmin } = ensureAdminAccount(liveAccounts);
+        setAccounts(merged);
+        saveAccounts(merged);
+        if (addedAdmin) {
+          syncAccountToFirestore(ADMIN_ACCOUNT).catch(console.error);
+        }
       }
     });
 

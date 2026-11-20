@@ -13,14 +13,11 @@ const STORAGE_KEYS = {
 
 export const getStoredStudents = (): Student[] => {
   try {
-    const data = secureStorage.getItem<Student[]>(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
-    if (!Array.isArray(data) || data.length === 0) {
-      return INITIAL_STUDENTS;
-    }
-    return data;
+    const data = secureStorage.getItem<Student[]>(STORAGE_KEYS.STUDENTS, []);
+    return Array.isArray(data) ? data : [];
   } catch (err) {
     console.error('Failed reading students storage', err);
-    return INITIAL_STUDENTS;
+    return [];
   }
 };
 
@@ -34,11 +31,11 @@ export const saveStudents = (students: Student[]): void => {
 
 export const getStoredViolations = (): ViolationRecord[] => {
   try {
-    const data = secureStorage.getItem<ViolationRecord[]>(STORAGE_KEYS.VIOLATIONS, INITIAL_VIOLATIONS);
-    return Array.isArray(data) ? data : INITIAL_VIOLATIONS;
+    const data = secureStorage.getItem<ViolationRecord[]>(STORAGE_KEYS.VIOLATIONS, []);
+    return Array.isArray(data) ? data : [];
   } catch (err) {
     console.error('Failed reading violations storage', err);
-    return INITIAL_VIOLATIONS;
+    return [];
   }
 };
 
@@ -52,11 +49,11 @@ export const saveViolations = (violations: ViolationRecord[]): void => {
 
 export const getStoredWaLogs = (): WhatsAppMessageLog[] => {
   try {
-    const data = secureStorage.getItem<WhatsAppMessageLog[]>(STORAGE_KEYS.WA_LOGS, INITIAL_WA_LOGS);
-    return Array.isArray(data) ? data : INITIAL_WA_LOGS;
+    const data = secureStorage.getItem<WhatsAppMessageLog[]>(STORAGE_KEYS.WA_LOGS, []);
+    return Array.isArray(data) ? data : [];
   } catch (err) {
     console.error('Failed reading wa logs storage', err);
-    return INITIAL_WA_LOGS;
+    return [];
   }
 };
 

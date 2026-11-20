@@ -1,4 +1,5 @@
 export type UserRole = 
+  | 'Administrator Sistem'
   | 'Kepala Sekolah'
   | 'Wakil Kepala Sekolah Bidang Akademik'
   | 'Wakil Kepala Sekolah Bidang Non Akademik'

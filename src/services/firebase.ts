@@ -8,14 +8,16 @@ import {
   deleteDoc, 
   getDocFromServer,
   getDoc,
+  getDocsFromServer,
   onSnapshot, 
   writeBatch,
   getDocs
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Student, ViolationRecord, WhatsAppMessageLog, SchoolProfile, AttendanceSheet } from '../types';
+import { Student, ViolationRecord, WhatsAppMessageLog, SchoolProfile, AttendanceSheet, AttendanceStatus } from '../types';
 import { SchoolActivity } from './announcementService';
 import { UserAccount } from '../types/auth';
+import { sortByClassAndName } from '../utils/sortUtils';
 
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
@@ -52,8 +54,8 @@ export interface FirestoreErrorInfo {
   };
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
+function buildErrorInfo(error: unknown, operationType: OperationType, path: string | null): FirestoreErrorInfo {
+  return {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
       userId: auth.currentUser?.uid,
@@ -69,8 +71,40 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path,
   };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo = buildErrorInfo(error, operationType, path);
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
+}
+
+function logFirestoreListenerError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo = buildErrorInfo(error, operationType, path);
+  console.error('Firestore Listener Error: ', JSON.stringify(errInfo));
+}
+
+/**
+ * Recursively remove `undefined` properties so Firestore SDK never rejects a write
+ * with "Unsupported field value: undefined".
+ */
+export function sanitizeForFirestore<T>(value: T): T {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForFirestore(item)) as unknown as T;
+  }
+  if (typeof value === 'object' && !(value instanceof Date)) {
+    const clean: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v !== undefined) {
+        clean[k] = sanitizeForFirestore(v);
+      }
+    }
+    return clean as T;
+  }
+  return value;
 }
 
 // Validate Connection to Firestore on boot as required by SKILL.md
@@ -102,10 +136,57 @@ const COLLECTIONS = {
   ACCOUNTS: 'accounts',
 };
 
+export interface SystemMeta {
+  studentsInitialized: boolean;
+  isCleanReset: boolean;
+  updatedAt: string;
+}
+
+/**
+ * Read system initialization metadata directly from Firestore server
+ * Prevents secondary devices from falsely re-seeding dummy INITIAL_STUDENTS
+ */
+export const getSystemMetaFromServer = async (): Promise<SystemMeta | null> => {
+  const docRef = doc(db, COLLECTIONS.SETTINGS, 'system_meta');
+  try {
+    const snap = await getDocFromServer(docRef);
+    return snap.exists() ? (snap.data() as SystemMeta) : null;
+  } catch {
+    try {
+      const snap = await getDoc(docRef);
+      return snap.exists() ? (snap.data() as SystemMeta) : null;
+    } catch {
+      return null;
+    }
+  }
+};
+
+export const setSystemMeta = async (meta: SystemMeta): Promise<void> => {
+  const path = `${COLLECTIONS.SETTINGS}/system_meta`;
+  try {
+    await setDoc(doc(db, COLLECTIONS.SETTINGS, 'system_meta'), sanitizeForFirestore(meta), { merge: true });
+  } catch (err) {
+    logFirestoreListenerError(err, OperationType.WRITE, path);
+  }
+};
+
+export const checkServerStudentsCount = async (): Promise<number | null> => {
+  const colRef = collection(db, COLLECTIONS.STUDENTS);
+  try {
+    const snap = await getDocsFromServer(colRef);
+    return snap.size;
+  } catch {
+    return null;
+  }
+};
+
 /**
  * Subscribe to real-time student updates across all devices
+ * Deterministically sorted by class (7A-9H) and name (A-Z).
  */
-export const subscribeToStudents = (onUpdate: (students: Student[]) => void) => {
+export const subscribeToStudents = (
+  onUpdate: (students: Student[], meta: { fromCache: boolean; empty: boolean }) => void
+) => {
   const colRef = collection(db, COLLECTIONS.STUDENTS);
   return onSnapshot(
     colRef,
@@ -114,10 +195,14 @@ export const subscribeToStudents = (onUpdate: (students: Student[]) => void) => 
       snapshot.forEach((d) => {
         list.push(d.data() as Student);
       });
-      onUpdate(list);
+      const sorted = sortByClassAndName(list);
+      onUpdate(sorted, {
+        fromCache: snapshot.metadata.fromCache,
+        empty: snapshot.empty,
+      });
     },
     (err) => {
-      handleFirestoreError(err, OperationType.GET, COLLECTIONS.STUDENTS);
+      logFirestoreListenerError(err, OperationType.GET, COLLECTIONS.STUDENTS);
     }
   );
 };
@@ -130,20 +215,25 @@ export const subscribeToViolations = (onUpdate: (violations: ViolationRecord[]) 
   return onSnapshot(
     colRef,
     (snapshot) => {
+      // Ignore empty initial cache-only snapshots to avoid wiping cached UI before server arrives
+      if (snapshot.metadata.fromCache && snapshot.empty) {
+        return;
+      }
       const list: ViolationRecord[] = [];
       snapshot.forEach((d) => {
         list.push(d.data() as ViolationRecord);
       });
-      // Sort newest first by tanggal and createdAt/waktu
+      // Sort newest first by tanggal and waktu/id
       list.sort((a, b) => {
-        const da = a.tanggal || '';
-        const db = b.tanggal || '';
-        return db.localeCompare(da);
+        const da = `${a.tanggal || ''} ${a.waktu || ''}`;
+        const dbDate = `${b.tanggal || ''} ${b.waktu || ''}`;
+        const cmp = dbDate.localeCompare(da);
+        return cmp !== 0 ? cmp : (b.id || '').localeCompare(a.id || '');
       });
       onUpdate(list);
     },
     (err) => {
-      handleFirestoreError(err, OperationType.GET, COLLECTIONS.VIOLATIONS);
+      logFirestoreListenerError(err, OperationType.GET, COLLECTIONS.VIOLATIONS);
     }
   );
 };
@@ -156,6 +246,9 @@ export const subscribeToWaLogs = (onUpdate: (logs: WhatsAppMessageLog[]) => void
   return onSnapshot(
     colRef,
     (snapshot) => {
+      if (snapshot.metadata.fromCache && snapshot.empty) {
+        return;
+      }
       const list: WhatsAppMessageLog[] = [];
       snapshot.forEach((d) => {
         list.push(d.data() as WhatsAppMessageLog);
@@ -165,7 +258,7 @@ export const subscribeToWaLogs = (onUpdate: (logs: WhatsAppMessageLog[]) => void
       onUpdate(list);
     },
     (err) => {
-      handleFirestoreError(err, OperationType.GET, COLLECTIONS.WA_LOGS);
+      logFirestoreListenerError(err, OperationType.GET, COLLECTIONS.WA_LOGS);
     }
   );
 };
@@ -183,7 +276,7 @@ export const subscribeToSchoolConfig = (onUpdate: (config: SchoolProfile) => voi
       }
     },
     (err) => {
-      handleFirestoreError(err, OperationType.GET, `${COLLECTIONS.SETTINGS}/profile`);
+      logFirestoreListenerError(err, OperationType.GET, `${COLLECTIONS.SETTINGS}/profile`);
     }
   );
 };
@@ -196,6 +289,9 @@ export const subscribeToAttendanceSheets = (onUpdate: (sheets: AttendanceSheet[]
   return onSnapshot(
     colRef,
     (snapshot) => {
+      if (snapshot.metadata.fromCache && snapshot.empty) {
+        return;
+      }
       const list: AttendanceSheet[] = [];
       snapshot.forEach((d) => {
         list.push(d.data() as AttendanceSheet);
@@ -203,7 +299,7 @@ export const subscribeToAttendanceSheets = (onUpdate: (sheets: AttendanceSheet[]
       onUpdate(list);
     },
     (err) => {
-      handleFirestoreError(err, OperationType.GET, COLLECTIONS.ATTENDANCE);
+      logFirestoreListenerError(err, OperationType.GET, COLLECTIONS.ATTENDANCE);
     }
   );
 };
@@ -216,6 +312,9 @@ export const subscribeToActivities = (onUpdate: (activities: SchoolActivity[]) =
   return onSnapshot(
     colRef,
     (snapshot) => {
+      if (snapshot.metadata.fromCache && snapshot.empty) {
+        return;
+      }
       const list: SchoolActivity[] = [];
       snapshot.forEach((d) => {
         list.push(d.data() as SchoolActivity);
@@ -225,7 +324,7 @@ export const subscribeToActivities = (onUpdate: (activities: SchoolActivity[]) =
       onUpdate(list);
     },
     (err) => {
-      handleFirestoreError(err, OperationType.GET, COLLECTIONS.ACTIVITIES);
+      logFirestoreListenerError(err, OperationType.GET, COLLECTIONS.ACTIVITIES);
     }
   );
 };
@@ -238,16 +337,23 @@ export const subscribeToAccounts = (onUpdate: (accounts: UserAccount[]) => void)
   return onSnapshot(
     colRef,
     (snapshot) => {
+      if (snapshot.metadata.fromCache && snapshot.empty) {
+        return;
+      }
       const list: UserAccount[] = [];
       snapshot.forEach((d) => {
         list.push(d.data() as UserAccount);
       });
-      // Sort by ID or sequence
-      list.sort((a, b) => a.id.localeCompare(b.id));
+      // Sort so usr-admin comes first, then by ID
+      list.sort((a, b) => {
+        if (a.id === 'usr-admin') return -1;
+        if (b.id === 'usr-admin') return 1;
+        return a.id.localeCompare(b.id);
+      });
       onUpdate(list);
     },
     (err) => {
-      handleFirestoreError(err, OperationType.GET, COLLECTIONS.ACCOUNTS);
+      logFirestoreListenerError(err, OperationType.GET, COLLECTIONS.ACCOUNTS);
     }
   );
 };
@@ -257,14 +363,92 @@ export const subscribeToAccounts = (onUpdate: (accounts: UserAccount[]) => void)
    ========================================================================= */
 
 /**
- * Save or update a single student in Firestore
+ * Save or update a single student in Firestore (merge: true preserves concurrent fields)
  */
 export const syncStudentToFirestore = async (student: Student): Promise<void> => {
   const path = `${COLLECTIONS.STUDENTS}/${student.id}`;
   try {
-    await setDoc(doc(db, COLLECTIONS.STUDENTS, student.id), student);
+    await setDoc(doc(db, COLLECTIONS.STUDENTS, student.id), sanitizeForFirestore(student), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
+  }
+};
+
+/**
+ * Update specific fields on a single student document without overwriting unrelated properties
+ */
+export const updateStudentFieldsInFirestore = async (
+  studentId: string,
+  fields: Partial<Student>
+): Promise<void> => {
+  const path = `${COLLECTIONS.STUDENTS}/${studentId}`;
+  try {
+    await setDoc(doc(db, COLLECTIONS.STUDENTS, studentId), sanitizeForFirestore(fields), { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, path);
+  }
+};
+
+/**
+ * Batch-update ONLY attendance fields for specific students (e.g., 1 class)
+ * NEVER touches nama, nisn, kelas, or violation counters of any student!
+ */
+export const batchUpdateStudentsAttendanceInFirestore = async (
+  updates: Array<{ id: string; statusKehadiran: AttendanceStatus; keteranganKehadiran?: string }>
+): Promise<void> => {
+  if (!updates || updates.length === 0) return;
+  const CHUNK_SIZE = 350;
+  try {
+    for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
+      const chunk = updates.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((u) => {
+        const ref = doc(db, COLLECTIONS.STUDENTS, u.id);
+        batch.set(
+          ref,
+          {
+            statusKehadiran: u.statusKehadiran,
+            keteranganKehadiran: u.keteranganKehadiran || '',
+          },
+          { merge: true }
+        );
+      });
+      await batch.commit();
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, COLLECTIONS.STUDENTS);
+  }
+};
+
+/**
+ * Batch-reset ONLY violation counters on specified students
+ */
+export const batchResetStudentViolationCountersInFirestore = async (
+  studentIds: string[]
+): Promise<void> => {
+  if (!studentIds || studentIds.length === 0) return;
+  const CHUNK_SIZE = 350;
+  try {
+    for (let i = 0; i < studentIds.length; i += CHUNK_SIZE) {
+      const chunk = studentIds.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((id) => {
+        const ref = doc(db, COLLECTIONS.STUDENTS, id);
+        batch.set(
+          ref,
+          {
+            totalPelanggaranRingan: 0,
+            totalPelanggaranSedang: 0,
+            totalPelanggaranBerat: 0,
+            totalPoinPelanggaran: 0,
+          },
+          { merge: true }
+        );
+      });
+      await batch.commit();
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, COLLECTIONS.STUDENTS);
   }
 };
 
@@ -286,7 +470,7 @@ export const deleteStudentFromFirestore = async (studentId: string): Promise<voi
 export const syncViolationToFirestore = async (violation: ViolationRecord): Promise<void> => {
   const path = `${COLLECTIONS.VIOLATIONS}/${violation.id}`;
   try {
-    await setDoc(doc(db, COLLECTIONS.VIOLATIONS, violation.id), violation);
+    await setDoc(doc(db, COLLECTIONS.VIOLATIONS, violation.id), sanitizeForFirestore(violation), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -310,7 +494,7 @@ export const deleteViolationFromFirestore = async (violationId: string): Promise
 export const syncWaLogToFirestore = async (log: WhatsAppMessageLog): Promise<void> => {
   const path = `${COLLECTIONS.WA_LOGS}/${log.id}`;
   try {
-    await setDoc(doc(db, COLLECTIONS.WA_LOGS, log.id), log);
+    await setDoc(doc(db, COLLECTIONS.WA_LOGS, log.id), sanitizeForFirestore(log), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -334,7 +518,7 @@ export const deleteWaLogFromFirestore = async (logId: string): Promise<void> => 
 export const syncSchoolConfigToFirestore = async (config: SchoolProfile): Promise<void> => {
   const path = `${COLLECTIONS.SETTINGS}/profile`;
   try {
-    await setDoc(doc(db, COLLECTIONS.SETTINGS, 'profile'), config);
+    await setDoc(doc(db, COLLECTIONS.SETTINGS, 'profile'), sanitizeForFirestore(config), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -346,7 +530,7 @@ export const syncSchoolConfigToFirestore = async (config: SchoolProfile): Promis
 export const syncAttendanceSheetToFirestore = async (sheet: AttendanceSheet): Promise<void> => {
   const path = `${COLLECTIONS.ATTENDANCE}/${sheet.id}`;
   try {
-    await setDoc(doc(db, COLLECTIONS.ATTENDANCE, sheet.id), sheet);
+    await setDoc(doc(db, COLLECTIONS.ATTENDANCE, sheet.id), sanitizeForFirestore(sheet));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -375,7 +559,7 @@ export const bulkSyncAttendanceSheets = async (sheets: AttendanceSheet[]): Promi
       const batch = writeBatch(db);
       chunk.forEach((sheet) => {
         const ref = doc(db, COLLECTIONS.ATTENDANCE, sheet.id);
-        batch.set(ref, sheet);
+        batch.set(ref, sanitizeForFirestore(sheet));
       });
       await batch.commit();
     }
@@ -390,7 +574,7 @@ export const bulkSyncAttendanceSheets = async (sheets: AttendanceSheet[]): Promi
 export const syncActivityToFirestore = async (activity: SchoolActivity): Promise<void> => {
   const path = `${COLLECTIONS.ACTIVITIES}/${activity.id}`;
   try {
-    await setDoc(doc(db, COLLECTIONS.ACTIVITIES, activity.id), activity);
+    await setDoc(doc(db, COLLECTIONS.ACTIVITIES, activity.id), sanitizeForFirestore(activity));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -416,7 +600,7 @@ export const bulkSyncActivitiesToFirestore = async (activities: SchoolActivity[]
     const batch = writeBatch(db);
     activities.forEach((act) => {
       const ref = doc(db, COLLECTIONS.ACTIVITIES, act.id);
-      batch.set(ref, act);
+      batch.set(ref, sanitizeForFirestore(act));
     });
     await batch.commit();
   } catch (err) {
@@ -430,7 +614,7 @@ export const bulkSyncActivitiesToFirestore = async (activities: SchoolActivity[]
 export const syncAccountToFirestore = async (account: UserAccount): Promise<void> => {
   const path = `${COLLECTIONS.ACCOUNTS}/${account.id}`;
   try {
-    await setDoc(doc(db, COLLECTIONS.ACCOUNTS, account.id), account);
+    await setDoc(doc(db, COLLECTIONS.ACCOUNTS, account.id), sanitizeForFirestore(account), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -456,7 +640,7 @@ export const bulkSyncAccountsToFirestore = async (accounts: UserAccount[]): Prom
     const batch = writeBatch(db);
     accounts.forEach((acc) => {
       const ref = doc(db, COLLECTIONS.ACCOUNTS, acc.id);
-      batch.set(ref, acc);
+      batch.set(ref, sanitizeForFirestore(acc), { merge: true });
     });
     await batch.commit();
   } catch (err) {
@@ -495,6 +679,7 @@ export const getAccountDirectlyFromFirestore = async (accountId: string): Promis
  * Bulk import students to Firestore safely chunked by 350 to prevent 500 limit exception
  */
 export const bulkImportStudentsToFirestore = async (students: Student[]): Promise<void> => {
+  if (!students || students.length === 0) return;
   const CHUNK_SIZE = 350;
   try {
     for (let i = 0; i < students.length; i += CHUNK_SIZE) {
@@ -502,7 +687,7 @@ export const bulkImportStudentsToFirestore = async (students: Student[]): Promis
       const batch = writeBatch(db);
       chunk.forEach((student) => {
         const ref = doc(db, COLLECTIONS.STUDENTS, student.id);
-        batch.set(ref, student);
+        batch.set(ref, sanitizeForFirestore(student), { merge: true });
       });
       await batch.commit();
     }
@@ -512,30 +697,51 @@ export const bulkImportStudentsToFirestore = async (students: Student[]): Promis
 };
 
 /**
+ * Safely delete all documents in a single Firestore collection using chunked batches (<500 limit)
+ */
+export const clearCollectionFromFirestore = async (
+  colName: 'students' | 'violations' | 'wa_logs' | 'attendance_sheets' | 'activities'
+): Promise<void> => {
+  const CHUNK_SIZE = 350;
+  try {
+    const snap = await getDocs(collection(db, colName));
+    if (snap.empty) return;
+    const docs = snap.docs;
+    for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+      const chunk = docs.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, colName);
+  }
+};
+
+/**
  * COMPLETELY CLEAN & RESET FIRESTORE
- * Deletes all documents in students, violations, wa_logs, attendance_sheets, activities.
- * Ensures the database is 100% clean across all devices.
+ * Deletes all documents in students, violations, wa_logs, attendance_sheets, activities
+ * using chunked batches, and records `isCleanReset: true` so other devices NEVER re-seed dummy data.
  */
 export const clearAllFirestoreData = async (): Promise<void> => {
   try {
-    const collectionsToClear = [
-      COLLECTIONS.STUDENTS,
-      COLLECTIONS.VIOLATIONS,
-      COLLECTIONS.WA_LOGS,
-      COLLECTIONS.ATTENDANCE,
-      COLLECTIONS.ACTIVITIES,
+    const collectionsToClear: Array<'students' | 'violations' | 'wa_logs' | 'attendance_sheets' | 'activities'> = [
+      'students',
+      'violations',
+      'wa_logs',
+      'attendance_sheets',
+      'activities',
     ];
 
     for (const colName of collectionsToClear) {
-      const snap = await getDocs(collection(db, colName));
-      if (!snap.empty) {
-        const batch = writeBatch(db);
-        snap.forEach((d) => {
-          batch.delete(d.ref);
-        });
-        await batch.commit();
-      }
+      await clearCollectionFromFirestore(colName);
     }
+
+    await setSystemMeta({
+      studentsInitialized: true,
+      isCleanReset: true,
+      updatedAt: new Date().toISOString(),
+    });
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, 'all_collections');
   }

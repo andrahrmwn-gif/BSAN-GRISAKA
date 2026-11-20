@@ -1,40 +1,27 @@
 import { AttendanceSheet, AttendanceStatus, Student, AttendanceRecapRow, AttendancePeriod } from '../types';
 import { KELAS_LIST } from '../data/schoolConfig';
-import { INITIAL_STUDENTS } from '../data/initialStudents';
 import { sortByClassAndName } from '../utils/sortUtils';
 import { syncAttendanceSheetToFirestore, bulkSyncAttendanceSheets } from './firebase';
 import { getRealtimeDateYMD } from '../utils/dateUtils';
+import { secureStorage } from './secureStorage';
+import { getStoredStudents } from './storage';
 
 const STORAGE_KEYS = {
   ATTENDANCE: 'bsan_grisaka_attendance_sheets_v1',
 };
 
-// Seed sample attendance sheets for recent school days
-// Generate clean today attendance sheets for all 24 classes (100% Hadir, 0 Sakit, 0 Izin, 0 Alfa)
 // Generate clean today attendance sheets based on actual students in database
 export const generateCleanTodayAttendanceSheets = (currentStudents?: Student[]): AttendanceSheet[] => {
   const sheets: AttendanceSheet[] = [];
   const todayStr = getRealtimeDateYMD();
-  
-  // Use passed students or fallback to stored students
-  let studentPool = currentStudents;
-  if (!studentPool) {
-    try {
-      const raw = localStorage.getItem('bsan_grisaka_students_v1');
-      if (raw) {
-        studentPool = JSON.parse(raw);
-      }
-    } catch {
-      studentPool = [];
-    }
-  }
 
+  const studentPool = currentStudents && currentStudents.length > 0 ? currentStudents : getStoredStudents();
   if (!studentPool || studentPool.length === 0) {
     return [];
   }
 
   KELAS_LIST.forEach((kelasName) => {
-    const classStudents = (studentPool || []).filter((s) => s.kelas === kelasName);
+    const classStudents = sortByClassAndName(studentPool.filter((s) => s.kelas === kelasName));
     if (classStudents.length === 0) return;
 
     const entries = classStudents.map((std) => ({
@@ -43,7 +30,7 @@ export const generateCleanTodayAttendanceSheets = (currentStudents?: Student[]):
       nama: std.nama,
       gender: std.gender,
       status: 'Hadir' as AttendanceStatus,
-      keterangan: undefined,
+      keterangan: '',
     }));
 
     const total = entries.length;
@@ -70,20 +57,21 @@ export const generateCleanTodayAttendanceSheets = (currentStudents?: Student[]):
   return sheets;
 };
 
-import { secureStorage } from './secureStorage';
-
 export const getStoredAttendanceSheets = (): AttendanceSheet[] => {
   try {
     const data = secureStorage.getItem<AttendanceSheet[]>(STORAGE_KEYS.ATTENDANCE, []);
-    if (!Array.isArray(data) || data.length === 0) {
-      const clean = generateCleanTodayAttendanceSheets();
-      secureStorage.setItem(STORAGE_KEYS.ATTENDANCE, clean);
-      return clean;
-    }
-    return data;
+    return Array.isArray(data) ? data : [];
   } catch (err) {
     console.error('Failed reading attendance storage', err);
     return [];
+  }
+};
+
+export const saveAttendanceSheetsLocalOnly = (sheets: AttendanceSheet[]): void => {
+  try {
+    secureStorage.setItem(STORAGE_KEYS.ATTENDANCE, sheets);
+  } catch (err) {
+    console.error('Failed saving attendance sheets locally', err);
   }
 };
 

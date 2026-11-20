@@ -18,7 +18,8 @@ import {
   resetAttendanceToClean,
   clearAllAttendanceSheets 
 } from '../../services/attendanceStorage';
-import { isGuestMode, getCurrentUser } from '../../services/authService';
+import { isGuestMode, isAdminUser, getCurrentUser } from '../../services/authService';
+import { clearCollectionFromFirestore } from '../../services/firebase';
 import { logAudit } from '../../services/auditLogger';
 import { exportAttendanceToWord, exportAttendanceToExcel, getPeriodLabel } from '../../utils/exportAttendance';
 import { exportElementToPDF } from '../../utils/exportDocs';
@@ -54,7 +55,7 @@ import {
 interface AttendanceManagerViewProps {
   students: Student[];
   schoolConfig: SchoolProfile;
-  onUpdateStudentsAttendance?: (updatedStudents: Student[]) => void;
+  onUpdateStudentsAttendance?: (updatedStudents: Student[], changedOnly?: Student[]) => void;
   onOpenAccountSwitchModal?: () => void;
 }
 
@@ -121,6 +122,14 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  useEffect(() => {
+    const handleRemoteAttendanceSync = () => {
+      setSaveTrigger((c) => c + 1);
+    };
+    window.addEventListener('bsan_attendance_sheets_synced', handleRemoteAttendanceSync);
+    return () => window.removeEventListener('bsan_attendance_sheets_synced', handleRemoteAttendanceSync);
+  }, []);
 
   useEffect(() => {
     const handleHardwareBack = (e: Event) => {
@@ -204,28 +213,30 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
     setEntries(fresh);
   };
 
-  // Reset all attendance sheets cleanly
+  // Reset all attendance sheets cleanly (STRICTLY ADMIN ONLY)
   const handleResetAllAttendance = () => {
-    if (isGuestMode()) {
+    if (!isAdminUser(getCurrentUser())) {
       setActionFeedback({
         type: 'error',
-        message: 'Akses Ditolak: Anda saat ini dalam Mode Tamu. Hanya akun petugas resmi yang berwenang mereset rekap presensi.',
+        message: 'Akses Ditolak: Hanya akun Administrator (admin) yang berwenang mereset seluruh rekap presensi.',
       });
       setTimeout(() => setActionFeedback(null), 5000);
-      if (onOpenAccountSwitchModal) onOpenAccountSwitchModal();
+      setIsResetModalOpen(false);
       return;
     }
 
     clearAllAttendanceSheets();
+    clearCollectionFromFirestore('attendance_sheets').catch(console.error);
+    setSaveTrigger((c) => c + 1);
 
-    // Reset student presence status in state
+    // Reset student presence status in state & Firestore cleanly (attendance fields only)
     const cleanStudents = students.map((s) => ({
       ...s,
       statusKehadiran: 'Hadir' as AttendanceStatus,
-      keteranganKehadiran: undefined,
+      keteranganKehadiran: '',
     }));
     if (onUpdateStudentsAttendance) {
-      onUpdateStudentsAttendance(cleanStudents);
+      onUpdateStudentsAttendance(cleanStudents, cleanStudents);
     }
 
     // Refresh current entries from actual students (will be empty if 0 students)
@@ -242,7 +253,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
     logAudit({
       actionType: 'RESET',
       module: 'Presensi',
-      description: 'Mereset & membersihkan seluruh lembar presensi kelas secara total.',
+      description: 'Administrator mereset & membersihkan seluruh lembar presensi kelas secara total.',
       status: 'SUCCESS',
     });
 
@@ -309,24 +320,27 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
       window.dispatchEvent(new CustomEvent('bsan_attendance_saved', { detail: newSheet }));
     } catch {}
 
-    // Synchronize the Student database with the latest recorded attendance
+    // Synchronize ONLY the affected class students so other classes & violation counters are never overwritten
     if (onUpdateStudentsAttendance) {
+      const changedClassStudents: Student[] = [];
       const updatedStudents = students.map((std) => {
         if (std.kelas === selectedKelas) {
           const matchedEntry = entries.find(
             (e) => e.studentId === std.id || (e.nama && std.nama && e.nama.trim().toLowerCase() === std.nama.trim().toLowerCase())
           );
           if (matchedEntry) {
-            return {
+            const nextStd: Student = {
               ...std,
               statusKehadiran: matchedEntry.status,
-              keteranganKehadiran: matchedEntry.keterangan || undefined,
+              keteranganKehadiran: matchedEntry.keterangan || '',
             };
+            changedClassStudents.push(nextStd);
+            return nextStd;
           }
         }
         return std;
       });
-      onUpdateStudentsAttendance(updatedStudents);
+      onUpdateStudentsAttendance(updatedStudents, changedClassStudents);
     }
 
     logAudit({
@@ -1092,15 +1106,17 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
                   <span>{isPdfExporting ? 'Memproses PDF...' : 'Unduh PDF'}</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setIsResetModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
-                  title="Bersihkan seluruh data rekap presensi dan reset ke Hadir 100%"
-                >
-                  <Trash2 className="w-4 h-4 text-rose-600" />
-                  <span>Reset / Bersihkan Rekap</span>
-                </button>
+                {isAdminUser(getCurrentUser()) && (
+                  <button
+                    type="button"
+                    onClick={() => setIsResetModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                    title="Bersihkan seluruh data rekap presensi dan reset ke Hadir 100% (Khusus Admin)"
+                  >
+                    <Trash2 className="w-4 h-4 text-rose-600" />
+                    <span>Reset / Bersihkan Rekap</span>
+                  </button>
+                )}
               </div>
             </div>
 

@@ -128,8 +128,12 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   });
   const [isChimePlaying, setIsChimePlaying] = useState(false);
 
-  // Play sound on mount if any activity is active (H-5 s/d Hari H) and listen to activity changes
+  const [attendanceSyncTick, setAttendanceSyncTick] = useState(0);
+
+  // Play sound on mount if any activity is active (H-5 s/d Hari H) and listen to activity & attendance changes
   useEffect(() => {
+    const handleAttendanceSynced = () => setAttendanceSyncTick((t) => t + 1);
+    window.addEventListener('bsan_attendance_sheets_synced', handleAttendanceSynced);
     const refreshActivities = () => {
       const list = getStoredActivities();
       setActivities(list);
@@ -151,11 +155,13 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
       return () => {
         clearTimeout(timer);
         window.removeEventListener('bsan_activities_changed', refreshActivities);
+        window.removeEventListener('bsan_attendance_sheets_synced', handleAttendanceSynced);
       };
     }
 
     return () => {
       window.removeEventListener('bsan_activities_changed', refreshActivities);
+      window.removeEventListener('bsan_attendance_sheets_synced', handleAttendanceSynced);
     };
   }, []);
 
@@ -189,7 +195,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
   const dateAttendance = useMemo(() => {
     return getDateAttendanceSummary(selectedDate, students);
-  }, [selectedDate, students]);
+  }, [selectedDate, students, attendanceSyncTick]);
 
   const hadirCount = dateAttendance.hadirCount;
   const sakitCount = dateAttendance.sakitCount;

@@ -4,6 +4,7 @@ import { SCHOOL_CONFIG } from '../../data/schoolConfig';
 import { getWhatsAppUrl, generateViolationMessage } from '../../utils/whatsapp';
 import { exportViolationsToWord, exportViolationsToPrintPDF, exportToCSV, exportElementToPDF } from '../../utils/exportDocs';
 import { useRealtimeDateTracker, formatIndoFullDate } from '../../utils/dateUtils';
+import { isAdminUser, getCurrentUser } from '../../services/authService';
 import { 
   ShieldAlert, 
   Search, 
@@ -202,11 +203,11 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
             <span>Ekspor Excel</span>
           </button>
 
-          {onClearAllViolations && violations.length > 0 && (
+          {isAdminUser(getCurrentUser()) && onClearAllViolations && violations.length > 0 && (
             <button
               onClick={() => setIsConfirmClearAllOpen(true)}
               className="flex items-center gap-1.5 px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-xl border border-rose-200 transition-colors shadow-xs cursor-pointer"
-              title="Kosongkan seluruh buku catatan pelanggaran"
+              title="Kosongkan seluruh buku catatan pelanggaran (Khusus Admin)"
             >
               <Trash2 className="w-4 h-4 text-rose-600" />
               <span>Kosongkan Semua</span>

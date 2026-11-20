@@ -10,9 +10,27 @@ const STORAGE_KEYS = {
 export const MAX_ACCOUNTS = 60;
 
 /**
+ * Dedicated System Administrator Account (Exclusive Access to Reset Data & System Maintenance)
+ */
+export const ADMIN_ACCOUNT: UserAccount = {
+  id: 'usr-admin',
+  name: 'Admin Sistem (Administrator)',
+  username: 'admin',
+  role: 'Administrator Sistem',
+  nip: '-',
+  pin: '1234',
+  isActive: true,
+  canEdit: true,
+  canDelete: true,
+  canManageSettings: true,
+  avatarColor: '#0F172A',
+};
+
+/**
  * Official Staff Accounts taken directly from Lampiran SK Pembagian Tugas Guru DAPODIK SMPN 1 Kandangan
  */
 export const DEFAULT_ACCOUNTS: UserAccount[] = [
+  ADMIN_ACCOUNT,
   // 1. Kepala Sekolah
   {
     id: 'usr-001',
@@ -645,6 +663,27 @@ export const DEFAULT_ACCOUNTS: UserAccount[] = [
   },
 ];
 
+export const ensureAdminAccount = (
+  accounts: UserAccount[]
+): { accounts: UserAccount[]; addedAdmin: boolean } => {
+  const hasAdmin = accounts.some(
+    (a) => a.id === 'usr-admin' || a.username?.trim().toLowerCase() === 'admin'
+  );
+  if (hasAdmin) {
+    // Keep usr-admin at top for convenience while preserving customized fields/PIN
+    const sorted = [...accounts].sort((a, b) => {
+      if (a.id === 'usr-admin' || a.username?.trim().toLowerCase() === 'admin') return -1;
+      if (b.id === 'usr-admin' || b.username?.trim().toLowerCase() === 'admin') return 1;
+      return 0;
+    });
+    return { accounts: sorted, addedAdmin: false };
+  }
+  return {
+    accounts: [ADMIN_ACCOUNT, ...accounts],
+    addedAdmin: true,
+  };
+};
+
 export const getStoredAccounts = (): UserAccount[] => {
   try {
     const data = secureStorage.getItem<UserAccount[]>(STORAGE_KEYS.ACCOUNTS, []);
@@ -652,7 +691,11 @@ export const getStoredAccounts = (): UserAccount[] => {
       saveAccounts(DEFAULT_ACCOUNTS);
       return DEFAULT_ACCOUNTS;
     }
-    return data;
+    const { accounts: merged, addedAdmin } = ensureAdminAccount(data);
+    if (addedAdmin) {
+      saveAccounts(merged);
+    }
+    return merged;
   } catch (err) {
     console.error('Failed reading user accounts', err);
     return DEFAULT_ACCOUNTS;
@@ -672,6 +715,8 @@ export const saveAccounts = (accounts: UserAccount[]): boolean => {
     return false;
   }
 };
+
+export const saveAccountsLocalOnly = saveAccounts;
 
 export const getCurrentUserId = (): string => {
   try {
@@ -800,6 +845,9 @@ export const updateAccountAsync = async (id: string, updates: Partial<UserAccoun
 };
 
 export const deleteAccount = (id: string): { success: boolean; message: string } => {
+  if (id === 'usr-admin') {
+    return { success: false, message: 'Akun Administrator utama (admin) tidak dapat dihapus.' };
+  }
   const accounts = getStoredAccounts();
   if (accounts.length <= 1) {
     return { success: false, message: 'Minimal harus ada 1 akun pengelola di dalam sistem' };
@@ -814,6 +862,16 @@ export const deleteAccount = (id: string): { success: boolean; message: string }
   }
 
   return { success: true, message: `Akun berhasil dihapus. Tersisa ${updated.length}/${MAX_ACCOUNTS} akun.` };
+};
+
+/**
+ * Security: Strict check for exclusive System Administrator account (`admin`)
+ */
+export const isAdminUser = (user: UserAccount | null): boolean => {
+  if (!user || !user.isActive) return false;
+  const uname = (user.username || '').trim().toLowerCase();
+  const role = (user.role || '').trim().toLowerCase();
+  return user.id === 'usr-admin' || uname === 'admin' || role === 'administrator sistem' || role === 'admin';
 };
 
 /**
