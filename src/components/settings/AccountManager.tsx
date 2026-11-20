@@ -8,7 +8,9 @@ import {
   MAX_ACCOUNTS,
   addAccount,
   updateAccount,
-  deleteAccount
+  deleteAccount,
+  getCurrentUser,
+  isAdminUser
 } from '../../services/authService';
 import { logAudit } from '../../services/auditLogger';
 import { 
@@ -34,6 +36,7 @@ interface AccountManagerProps {
 export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitched }) => {
   const [accounts, setAccounts] = useState<UserAccount[]>(() => getStoredAccounts());
   const [currentId, setCurrentId] = useState<string>(() => getCurrentUserId());
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<UserAccount | null>(null);
   const [formMsg, setFormMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -45,9 +48,12 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
   const [newNip, setNewNip] = useState('');
   const [newPin, setNewPin] = useState('1234');
 
+  const isAdmin = isAdminUser(currentUser);
+
   useEffect(() => {
     setAccounts(getStoredAccounts());
     setCurrentId(getCurrentUserId());
+    setCurrentUser(getCurrentUser());
 
     const handleAccountsChanged = (e: Event) => {
       const custom = e as CustomEvent<UserAccount[]>;
@@ -56,6 +62,8 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
       } else {
         setAccounts(getStoredAccounts());
       }
+      setCurrentUser(getCurrentUser());
+      setCurrentId(getCurrentUserId());
     };
     window.addEventListener('bsan_accounts_changed', handleAccountsChanged);
     return () => window.removeEventListener('bsan_accounts_changed', handleAccountsChanged);
@@ -133,9 +141,11 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
   const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingAccount) return;
+    setFormMsg(null);
 
     const res = updateAccount(editingAccount.id, {
       name: editingAccount.name,
+      username: editingAccount.id === 'usr-admin' ? 'admin' : editingAccount.username,
       role: editingAccount.role,
       nip: editingAccount.nip,
       pin: editingAccount.pin,
@@ -157,6 +167,8 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
       setEditingAccount(null);
       setFormMsg({ text: 'Perubahan akun berhasil disimpan.', type: 'success' });
       setTimeout(() => setFormMsg(null), 3000);
+    } else {
+      setFormMsg({ text: res.message, type: 'error' });
     }
   };
 
@@ -175,11 +187,29 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
         setCurrentId(getCurrentUserId());
         setFormMsg({ text: res.message, type: 'success' });
         setTimeout(() => setFormMsg(null), 3000);
+      } else {
+        setFormMsg({ text: res.message, type: 'error' });
       }
     }
   };
 
   const rolesList = OFFICIAL_JABATAN_LIST;
+
+  if (!isAdmin) {
+    return (
+      <div className="bg-white rounded-3xl border border-rose-200 shadow-xs p-8 text-center space-y-3">
+        <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 mx-auto flex items-center justify-center">
+          <Lock className="w-6 h-6" />
+        </div>
+        <h3 className="font-bold text-slate-900 text-sm">
+          Akses Terbatas — Khusus Administrator Sistem
+        </h3>
+        <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
+          Menu Manajemen 55 Akun Petugas (tambah, edit data petugas lain, atau hapus akun) hanya tersedia untuk akun <strong>Admin</strong> demi menjaga keamanan sistem. Gunakan menu <strong>Ubah Username &amp; Password</strong> untuk mengelola akun Anda sendiri.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -385,7 +415,7 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                   <h3 className="font-bold text-slate-900 text-sm">
                     Tambah Akun Petugas ({accounts.length + 1} / {MAX_ACCOUNTS})
                   </h3>
-                  <p className="text-[11px] text-slate-500">Maksimal 20 akun resmi terdaftar.</p>
+                  <p className="text-[11px] text-slate-500">Maksimal {MAX_ACCOUNTS} akun resmi terdaftar.</p>
                 </div>
               </div>
               <button
@@ -504,6 +534,13 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
             </div>
 
             <form onSubmit={handleUpdate} className="space-y-4 mt-4 text-xs">
+              {formMsg && formMsg.type === 'error' && (
+                <div className="p-3 rounded-xl text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-200 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{formMsg.text}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Nama Lengkap & Gelar</label>
                 <input
@@ -513,6 +550,28 @@ export const AccountManager: React.FC<AccountManagerProps> = ({ onAccountSwitche
                   onChange={(e) => setEditingAccount({ ...editingAccount, name: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Username Login</label>
+                <input
+                  type="text"
+                  required
+                  disabled={editingAccount.id === 'usr-admin'}
+                  value={editingAccount.username}
+                  onChange={(e) =>
+                    setEditingAccount({
+                      ...editingAccount,
+                      username: e.target.value.toLowerCase().replace(/\s+/g, '')
+                    })
+                  }
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-none font-mono disabled:opacity-60 disabled:cursor-not-allowed"
+                />
+                {editingAccount.id === 'usr-admin' && (
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Username Administrator utama dikunci sebagai <strong>admin</strong>.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

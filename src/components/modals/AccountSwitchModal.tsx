@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserAccount } from '../../types/auth';
-import { getCurrentUser, updateAccount, updateAccountAsync } from '../../services/authService';
+import { getCurrentUser, updateAccountAsync, isDefaultPassword } from '../../services/authService';
 import { logAudit } from '../../services/auditLogger';
 import { 
   User, 
@@ -13,7 +13,8 @@ import {
   LogOut,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  AtSign
 } from 'lucide-react';
 
 interface AccountSwitchModalProps {
@@ -33,14 +34,24 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
 }) => {
   const activeUser = propUser || getCurrentUser();
 
-  // Change Password state
+  // Change Username & Password state
   const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [newUsername, setNewUsername] = useState(activeUser?.username || '');
   const [oldPin, setOldPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [showPins, setShowPins] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen && activeUser) {
+      setNewUsername(activeUser.username || '');
+      setErrorMsg(null);
+      setSuccessMsg(null);
+    }
+  }, [isOpen, activeUser?.id, activeUser?.username]);
 
   if (!isOpen) return null;
 
@@ -60,44 +71,96 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
 
     const currentExpectedPin = activeUser.pin || '1234';
 
-    if (oldPin !== currentExpectedPin) {
-      setErrorMsg('Password / PIN lama yang Anda masukkan salah.');
+    if (oldPin.trim() !== currentExpectedPin) {
+      setErrorMsg('Password saat ini yang Anda masukkan salah.');
       return;
     }
 
-    if (!newPin || newPin.trim().length < 4) {
-      setErrorMsg('Password baru minimal 4 karakter.');
+    const cleanUsername = newUsername.trim().toLowerCase();
+    const isUsernameChanged =
+      activeUser.id !== 'usr-admin' &&
+      cleanUsername !== (activeUser.username || '').trim().toLowerCase();
+
+    const cleanNewPin = newPin.trim();
+    const cleanConfirmPin = confirmPin.trim();
+    const isPasswordChanged = cleanNewPin.length > 0 || cleanConfirmPin.length > 0;
+
+    if (!isUsernameChanged && !isPasswordChanged) {
+      setErrorMsg('Belum ada perubahan. Ubah username atau isi password baru terlebih dahulu.');
       return;
     }
 
-    if (newPin !== confirmPin) {
-      setErrorMsg('Konfirmasi password baru tidak cocok.');
-      return;
-    }
-
-    const res = await updateAccountAsync(activeUser.id, { pin: newPin.trim() });
-    if (res.success) {
-      setSuccessMsg('Password akun berhasil diperbarui! Gunakan password baru ini untuk login berikutnya.');
-      logAudit({
-        actionType: 'UPDATE',
-        module: 'Autentikasi',
-        description: `Ganti password akun sukses untuk: ${activeUser.name} (${activeUser.role})`,
-        status: 'SUCCESS',
-      });
-
-      if (onAccountChanged) {
-        onAccountChanged({ ...activeUser, pin: newPin.trim() });
+    if (isUsernameChanged) {
+      if (cleanUsername.length < 3) {
+        setErrorMsg('Username minimal 3 karakter.');
+        return;
       }
+      if (!/^[a-z0-9._-]+$/.test(cleanUsername)) {
+        setErrorMsg('Username hanya boleh huruf kecil, angka, titik (.), garis bawah (_), atau tanda hubung (-), tanpa spasi.');
+        return;
+      }
+    }
 
-      setTimeout(() => {
-        setOldPin('');
-        setNewPin('');
-        setConfirmPin('');
-        setShowPasswordChange(false);
-        setSuccessMsg(null);
-      }, 2000);
-    } else {
-      setErrorMsg(res.message);
+    if (isPasswordChanged) {
+      if (cleanNewPin.length < 4) {
+        setErrorMsg('Password baru minimal 4 karakter.');
+        return;
+      }
+      if (isDefaultPassword(cleanNewPin)) {
+        setErrorMsg('Password baru tidak boleh menggunakan password bawaan (1234).');
+        return;
+      }
+      if (cleanNewPin !== cleanConfirmPin) {
+        setErrorMsg('Konfirmasi password baru tidak cocok.');
+        return;
+      }
+    }
+
+    const updates: Partial<UserAccount> = {};
+    if (isUsernameChanged) updates.username = cleanUsername;
+    if (isPasswordChanged) updates.pin = cleanNewPin;
+
+    setIsSaving(true);
+    try {
+      const res = await updateAccountAsync(activeUser.id, updates);
+      if (res.success) {
+        const updatedUser = res.account || { ...activeUser, ...updates };
+        setSuccessMsg(
+          isUsernameChanged && isPasswordChanged
+            ? 'Username & password berhasil diperbarui! Gunakan kredensial baru untuk login berikutnya.'
+            : isUsernameChanged
+            ? `Username berhasil diubah menjadi @${updatedUser.username}!`
+            : 'Password akun berhasil diperbarui! Gunakan password baru ini untuk login berikutnya.'
+        );
+
+        const changedParts = [
+          isUsernameChanged ? `username (@${updatedUser.username})` : null,
+          isPasswordChanged ? 'password' : null,
+        ].filter(Boolean).join(' dan ');
+
+        logAudit({
+          actionType: 'UPDATE',
+          module: 'Autentikasi',
+          description: `Ubah ${changedParts} sukses untuk: ${updatedUser.name} (${updatedUser.role})`,
+          status: 'SUCCESS',
+        });
+
+        if (onAccountChanged) {
+          onAccountChanged(updatedUser);
+        }
+
+        setTimeout(() => {
+          setOldPin('');
+          setNewPin('');
+          setConfirmPin('');
+          setShowPasswordChange(false);
+          setSuccessMsg(null);
+        }, 2000);
+      } else {
+        setErrorMsg(res.message);
+      }
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -174,13 +237,13 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                 </div>
               )}
 
-              {/* Change Password Collapsible Section */}
+              {/* Change Username & Password Collapsible Section */}
               {showPasswordChange ? (
                 <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
                       <Lock className="w-4 h-4 text-[#3B5BDB]" />
-                      <span>Form Ubah Password Akun</span>
+                      <span>Form Ubah Username &amp; Password</span>
                     </div>
                     <button
                       type="button"
@@ -211,7 +274,28 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
 
                   <form onSubmit={handleChangePasswordSubmit} className="space-y-2.5 text-xs">
                     <div>
-                      <label className="block text-slate-700 font-bold mb-1">Password Lama:</label>
+                      <label className="block text-slate-700 font-bold mb-1">Username Akun:</label>
+                      <div className="relative">
+                        <AtSign className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                        <input
+                          type="text"
+                          required
+                          disabled={activeUser.id === 'usr-admin'}
+                          value={newUsername}
+                          onChange={(e) => setNewUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                          placeholder="username.anda"
+                          className="w-full pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#3B5BDB] focus:outline-hidden font-mono disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                      </div>
+                      {activeUser.id === 'usr-admin' && (
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          Username admin utama dikunci sebagai &quot;admin&quot;.
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">Password Saat Ini (Verifikasi):</label>
                       <input
                         type={showPins ? 'text' : 'password'}
                         required
@@ -223,10 +307,11 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-slate-700 font-bold mb-1">Password Baru:</label>
+                      <label className="block text-slate-700 font-bold mb-1">
+                        Password Baru <span className="font-normal text-slate-400">(opsional jika hanya ubah username)</span>:
+                      </label>
                       <input
                         type={showPins ? 'text' : 'password'}
-                        required
                         value={newPin}
                         onChange={(e) => setNewPin(e.target.value)}
                         placeholder="Minimal 4 karakter"
@@ -238,7 +323,6 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                       <label className="block text-slate-700 font-bold mb-1">Ulangi Password Baru:</label>
                       <input
                         type={showPins ? 'text' : 'password'}
-                        required
                         value={confirmPin}
                         onChange={(e) => setConfirmPin(e.target.value)}
                         placeholder="Ketik ulang password baru"
@@ -258,9 +342,10 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
 
                       <button
                         type="submit"
-                        className="px-4 py-2 bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                        disabled={isSaving}
+                        className="px-4 py-2 bg-[#3B5BDB] hover:bg-[#2F4CB7] disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
                       >
-                        Simpan Password Baru
+                        {isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
                       </button>
                     </div>
                   </form>
@@ -272,7 +357,7 @@ export const AccountSwitchModal: React.FC<AccountSwitchModalProps> = ({
                   className="w-full py-2.5 px-3 rounded-2xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-2xs"
                 >
                   <Key className="w-4 h-4 text-blue-600" />
-                  <span>Ubah Password Akun Anda</span>
+                  <span>Ubah Username &amp; Password Akun Anda</span>
                 </button>
               )}
 

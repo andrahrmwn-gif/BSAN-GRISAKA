@@ -765,7 +765,70 @@ export const canUserModify = (): boolean => {
   return user.canEdit;
 };
 
+const validateAndBuildAccountUpdate = (
+  id: string,
+  updates: Partial<UserAccount>
+): { success: boolean; message: string; updatedAcc?: UserAccount; accounts?: UserAccount[] } => {
+  const accounts = getStoredAccounts();
+  const index = accounts.findIndex(a => a.id === id);
+  if (index === -1) {
+    return { success: false, message: 'Akun tidak ditemukan' };
+  }
+
+  const currentAcc = accounts[index];
+  const normalizedUpdates: Partial<UserAccount> = { ...updates };
+
+  if (updates.username !== undefined) {
+    const cleanUsername = updates.username.trim().toLowerCase();
+    if (cleanUsername.length < 3) {
+      return {
+        success: false,
+        message: 'Username minimal terdiri dari 3 karakter.'
+      };
+    }
+    if (!/^[a-z0-9._-]+$/.test(cleanUsername)) {
+      return {
+        success: false,
+        message: 'Username hanya boleh berisi huruf kecil, angka, titik (.), garis bawah (_), atau tanda hubung (-), tanpa spasi.'
+      };
+    }
+    if (currentAcc.id === 'usr-admin' && cleanUsername !== 'admin') {
+      return {
+        success: false,
+        message: 'Username akun Administrator utama harus tetap "admin".'
+      };
+    }
+    if (currentAcc.id !== 'usr-admin' && (cleanUsername === 'admin' || cleanUsername === 'guest')) {
+      return {
+        success: false,
+        message: `Username "${cleanUsername}" dicadangkan oleh sistem dan tidak dapat digunakan.`
+      };
+    }
+    const isDuplicate = accounts.some(
+      a => a.id !== id && a.username.trim().toLowerCase() === cleanUsername
+    );
+    if (isDuplicate) {
+      return {
+        success: false,
+        message: `Username "${cleanUsername}" sudah digunakan oleh akun lain. Silakan pilih username yang berbeda.`
+      };
+    }
+    normalizedUpdates.username = cleanUsername;
+  }
+
+  const updatedAcc = { ...currentAcc, ...normalizedUpdates };
+  accounts[index] = updatedAcc;
+  return { success: true, message: 'Valid', updatedAcc, accounts };
+};
+
 export const addAccount = (newAccount: Omit<UserAccount, 'id'>): { success: boolean; message: string; account?: UserAccount } => {
+  if (!isAdminUser(getCurrentUser())) {
+    return {
+      success: false,
+      message: 'Akses Ditolak: Hanya akun Administrator (admin) yang berhak menambah akun pengguna.'
+    };
+  }
+
   const accounts = getStoredAccounts();
   if (accounts.length >= MAX_ACCOUNTS) {
     return {
@@ -774,23 +837,42 @@ export const addAccount = (newAccount: Omit<UserAccount, 'id'>): { success: bool
     };
   }
 
-  // Check username uniqueness
-  if (accounts.some(a => a.username.toLowerCase() === newAccount.username.toLowerCase())) {
+  const cleanUsername = newAccount.username.trim().toLowerCase();
+  if (cleanUsername.length < 3 || !/^[a-z0-9._-]+$/.test(cleanUsername)) {
     return {
       success: false,
-      message: `Username "${newAccount.username}" sudah digunakan oleh akun lain.`
+      message: 'Username minimal 3 karakter dan hanya boleh huruf kecil, angka, titik (.), garis bawah (_), atau tanda hubung (-).'
+    };
+  }
+  if (cleanUsername === 'admin' || cleanUsername === 'guest') {
+    return {
+      success: false,
+      message: `Username "${cleanUsername}" dicadangkan oleh sistem.`
+    };
+  }
+
+  // Check username uniqueness
+  if (accounts.some(a => a.username.trim().toLowerCase() === cleanUsername)) {
+    return {
+      success: false,
+      message: `Username "${cleanUsername}" sudah digunakan oleh akun lain.`
     };
   }
 
   const id = `usr-${String(Date.now()).slice(-6)}`;
   const created: UserAccount = {
     ...newAccount,
+    username: cleanUsername,
     id,
   };
 
   const updated = [...accounts, created];
   saveAccounts(updated);
   syncAccountToFirestore(created).catch(console.error);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('bsan_accounts_changed', { detail: updated }));
+  }
 
   return {
     success: true,
@@ -799,52 +881,52 @@ export const addAccount = (newAccount: Omit<UserAccount, 'id'>): { success: bool
   };
 };
 
-export const updateAccount = (id: string, updates: Partial<UserAccount>): { success: boolean; message: string } => {
-  const accounts = getStoredAccounts();
-  const index = accounts.findIndex(a => a.id === id);
-  if (index === -1) {
-    return { success: false, message: 'Akun tidak ditemukan' };
+export const updateAccount = (id: string, updates: Partial<UserAccount>): { success: boolean; message: string; account?: UserAccount } => {
+  const validation = validateAndBuildAccountUpdate(id, updates);
+  if (!validation.success || !validation.updatedAcc || !validation.accounts) {
+    return { success: false, message: validation.message };
   }
 
-  const updatedAcc = { ...accounts[index], ...updates };
-  accounts[index] = updatedAcc;
-  saveAccounts(accounts);
-  syncAccountToFirestore(updatedAcc).catch((err) => {
+  saveAccounts(validation.accounts);
+  syncAccountToFirestore(validation.updatedAcc).catch((err) => {
     console.error('Failed syncing updated account to Firestore', err);
   });
 
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('bsan_accounts_changed', { detail: accounts }));
+    window.dispatchEvent(new CustomEvent('bsan_accounts_changed', { detail: validation.accounts }));
   }
 
-  return { success: true, message: 'Perubahan akun berhasil disimpan' };
+  return { success: true, message: 'Perubahan akun berhasil disimpan', account: validation.updatedAcc };
 };
 
-export const updateAccountAsync = async (id: string, updates: Partial<UserAccount>): Promise<{ success: boolean; message: string }> => {
-  const accounts = getStoredAccounts();
-  const index = accounts.findIndex(a => a.id === id);
-  if (index === -1) {
-    return { success: false, message: 'Akun tidak ditemukan' };
+export const updateAccountAsync = async (id: string, updates: Partial<UserAccount>): Promise<{ success: boolean; message: string; account?: UserAccount }> => {
+  const validation = validateAndBuildAccountUpdate(id, updates);
+  if (!validation.success || !validation.updatedAcc || !validation.accounts) {
+    return { success: false, message: validation.message };
   }
 
-  const updatedAcc = { ...accounts[index], ...updates };
-  accounts[index] = updatedAcc;
-  saveAccounts(accounts);
+  saveAccounts(validation.accounts);
 
   try {
-    await syncAccountToFirestore(updatedAcc);
+    await syncAccountToFirestore(validation.updatedAcc);
   } catch (err) {
     console.error('Failed syncing updated account to Firestore', err);
   }
 
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('bsan_accounts_changed', { detail: accounts }));
+    window.dispatchEvent(new CustomEvent('bsan_accounts_changed', { detail: validation.accounts }));
   }
 
-  return { success: true, message: 'Perubahan akun berhasil disimpan' };
+  return { success: true, message: 'Perubahan akun berhasil disimpan', account: validation.updatedAcc };
 };
 
 export const deleteAccount = (id: string): { success: boolean; message: string } => {
+  if (!isAdminUser(getCurrentUser())) {
+    return {
+      success: false,
+      message: 'Akses Ditolak: Hanya akun Administrator (admin) yang berhak menghapus akun pengguna.'
+    };
+  }
   if (id === 'usr-admin') {
     return { success: false, message: 'Akun Administrator utama (admin) tidak dapat dihapus.' };
   }
@@ -856,6 +938,10 @@ export const deleteAccount = (id: string): { success: boolean; message: string }
   const updated = accounts.filter(a => a.id !== id);
   saveAccounts(updated);
   deleteAccountFromFirestore(id).catch(console.error);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('bsan_accounts_changed', { detail: updated }));
+  }
 
   if (getCurrentUserId() === id) {
     setCurrentUserId('guest');

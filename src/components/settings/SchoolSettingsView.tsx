@@ -35,10 +35,10 @@ import {
 import { User } from 'firebase/auth';
 import { AccountManager } from './AccountManager';
 import { AuditLogTable } from './AuditLogTable';
-import { isGuestMode, isAdminUser, getCurrentUser, updateAccount, updateAccountAsync } from '../../services/authService';
+import { isGuestMode, isAdminUser, isDefaultPassword, getCurrentUser, updateAccountAsync } from '../../services/authService';
 import { logAudit } from '../../services/auditLogger';
 import { UserAccount } from '../../types/auth';
-import { Users, Shield, History, Lock, Key, Eye, EyeOff } from 'lucide-react';
+import { Users, Shield, History, Lock, Key, Eye, EyeOff, AtSign } from 'lucide-react';
 
 interface SchoolSettingsViewProps {
   schoolConfig: SchoolProfile;
@@ -147,8 +147,19 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
 
   const [activeSettingsTab, setActiveSettingsTab] = useState<'profile_db' | 'accounts' | 'audit_log' | 'password'>('profile_db');
 
-  // Password Change State (Requirement 6)
+  const currentUser = propCurrentUser || getCurrentUser();
+  const isAdmin = isAdminUser(currentUser);
+
+  // Security guard: prevent non-admin users from staying on or accessing the 55-account management tab
+  useEffect(() => {
+    if (!isAdmin && activeSettingsTab === 'accounts') {
+      setActiveSettingsTab('password');
+    }
+  }, [isAdmin, activeSettingsTab]);
+
+  // Self-service Username & Password Change State
   const [passwordForm, setPasswordForm] = useState({
+    username: currentUser?.username || '',
     oldPassword: '',
     newPassword: '',
     confirmPassword: '',
@@ -156,11 +167,16 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
   const [showOldPass, setShowOldPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [isSavingCredentials, setIsSavingCredentials] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
 
-  const currentUser = propCurrentUser || getCurrentUser();
-  const isAdmin = isAdminUser(currentUser);
+  useEffect(() => {
+    setPasswordForm((prev) => ({
+      ...prev,
+      username: currentUser?.username || '',
+    }));
+  }, [currentUser?.id, currentUser?.username]);
 
   const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,49 +184,107 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
     setPasswordSuccess(null);
 
     if (!currentUser || isGuestMode()) {
-      setPasswordError('Akses Ditolak: Anda sedang dalam Mode Tamu. Silakan login terlebih dahulu dengan akun petugas resmi untuk mengubah password.');
+      setPasswordError('Akses Ditolak: Anda sedang dalam Mode Tamu. Silakan login terlebih dahulu dengan akun petugas resmi.');
       return;
     }
 
     const currentPin = currentUser.pin || '1234';
 
-    // Requirement 6: setiap mau mengganti password, harus menyertakan password lamanya.
+    // Always verify current password before updating username or password
     if (passwordForm.oldPassword.trim() !== currentPin) {
-      setPasswordError('Password Lama yang Anda masukkan salah. Harap periksa kembali.');
+      setPasswordError('Password Saat Ini yang Anda masukkan salah. Harap periksa kembali.');
       return;
     }
 
-    if (passwordForm.newPassword.trim().length < 4) {
-      setPasswordError('Password Baru minimal terdiri dari 4 karakter / digit.');
-      return;
-    }
-
-    if (passwordForm.newPassword.trim() !== passwordForm.confirmPassword.trim()) {
-      setPasswordError('Konfirmasi Password Baru tidak cocok dengan Password Baru.');
-      return;
-    }
+    const cleanUsername = passwordForm.username.trim().toLowerCase();
+    const isUsernameChanged =
+      currentUser.id !== 'usr-admin' &&
+      cleanUsername !== (currentUser.username || '').trim().toLowerCase();
 
     const newPin = passwordForm.newPassword.trim();
-    const res = await updateAccountAsync(currentUser.id, { pin: newPin });
-    if (res.success) {
-      const updatedUser: UserAccount = { ...currentUser, pin: newPin };
-      if (onUserUpdated) {
-        onUserUpdated(updatedUser);
+    const confirmPin = passwordForm.confirmPassword.trim();
+    const isPasswordChanged = newPin.length > 0 || confirmPin.length > 0;
+
+    if (!isUsernameChanged && !isPasswordChanged) {
+      setPasswordError('Belum ada perubahan. Ubah username atau isi password baru terlebih dahulu.');
+      return;
+    }
+
+    if (isUsernameChanged) {
+      if (cleanUsername.length < 3) {
+        setPasswordError('Username baru minimal terdiri dari 3 karakter.');
+        return;
       }
-      logAudit({
-        actionType: 'UPDATE',
-        module: 'Autentikasi',
-        description: `Perubahan password berhasil disimpan untuk akun ${currentUser.name} (${currentUser.role})`,
-        status: 'SUCCESS',
-      });
-      setPasswordSuccess('Password akun Anda berhasil diperbarui! Password baru inilah yang akan digunakan untuk login seterusnya.');
-      setPasswordForm({
-        oldPassword: '',
-        newPassword: '',
-        confirmPassword: '',
-      });
-    } else {
-      setPasswordError(res.message);
+      if (!/^[a-z0-9._-]+$/.test(cleanUsername)) {
+        setPasswordError('Username hanya boleh berisi huruf kecil, angka, titik (.), garis bawah (_), atau tanda hubung (-), tanpa spasi.');
+        return;
+      }
+    }
+
+    if (isPasswordChanged) {
+      if (newPin.length < 4) {
+        setPasswordError('Password Baru minimal terdiri dari 4 karakter / digit.');
+        return;
+      }
+      if (isDefaultPassword(newPin)) {
+        setPasswordError('Password baru tidak boleh sama dengan password bawaan (1234).');
+        return;
+      }
+      if (newPin !== confirmPin) {
+        setPasswordError('Konfirmasi Password Baru tidak cocok dengan Password Baru.');
+        return;
+      }
+    }
+
+    const updates: Partial<UserAccount> = {};
+    if (isUsernameChanged) {
+      updates.username = cleanUsername;
+    }
+    if (isPasswordChanged) {
+      updates.pin = newPin;
+    }
+
+    setIsSavingCredentials(true);
+    try {
+      const res = await updateAccountAsync(currentUser.id, updates);
+      if (res.success) {
+        const updatedUser: UserAccount = res.account || { ...currentUser, ...updates };
+        if (onUserUpdated) {
+          onUserUpdated(updatedUser);
+        }
+
+        const changedParts = [
+          isUsernameChanged ? `username (@${updatedUser.username})` : null,
+          isPasswordChanged ? 'password' : null,
+        ].filter(Boolean).join(' dan ');
+
+        logAudit({
+          actionType: 'UPDATE',
+          module: 'Autentikasi',
+          description: `Perubahan ${changedParts} berhasil disimpan untuk akun ${updatedUser.name} (${updatedUser.role})`,
+          status: 'SUCCESS',
+        });
+
+        setPasswordSuccess(
+          `Berhasil! ${
+            isUsernameChanged && isPasswordChanged
+              ? 'Username dan password akun Anda'
+              : isUsernameChanged
+              ? `Username akun Anda telah diubah menjadi @${updatedUser.username}`
+              : 'Password akun Anda'
+          } telah diperbarui & tersinkron ke seluruh perangkat.`
+        );
+        setPasswordForm({
+          username: updatedUser.username,
+          oldPassword: '',
+          newPassword: '',
+          confirmPassword: '',
+        });
+      } else {
+        setPasswordError(res.message);
+      }
+    } finally {
+      setIsSavingCredentials(false);
     }
   };
 
@@ -388,17 +462,19 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
           <span>Profil Sekolah & Database Cloud</span>
         </button>
 
-        <button
-          onClick={() => setActiveSettingsTab('accounts')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            activeSettingsTab === 'accounts'
-              ? 'bg-[#3B5BDB] text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Manajemen 55 Akun Petugas</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setActiveSettingsTab('accounts')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeSettingsTab === 'accounts'
+                ? 'bg-[#3B5BDB] text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Manajemen 55 Akun Petugas</span>
+          </button>
+        )}
 
         <button
           onClick={() => setActiveSettingsTab('audit_log')}
@@ -421,7 +497,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
           }`}
         >
           <Key className="w-4 h-4" />
-          <span>Ubah Password / PIN Akun Saya</span>
+          <span>Ubah Username &amp; Password</span>
         </button>
       </div>
 
@@ -1054,8 +1130,8 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
         </div>
       )}
 
-      {/* TAB 2: MANAJEMEN 20 AKUN PETUGAS */}
-      {activeSettingsTab === 'accounts' && (
+      {/* TAB 2: MANAJEMEN 55 AKUN PETUGAS (KHUSUS ADMIN) */}
+      {isAdmin && activeSettingsTab === 'accounts' && (
         <AccountManager />
       )}
 
@@ -1064,7 +1140,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
         <AuditLogTable />
       )}
 
-      {/* TAB 4: UBAH PASSWORD / PIN AKUN SAYA (Requirement 6) */}
+      {/* TAB 4: UBAH USERNAME & PASSWORD AKUN SAYA */}
       {activeSettingsTab === 'password' && (
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
@@ -1072,16 +1148,16 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#3B5BDB]"></span>
                 <h3 className="font-bold text-base text-slate-900">
-                  Ubah Password / PIN Keamanan Akun
+                  Ubah Username &amp; Password Akun Saya
                 </h3>
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Gunakan menu ini untuk mengubah password/PIN login akun Anda. Password baru inilah yang akan digunakan untuk login seterusnya.
+                Gunakan menu ini untuk mengubah username login dan/atau password akun Anda sendiri. Perubahan akan langsung tersinkronisasi ke seluruh perangkat.
               </p>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-800">
               <ShieldCheck className="w-4 h-4 text-[#3B5BDB]" />
-              <span>Keamanan DAPODIK</span>
+              <span>Keamanan Akun Personal</span>
             </div>
           </div>
 
@@ -1092,7 +1168,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
               </div>
               <div className="font-bold text-slate-800 text-sm">Mode Tamu Aktif</div>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Anda saat ini sedang menjelajah dalam Mode Tamu. Mode Tamu tidak memiliki akun petugas personal dan tidak dapat mengubah password. Silakan login terlebih dahulu dengan akun petugas resmi.
+                Anda saat ini sedang menjelajah dalam Mode Tamu. Mode Tamu tidak memiliki akun petugas personal dan tidak dapat mengubah username atau password. Silakan login terlebih dahulu dengan akun petugas resmi.
               </p>
             </div>
           ) : (
@@ -1109,7 +1185,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                   <div className="font-black text-sm text-slate-900 truncate">{currentUser.name}</div>
                   <div className="text-xs text-blue-700 font-semibold">{currentUser.role}</div>
                   <div className="text-[11px] font-mono text-slate-500 mt-0.5">
-                    NIP: {currentUser.nip || '-'} · Username: @{currentUser.username}
+                    NIP: {currentUser.nip || '-'} · Username aktif: @{currentUser.username}
                   </div>
                 </div>
               </div>
@@ -1129,12 +1205,41 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                 </div>
               )}
 
-              {/* Password Change Form */}
+              {/* Username & Password Change Form */}
               <form onSubmit={handleChangePasswordSubmit} className="space-y-4">
+                {/* Username Akun */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Username Login Akun Anda:
+                  </label>
+                  <div className="relative">
+                    <AtSign className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type="text"
+                      value={passwordForm.username}
+                      disabled={currentUser.id === 'usr-admin'}
+                      onChange={(e) =>
+                        setPasswordForm({
+                          ...passwordForm,
+                          username: e.target.value.toLowerCase().replace(/\s+/g, ''),
+                        })
+                      }
+                      placeholder="username.anda"
+                      className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 font-mono text-slate-900 bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                      required
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    {currentUser.id === 'usr-admin'
+                      ? 'Username akun Administrator utama dikunci sebagai "admin" demi keamanan sistem.'
+                      : 'Gunakan huruf kecil, angka, titik (.), garis bawah (_), atau tanda hubung (-) tanpa spasi.'}
+                  </p>
+                </div>
+
                 {/* Password Lama */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Password / PIN Lama (Saat Ini):
+                    Password Saat Ini (Verifikasi Keamanan):
                   </label>
                   <div className="relative">
                     <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -1142,7 +1247,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                       type={showOldPass ? 'text' : 'password'}
                       value={passwordForm.oldPassword}
                       onChange={(e) => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
-                      placeholder="Masukkan password lama (default awal: 1234)"
+                      placeholder="Masukkan password Anda saat ini"
                       className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 font-mono text-slate-900 bg-slate-50"
                       required
                     />
@@ -1155,14 +1260,14 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                     </button>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Wajib menyertakan password lama akun untuk verifikasi keamanan.
+                    Wajib menyertakan password saat ini untuk menyimpan perubahan username maupun password.
                   </p>
                 </div>
 
                 {/* Password Baru */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Password / PIN Baru:
+                    Password Baru <span className="font-normal text-slate-400">(opsional jika hanya mengubah username)</span>:
                   </label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -1172,7 +1277,6 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                       onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
                       placeholder="Masukkan password baru (minimal 4 karakter)"
                       className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 font-mono text-slate-900 bg-slate-50"
-                      required
                     />
                     <button
                       type="button"
@@ -1197,7 +1301,6 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                       onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
                       placeholder="Ketik ulang password baru Anda"
                       className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-[#3B5BDB]/40 font-mono text-slate-900 bg-slate-50"
-                      required
                     />
                     <button
                       type="button"
@@ -1212,9 +1315,10 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
                 <div className="pt-2">
                   <button
                     type="submit"
-                    className="w-full py-3 px-4 rounded-xl bg-[#3B5BDB] hover:bg-[#2F4CB7] text-white font-bold text-xs shadow-md shadow-blue-900/20 transition-all active:scale-98 cursor-pointer"
+                    disabled={isSavingCredentials}
+                    className="w-full py-3 px-4 rounded-xl bg-[#3B5BDB] hover:bg-[#2F4CB7] disabled:opacity-60 text-white font-bold text-xs shadow-md shadow-blue-900/20 transition-all active:scale-98 cursor-pointer"
                   >
-                    Simpan Perubahan Password
+                    {isSavingCredentials ? 'Menyimpan Perubahan...' : 'Simpan Perubahan Username & Password'}
                   </button>
                 </div>
               </form>
