@@ -759,6 +759,40 @@ export const bulkImportStudentsToFirestore = async (students: Student[]): Promis
 };
 
 /**
+ * Replace the entire Firestore students collection so it matches the uploaded database 1:1
+ */
+export const replaceAllStudentsInFirestore = async (students: Student[]): Promise<void> => {
+  const CHUNK_SIZE = 350;
+  try {
+    const colRef = collection(db, COLLECTIONS.STUDENTS);
+    const snap = await getDocsFromServer(colRef).catch(() => getDocs(colRef));
+    const keepIds = new Set(students.map((s) => s.id));
+    const docsToDelete = snap.docs.filter((d) => !keepIds.has(d.id));
+
+    // Write uploaded students first so the collection never becomes transiently empty
+    for (let i = 0; i < students.length; i += CHUNK_SIZE) {
+      const chunk = students.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((student) => {
+        const ref = doc(db, COLLECTIONS.STUDENTS, student.id);
+        batch.set(ref, sanitizeForFirestore(student));
+      });
+      await batch.commit();
+    }
+
+    // Delete any stale student documents not present in the uploaded file
+    for (let i = 0; i < docsToDelete.length; i += CHUNK_SIZE) {
+      const chunk = docsToDelete.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, COLLECTIONS.STUDENTS);
+  }
+};
+
+/**
  * Safely delete all documents in a single Firestore collection using chunked batches (<500 limit)
  */
 export const clearCollectionFromFirestore = async (

@@ -2,6 +2,7 @@ import { Student, ViolationRecord, SchoolProfile } from '../types';
 import { SCHOOL_CONFIG } from '../data/schoolConfig';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import * as XLSX from 'xlsx';
 import { sortByClassAndName } from './sortUtils';
 import { LOGO_TEMANGGUNG_DATA_URL, LOGO_TUTWURI_DATA_URL } from '../data/logoAssets';
 
@@ -161,7 +162,7 @@ export function exportToWordDocument(
 }
 
 /**
- * Generate sample CSV template for bulk student import
+ * Generate sample Excel (.xlsx) template for Upload Database Murid
  */
 export function downloadStudentTemplate(): void {
   const sample = [
@@ -190,7 +191,39 @@ export function downloadStudentTemplate(): void {
       statusKehadiran: 'Hadir'
     }
   ];
-  exportToCSV(sample, 'Template_Import_Siswa_SMPN1_Kandangan');
+
+  const worksheet = XLSX.utils.json_to_sheet(sample, {
+    header: ['nisn', 'nama', 'kelas', 'jenjang', 'gender', 'noHpSiswa', 'namaOrtu', 'noWaOrtu', 'alamat', 'statusKehadiran']
+  });
+
+  // Ensure NISN and phone columns stay formatted as text to preserve leading zeroes
+  const textColIndices = [0, 5, 7];
+  for (let r = 1; r <= sample.length; r++) {
+    textColIndices.forEach((c) => {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      if (worksheet[addr]) {
+        worksheet[addr].t = 's';
+        worksheet[addr].z = '@';
+      }
+    });
+  }
+
+  worksheet['!cols'] = [
+    { wch: 15 },
+    { wch: 26 },
+    { wch: 8 },
+    { wch: 9 },
+    { wch: 8 },
+    { wch: 16 },
+    { wch: 22 },
+    { wch: 17 },
+    { wch: 28 },
+    { wch: 16 },
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Database_Murid');
+  XLSX.writeFile(workbook, 'Template_Database_Murid_SMPN1_Kandangan.xlsx');
 }
 
 /**

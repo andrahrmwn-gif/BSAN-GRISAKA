@@ -33,6 +33,7 @@ import {
   syncSchoolConfigToFirestore,
   syncAccountToFirestore,
   bulkImportStudentsToFirestore,
+  replaceAllStudentsInFirestore,
   bulkSyncAccountsToFirestore,
   clearCollectionFromFirestore,
   clearAllFirestoreData,
@@ -468,42 +469,87 @@ export default function App() {
     });
   };
 
-  const handleBulkImportStudents = (newStudents: Student[]) => {
+  const handleBulkImportStudents = async (newStudents: Student[], mode: 'merge' | 'replace' = 'merge') => {
     if (isGuestMode()) {
-      setResetErrorToast('Akses Ditolak: Anda sedang dalam Mode Tamu. Hanya akun petugas resmi yang berhak mengimpor data siswa.');
+      setResetErrorToast('Akses Ditolak: Anda sedang dalam Mode Tamu. Hanya akun petugas resmi yang berhak mengupload database murid.');
       setTimeout(() => setResetErrorToast(null), 5000);
       logAudit({
         actionType: 'BLOCKED',
         module: 'Siswa',
-        description: 'Percobaan impor massal data siswa ditolak karena dalam Mode Tamu',
+        description: 'Percobaan upload database murid ditolak karena dalam Mode Tamu',
         status: 'BLOCKED',
       });
       setIsAccountSwitchOpen(true);
       return;
     }
 
-    setStudents((prev) => {
-      const existingMap = new Map<string, Student>();
-      prev.forEach((s) => existingMap.set(s.id, s));
-      newStudents.forEach((ns) => {
-        existingMap.set(ns.id, ns);
+    if (!isAdminUser(currentUser)) {
+      setResetErrorToast('Akses Ditolak: Fitur Upload Database Murid hanya tersedia untuk akun Administrator (admin).');
+      setTimeout(() => setResetErrorToast(null), 5000);
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Siswa',
+        description: 'Percobaan upload database murid ditolak karena bukan akun admin',
+        status: 'BLOCKED',
       });
-      return sortByClassAndName(Array.from(existingMap.values()));
-    });
-    // Real-time bulk sync to Firestore
-    bulkImportStudentsToFirestore(newStudents).catch(console.error);
-    setSystemMeta({
-      studentsInitialized: true,
-      isCleanReset: false,
-      updatedAt: new Date().toISOString(),
-    }).catch(console.error);
+      return;
+    }
 
-    logAudit({
-      actionType: 'CREATE',
-      module: 'Siswa',
-      description: `Impor massal data siswa berhasil: ${newStudents.length} siswa baru ditambahkan`,
-      status: 'SUCCESS',
-    });
+    try {
+      if (mode === 'replace') {
+        const sorted = sortByClassAndName(newStudents);
+        setStudents(sorted);
+        saveStudents(sorted);
+        await replaceAllStudentsInFirestore(sorted);
+        await setSystemMeta({
+          studentsInitialized: true,
+          isCleanReset: false,
+          updatedAt: new Date().toISOString(),
+        });
+
+        logAudit({
+          actionType: 'UPDATE',
+          module: 'Siswa',
+          description: `Upload Database Murid (Sesuai Persis Isi File): ${sorted.length} murid berhasil disimpan`,
+          status: 'SUCCESS',
+        });
+
+        setResetSuccessToast(`Database murid berhasil diperbarui sesuai isi file (${sorted.length} murid).`);
+        setTimeout(() => setResetSuccessToast(null), 5000);
+      } else {
+        setStudents((prev) => {
+          const existingMap = new Map<string, Student>();
+          prev.forEach((s) => existingMap.set(s.id, s));
+          newStudents.forEach((ns) => {
+            existingMap.set(ns.id, ns);
+          });
+          const mergedSorted = sortByClassAndName(Array.from(existingMap.values()));
+          saveStudents(mergedSorted);
+          return mergedSorted;
+        });
+        await bulkImportStudentsToFirestore(newStudents);
+        await setSystemMeta({
+          studentsInitialized: true,
+          isCleanReset: false,
+          updatedAt: new Date().toISOString(),
+        });
+
+        logAudit({
+          actionType: 'CREATE',
+          module: 'Siswa',
+          description: `Upload Database Murid (Tambah & Perbarui): ${newStudents.length} murid berhasil diproses`,
+          status: 'SUCCESS',
+        });
+
+        setResetSuccessToast(`${newStudents.length} data murid berhasil ditambahkan/diperbarui ke database.`);
+        setTimeout(() => setResetSuccessToast(null), 5000);
+      }
+    } catch (err) {
+      console.error('Upload database murid error:', err);
+      setResetErrorToast('Gagal menyimpan database murid ke server. Silakan periksa koneksi dan coba lagi.');
+      setTimeout(() => setResetErrorToast(null), 5000);
+      throw err;
+    }
   };
 
   // Handlers for violations

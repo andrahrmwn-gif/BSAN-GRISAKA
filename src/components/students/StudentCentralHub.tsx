@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Student, Gender, AttendanceStatus } from '../../types';
 import { KELAS_LIST } from '../../data/schoolConfig';
 import { exportToCSV, downloadStudentTemplate } from '../../utils/exportDocs';
+import { parseStudentDatabaseFile, ParseStudentFileResult } from '../../utils/studentImportParser';
 import { 
   Users, 
   Search, 
@@ -19,7 +20,9 @@ import {
   School,
   GraduationCap,
   Layers,
-  Lock
+  Lock,
+  Database,
+  RefreshCw
 } from 'lucide-react';
 import { isGuestMode, isAdminUser, getCurrentUser } from '../../services/authService';
 import { UserAccount } from '../../types/auth';
@@ -30,7 +33,7 @@ interface StudentCentralHubProps {
   onAddStudent: (student: Student) => void;
   onUpdateStudent: (student: Student) => void;
   onDeleteStudent: (studentId: string) => void;
-  onBulkImport: (newStudents: Student[]) => void;
+  onBulkImport: (newStudents: Student[], mode?: 'merge' | 'replace') => void | Promise<void>;
   onOpenRecordViolation: (studentId: string) => void;
   onSelectStudentProfile?: (student: Student) => void;
 }
@@ -58,8 +61,22 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
   const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
   const [profileStudent, setProfileStudent] = useState<Student | null>(null);
 
+  // Upload Database Murid state
+  const [uploadPreview, setUploadPreview] = useState<ParseStudentFileResult | null>(null);
+  const [uploadMode, setUploadMode] = useState<'replace' | 'merge'>('replace');
+  const [isParsingUpload, setIsParsingUpload] = useState(false);
+  const [isSavingUpload, setIsSavingUpload] = useState(false);
+  const [uploadFeedback, setUploadFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
+
   React.useEffect(() => {
     const handleHardwareBack = (e: Event) => {
+      if (uploadPreview) {
+        e.preventDefault();
+        if (!isSavingUpload) {
+          setUploadPreview(null);
+        }
+        return;
+      }
       if (deletingStudent) {
         e.preventDefault();
         setDeletingStudent(null);
@@ -78,7 +95,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
     };
     window.addEventListener('bsan_hardware_back', handleHardwareBack);
     return () => window.removeEventListener('bsan_hardware_back', handleHardwareBack);
-  }, [deletingStudent, isAddModalOpen, editingStudent, profileStudent]);
+  }, [uploadPreview, isSavingUpload, deletingStudent, isAddModalOpen, editingStudent, profileStudent]);
 
   // Form State
   const initialForm: Omit<Student, 'id' | 'totalPoinPelanggaran' | 'totalPelanggaranRingan' | 'totalPelanggaranSedang' | 'totalPelanggaranBerat'> = {
@@ -165,79 +182,75 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
     });
   };
 
-  // CSV Import handler (Khusus Admin)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Upload Database Murid handler (Khusus Admin — Excel .xlsx/.xls & CSV)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setUploadFeedback(null);
+
     if (!isAdmin) {
-      alert('Akses Ditolak: Fitur Import Massal hanya tersedia untuk akun Administrator (admin).');
-      e.target.value = '';
+      setUploadFeedback({
+        type: 'error',
+        message: 'Akses Ditolak: Fitur Upload Database Murid hanya tersedia untuk akun Administrator (admin).',
+      });
       return;
     }
     if (isGuestMode()) {
-      alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 55 akun petugas resmi yang berhak mengimpor data siswa.');
-      e.target.value = '';
+      setUploadFeedback({
+        type: 'error',
+        message: 'Akses Ditolak: Anda sedang dalam Mode Tamu (View Only). Hanya akun Administrator yang berhak mengupload database murid.',
+      });
       return;
     }
-    const file = e.target.files?.[0];
-    if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const text = event.target?.result as string;
-        const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
-        if (lines.length < 2) {
-          alert('File tidak memuat data yang valid.');
-          return;
-        }
-
-        const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-        const newStudents: Student[] = [];
-
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-          if (cols.length >= 4) {
-            const nisn = cols[0] || `00892${Date.now().toString().slice(-5)}`;
-            const nama = cols[1] || 'Siswa Baru';
-            const kelas = cols[2] || '7A';
-            const gender = (cols[4] === 'P' ? 'P' : 'L') as Gender;
-            const existingMatch = students.find(
-              (s) => s.nisn && nisn && s.nisn.trim() === nisn.trim()
-            );
-
-            newStudents.push({
-              id: existingMatch
-                ? existingMatch.id
-                : `std-imp-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-              nisn,
-              nama,
-              kelas,
-              jenjang: parseInt(kelas.charAt(0)) || 7,
-              gender,
-              noHpSiswa: cols[5] || existingMatch?.noHpSiswa || '081234567890',
-              namaOrtu: cols[6] || existingMatch?.namaOrtu || 'Orang Tua Siswa',
-              noWaOrtu: cols[7] || existingMatch?.noWaOrtu || '6281234567890',
-              alamat: cols[8] || existingMatch?.alamat || 'Kec. Kandangan, Temanggung',
-              statusKehadiran: existingMatch?.statusKehadiran || 'Hadir',
-              keteranganKehadiran: existingMatch?.keteranganKehadiran || '',
-              totalPoinPelanggaran: existingMatch?.totalPoinPelanggaran || 0,
-              totalPelanggaranRingan: existingMatch?.totalPelanggaranRingan || 0,
-              totalPelanggaranSedang: existingMatch?.totalPelanggaranSedang || 0,
-              totalPelanggaranBerat: existingMatch?.totalPelanggaranBerat || 0,
-            });
-          }
-        }
-
-        if (newStudents.length > 0) {
-          onBulkImport(newStudents);
-          alert(`Berhasil mengimpor ${newStudents.length} siswa ke sistem BSAN.`);
-        }
-      } catch (err) {
-        console.error('Import error', err);
-        alert('Gagal memproses file. Pastikan format file sesuai dengan template CSV/Excel.');
+    setIsParsingUpload(true);
+    try {
+      const result = await parseStudentDatabaseFile(file, students);
+      if (result.error || result.students.length === 0) {
+        setUploadFeedback({
+          type: 'error',
+          message: result.error || 'Tidak ada data murid valid yang ditemukan dalam file.',
+        });
+        return;
       }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
+      setUploadMode('replace');
+      setUploadPreview(result);
+    } catch (err) {
+      console.error('Upload parse error:', err);
+      setUploadFeedback({
+        type: 'error',
+        message: 'Gagal memproses file. Pastikan file berformat Excel (.xlsx/.xls) atau CSV yang valid.',
+      });
+    } finally {
+      setIsParsingUpload(false);
+    }
+  };
+
+  const handleConfirmUpload = async () => {
+    if (!uploadPreview || uploadPreview.students.length === 0) return;
+    setIsSavingUpload(true);
+    setUploadFeedback(null);
+    try {
+      await onBulkImport(uploadPreview.students, uploadMode);
+      const savedCount = uploadPreview.students.length;
+      const modeLabel = uploadMode === 'replace' ? 'disesuaikan 100% dengan isi file' : 'ditambahkan/diperbarui';
+      setUploadPreview(null);
+      setUploadFeedback({
+        type: 'success',
+        message: `Berhasil! Database murid telah ${modeLabel} (${savedCount} murid).`,
+      });
+      setTimeout(() => setUploadFeedback(null), 6000);
+    } catch (err) {
+      console.error('Confirm upload error:', err);
+      setUploadFeedback({
+        type: 'error',
+        message: 'Gagal menyimpan database murid ke server. Silakan coba lagi.',
+      });
+    } finally {
+      setIsSavingUpload(false);
+    }
   };
 
   const handleExportAll = () => {
@@ -286,18 +299,28 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
               <button
                 onClick={downloadStudentTemplate}
                 className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl transition-colors cursor-pointer"
-                title="Download Template Format CSV/Excel (Khusus Admin)"
+                title="Download Template Format Excel (.xlsx) Database Murid (Khusus Admin)"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Unduh Template</span>
               </button>
 
-              <label className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl cursor-pointer transition-colors">
-                <Upload className="w-3.5 h-3.5" />
-                <span>Import Massal</span>
+              <label
+                className={`flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-[#1E3A8A] border border-blue-200 text-xs font-semibold rounded-xl transition-colors ${
+                  isParsingUpload ? 'opacity-60 cursor-wait' : 'cursor-pointer'
+                }`}
+                title="Upload file Excel (.xlsx/.xls) atau CSV database murid (Khusus Admin)"
+              >
+                {isParsingUpload ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Upload className="w-3.5 h-3.5" />
+                )}
+                <span>{isParsingUpload ? 'Membaca File...' : 'Upload Database Murid'}</span>
                 <input
                   type="file"
-                  accept=".csv, .txt, .xlsx"
+                  accept=".xlsx, .xls, .csv, .txt"
+                  disabled={isParsingUpload}
                   onChange={handleFileUpload}
                   className="hidden"
                 />
@@ -329,6 +352,32 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Feedback Banner for Upload Database Murid */}
+      {uploadFeedback && (
+        <div
+          className={`px-4 py-3 rounded-2xl border flex items-start justify-between gap-3 text-xs ${
+            uploadFeedback.type === 'error'
+              ? 'bg-red-50 border-red-200 text-red-800'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          }`}
+        >
+          <div className="flex items-start gap-2.5">
+            {uploadFeedback.type === 'error' ? (
+              <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            )}
+            <span className="font-medium leading-relaxed">{uploadFeedback.message}</span>
+          </div>
+          <button
+            onClick={() => setUploadFeedback(null)}
+            className="text-slate-400 hover:text-slate-700 shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Dedicated Class Dropdown Tracking Bar (7A - 9H) */}
       <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
@@ -511,7 +560,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
                     <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
                       {students.length === 0
                         ? isAdmin
-                          ? 'Data contoh telah dibersihkan secara tuntas. Silakan klik "Tambah Siswa Manual" atau "Import Massal" untuk memasukkan data siswa riil sekolah.'
+                          ? 'Data contoh telah dibersihkan secara tuntas. Silakan klik "Tambah Siswa Manual" atau "Upload Database Murid" untuk memasukkan data siswa riil sekolah.'
                           : 'Data siswa saat ini masih kosong. Silakan klik "Tambah Siswa Manual" untuk memasukkan data siswa.'
                         : 'Tidak ada data siswa yang cocok dengan kriteria pencarian atau filter saat ini.'}
                     </p>
@@ -959,6 +1008,204 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
                   className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl font-medium transition-colors"
                 >
                   Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Preview & Konfirmasi Upload Database Murid (Khusus Admin) */}
+      {uploadPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-5xl w-full shadow-2xl border border-slate-200 overflow-hidden my-4 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#1E3A8A] to-[#3B5BDB] px-6 py-4 flex items-center justify-between text-white shrink-0">
+              <div className="flex items-center gap-2.5">
+                <Database className="w-5 h-5 text-blue-200" />
+                <div>
+                  <h3 className="font-bold text-sm">Preview &amp; Konfirmasi Upload Database Murid</h3>
+                  <p className="text-[11px] text-blue-100 mt-0.5">
+                    File: <strong>{uploadPreview.fileName}</strong>
+                    {uploadPreview.sheetName ? ` · Sheet: ${uploadPreview.sheetName}` : ''}
+                  </p>
+                </div>
+              </div>
+              <button
+                disabled={isSavingUpload}
+                onClick={() => setUploadPreview(null)}
+                className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-blue-100 hover:text-white disabled:opacity-40 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+              {/* Summary Badges & Detected Columns */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {uploadPreview.students.length} Murid Siap Diupload
+                    </span>
+                    {uploadPreview.skippedRows > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 font-semibold">
+                        {uploadPreview.skippedRows} baris kosong/header dilewati
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-slate-500">
+                    Database saat ini: <strong>{students.length} murid</strong>
+                  </span>
+                </div>
+
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-600 mb-1">
+                    Pemetaan Kolom Terdeteksi dari File:
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {uploadPreview.detectedColumns.map((colLabel, i) => (
+                      <span
+                        key={i}
+                        className="px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[10px] font-mono text-slate-700"
+                      >
+                        {colLabel}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Mode Selector */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  disabled={isSavingUpload}
+                  onClick={() => setUploadMode('replace')}
+                  className={`text-left p-3.5 rounded-2xl border-2 transition-all cursor-pointer ${
+                    uploadMode === 'replace'
+                      ? 'border-[#3B5BDB] bg-blue-50/70 shadow-xs'
+                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-900">Ganti Seluruh Database Murid</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#3B5BDB] text-white">
+                      Direkomendasikan
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                    Hasil database akan <strong>sama persis 100%</strong> dengan isi file ({uploadPreview.students.length} murid). Data murid lama di luar file ini akan dihapus.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isSavingUpload}
+                  onClick={() => setUploadMode('merge')}
+                  className={`text-left p-3.5 rounded-2xl border-2 transition-all cursor-pointer ${
+                    uploadMode === 'merge'
+                      ? 'border-[#3B5BDB] bg-blue-50/70 shadow-xs'
+                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  }`}
+                >
+                  <div className="font-bold text-slate-900">Tambah &amp; Perbarui Data Saja</div>
+                  <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                    Memperbarui murid yang NISN/namanya sama dan menambahkan murid baru tanpa menghapus data murid lain yang sudah ada.
+                  </p>
+                </button>
+              </div>
+
+              {/* Error inside Modal if Save fails */}
+              {uploadFeedback && uploadFeedback.type === 'error' && (
+                <div className="bg-red-50 border border-red-200 text-red-800 px-3.5 py-2.5 rounded-xl flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>{uploadFeedback.message}</span>
+                </div>
+              )}
+
+              {/* Data Preview Table */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-slate-800">
+                    Pratinjau Data yang Akan Disimpan
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    {uploadPreview.students.length > 100
+                      ? `Menampilkan 100 dari ${uploadPreview.students.length} murid`
+                      : `Menampilkan seluruh ${uploadPreview.students.length} murid`}
+                  </span>
+                </div>
+                <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                  <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                    <table className="w-full text-left text-[11px]">
+                      <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] sticky top-0 border-b border-slate-200">
+                        <tr>
+                          <th className="py-2 px-3">No</th>
+                          <th className="py-2 px-3">NISN</th>
+                          <th className="py-2 px-3">Nama Lengkap</th>
+                          <th className="py-2 px-2.5">Kelas</th>
+                          <th className="py-2 px-2.5">L/P</th>
+                          <th className="py-2 px-3">Nama Ortu</th>
+                          <th className="py-2 px-3">No. WA Ortu</th>
+                          <th className="py-2 px-3">Alamat</th>
+                          <th className="py-2 px-2.5">Presensi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {uploadPreview.students.slice(0, 100).map((s, idx) => (
+                          <tr key={s.id} className="hover:bg-slate-50">
+                            <td className="py-1.5 px-3 font-mono text-slate-500">{idx + 1}</td>
+                            <td className="py-1.5 px-3 font-mono text-slate-700">{s.nisn || '-'}</td>
+                            <td className="py-1.5 px-3 font-semibold text-slate-900">{s.nama}</td>
+                            <td className="py-1.5 px-2.5 font-mono font-bold text-[#3B5BDB]">{s.kelas}</td>
+                            <td className="py-1.5 px-2.5">{s.gender}</td>
+                            <td className="py-1.5 px-3 text-slate-700">{s.namaOrtu || '-'}</td>
+                            <td className="py-1.5 px-3 font-mono text-slate-700">{s.noWaOrtu || '-'}</td>
+                            <td className="py-1.5 px-3 text-slate-600 max-w-[180px] truncate">{s.alamat || '-'}</td>
+                            <td className="py-1.5 px-2.5">{s.statusKehadiran}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+              <p className="text-[11px] text-slate-500">
+                Pastikan kolom Nama, Kelas, dan NISN pada pratinjau di atas sudah sesuai dengan file Anda.
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={isSavingUpload}
+                  onClick={() => setUploadPreview(null)}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingUpload}
+                  onClick={handleConfirmUpload}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#3B5BDB] hover:bg-[#2563EB] text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-60 cursor-pointer"
+                >
+                  {isSavingUpload ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Menyimpan ke Database...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload &amp; Simpan ({uploadPreview.students.length} Murid)</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
