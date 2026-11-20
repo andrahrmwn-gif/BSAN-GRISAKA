@@ -455,222 +455,329 @@ export function exportViolationsToPrintPDF(
   }, 400);
 }
 
+export interface StudentSlipResolvedStats {
+  statusKehadiran?: string;
+  countRingan?: number;
+  countSedang?: number;
+  countBerat?: number;
+  dateStr?: string;
+}
+
+const escapeHtml = (val: unknown): string => {
+  return String(val ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+export function getMatchedStudentViolations(
+  student: Student,
+  violations: ViolationRecord[]
+): ViolationRecord[] {
+  const sName = (student.nama || '').trim().toLowerCase();
+  return (violations || [])
+    .filter(
+      (v) =>
+        v &&
+        (v.studentId === student.id ||
+          (v.studentName?.trim().toLowerCase() === sName && v.kelas === student.kelas) ||
+          (sName && v.studentName?.trim().toLowerCase() === sName))
+    )
+    .sort((a, b) => {
+      const da = a.tanggal ? new Date(a.tanggal).getTime() : 0;
+      const db = b.tanggal ? new Date(b.tanggal).getTime() : 0;
+      return db - da;
+    });
+}
+
+/**
+ * Canonical pure-HTML (hex-only) document builder for Slip Kedisiplinan & Rapor Pelanggaran Siswa.
+ * Shared 1:1 across In-App Preview, PDF Download, and Word (.doc) Download for identical precision.
+ */
+export function buildStudentSlipBodyHtml(
+  student: Student,
+  violations: ViolationRecord[],
+  schoolConfig: SchoolProfile = SCHOOL_CONFIG,
+  resolvedStats?: StudentSlipResolvedStats
+): string {
+  const dateStr =
+    resolvedStats?.dateStr ||
+    new Intl.DateTimeFormat('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date());
+
+  const studentViolations = getMatchedStudentViolations(student, violations);
+
+  const countRingan = Math.max(
+    studentViolations.filter((v) => v.tingkat === 'Ringan').length,
+    resolvedStats?.countRingan ?? student.totalPelanggaranRingan ?? 0
+  );
+  const countSedang = Math.max(
+    studentViolations.filter((v) => v.tingkat === 'Sedang').length,
+    resolvedStats?.countSedang ?? student.totalPelanggaranSedang ?? 0
+  );
+  const countBerat = Math.max(
+    studentViolations.filter((v) => v.tingkat === 'Berat').length,
+    resolvedStats?.countBerat ?? student.totalPelanggaranBerat ?? 0
+  );
+  const statusKehadiran = resolvedStats?.statusKehadiran || student.statusKehadiran || 'Hadir';
+  const hasBerat = countBerat > 0;
+
+  const schoolAddress = escapeHtml(schoolConfig.address || 'Jl. Raya Kandangan - Temanggung, Kec. Kandangan');
+  const schoolCity = escapeHtml(schoolConfig.city || 'Kabupaten Temanggung');
+  const schoolPostal = escapeHtml(schoolConfig.postalCode || '56281');
+  const schoolPhone = escapeHtml(schoolConfig.phone || '(0293) 490123');
+  const schoolWebsite = escapeHtml(schoolConfig.website || 'smpn1kandangan-tmg.sch.id');
+  const schoolEmail = escapeHtml(schoolConfig.email || 'smpn1kandangan@temanggungkab.go.id');
+  const schoolNpsn = escapeHtml(schoolConfig.npsn || '20321456');
+  const schoolAccred = escapeHtml(schoolConfig.accreditation || 'A');
+  const rightLogo = schoolConfig.logoUrl || LOGO_TUTWURI_DATA_URL;
+
+  const bkTitle = escapeHtml(schoolConfig.bkTitle || 'Guru BK / Konselor');
+  const bkName = escapeHtml(schoolConfig.bkName || 'Sri Wahyuni, S.Pd., M.Si.');
+  const bkNip = escapeHtml(schoolConfig.bkNip || '19780824 200501 2 008');
+
+  const timTitle = escapeHtml(schoolConfig.timKesiswaanTitle || 'Tim Kesiswaan');
+  const timName = escapeHtml(schoolConfig.timKesiswaanName || schoolConfig.wakasekName || 'Drs. Subagyo, M.Pd.');
+  const timNip = escapeHtml(schoolConfig.timKesiswaanNip || schoolConfig.wakasekNip || '19700315 199601 1 002');
+
+  const principalName = escapeHtml(schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.');
+  const principalNip = escapeHtml(schoolConfig.principalNip || '19740512 199802 2 003');
+
+  const rowsHtml =
+    studentViolations.length === 0
+      ? `<tr>
+          <td colspan="5" style="border:1px solid #000000; padding:12px 10px; text-align:center; color:#64748b; font-style:italic; font-size:10.5px;">
+            Nihil catatan pelanggaran tata tertib. Siswa tercatat mematuhi norma BSAN dengan baik.
+          </td>
+        </tr>`
+      : studentViolations
+          .map(
+            (v, i) => `
+          <tr>
+            <td style="border:1px solid #000000; padding:6px; text-align:center; font-family:'Courier New', Courier, monospace; font-size:10.5px; vertical-align:top;">${i + 1}</td>
+            <td style="border:1px solid #000000; padding:6px; text-align:center; font-size:10.5px; vertical-align:top;">
+              <div>${escapeHtml(v.tanggal)}</div>
+              <div style="font-size:9.5px; color:#475569; font-family:'Courier New', Courier, monospace;">${escapeHtml(v.waktu || '07:30')} WIB</div>
+              <div style="font-size:9.5px; font-style:italic; color:#334155;">${escapeHtml(v.lokasi || 'Sekolah')}</div>
+            </td>
+            <td style="border:1px solid #000000; padding:6px; text-align:left; font-size:10.5px; vertical-align:top;">
+              <strong>${escapeHtml(v.kodePasal)} - ${escapeHtml(v.pasalTitle)}:</strong> ${escapeHtml(v.uraian)}
+              ${
+                v.catatanKhusus
+                  ? `<div style="font-size:9.5px; color:#475569; font-style:italic; margin-top:3px;">Catatan: ${escapeHtml(v.catatanKhusus)}</div>`
+                  : ''
+              }
+            </td>
+            <td style="border:1px solid #000000; padding:6px; text-align:center; font-weight:bold; font-size:10.5px; vertical-align:top; color:${
+              v.tingkat === 'Berat' ? '#b91c1c' : v.tingkat === 'Sedang' ? '#b45309' : '#1e293b'
+            };">${escapeHtml(v.tingkat)}</td>
+            <td style="border:1px solid #000000; padding:6px; text-align:left; font-size:10px; vertical-align:top;">
+              <div style="font-weight:bold; color:#000000;">${escapeHtml(v.tahapPembinaan)}</div>
+              <div style="color:#475569; margin-top:2px;">Oleh: ${escapeHtml(v.guruPencatat)}</div>
+            </td>
+          </tr>
+        `
+          )
+          .join('');
+
+  return `
+    <div style="font-family: 'Times New Roman', Times, serif; color: #000000; background-color: #ffffff; line-height: 1.4;">
+      <!-- Kop Surat Resmi -->
+      <table style="width:100%; border-collapse:collapse; border-bottom:3px double #000000; margin-bottom:18px;">
+        <tr>
+          <td style="width:68px; text-align:left; vertical-align:middle; padding-bottom:10px;">
+            <img src="${LOGO_TEMANGGUNG_DATA_URL}" width="58" height="64" alt="Logo Pemda Temanggung" style="display:block; width:58px; height:64px; object-fit:contain;" />
+          </td>
+          <td style="text-align:center; vertical-align:middle; padding-bottom:10px;">
+            <div style="font-family:'Times New Roman', Times, serif; font-size:11px; font-weight:bold; text-transform:uppercase; letter-spacing:0.6px; color:#000000;">PEMERINTAH KABUPATEN TEMANGGUNG</div>
+            <div style="font-family:'Times New Roman', Times, serif; font-size:11px; font-weight:bold; text-transform:uppercase; letter-spacing:0.6px; color:#000000;">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
+            <div style="font-family:'Times New Roman', Times, serif; font-size:18px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; color:#000000; margin:2px 0;">SMPN 1 KANDANGAN</div>
+            <div style="font-family:Arial, Helvetica, sans-serif; font-size:10.5px; color:#000000; margin-top:1px;">NPSN: ${schoolNpsn} &middot; Status Akreditasi: ${schoolAccred}</div>
+            <div style="font-family:'Times New Roman', Times, serif; font-size:10.5px; color:#000000;">${schoolAddress}, ${schoolCity} &middot; Jawa Tengah ${schoolPostal}</div>
+            <div style="font-family:Arial, Helvetica, sans-serif; font-size:9.5px; color:#000000;">Telp: ${schoolPhone} &middot; Website: ${schoolWebsite} &middot; Email: ${schoolEmail}</div>
+          </td>
+          <td style="width:68px; text-align:right; vertical-align:middle; padding-bottom:10px;">
+            <img src="${rightLogo}" width="58" height="64" alt="Logo Sekolah" style="display:block; margin-left:auto; width:58px; height:64px; object-fit:contain;" />
+          </td>
+        </tr>
+      </table>
+
+      <!-- Judul Dokumen -->
+      <div style="text-align:center; margin-bottom:18px;">
+        <div style="font-family:'Times New Roman', Times, serif; font-size:15px; font-weight:bold; text-transform:uppercase; text-decoration:underline; letter-spacing:0.4px; color:#000000;">
+          LEMBAR KONTROL &amp; RAPOR KEDISIPLINAN SISWA (BSAN)
+        </div>
+        <div style="font-family:Arial, Helvetica, sans-serif; font-size:11px; color:#475569; margin-top:4px;">
+          Dokumen Resmi Bimbingan Konseling &amp; Kesiswaan &middot; Dicetak pada: ${escapeHtml(dateStr)}
+        </div>
+      </div>
+
+      <!-- I. Identitas Peserta Didik -->
+      <div style="border:1px solid #000000; padding:12px 14px; margin-bottom:16px; background-color:#f8fafc; font-family:Arial, Helvetica, sans-serif; font-size:11px;">
+        <div style="font-weight:bold; text-transform:uppercase; font-size:11px; border-bottom:1px solid #000000; padding-bottom:4px; margin-bottom:8px; color:#000000;">
+          I. IDENTITAS PESERTA DIDIK
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:11px;">
+          <tr>
+            <td style="width:185px; padding:3px 0; font-weight:bold; color:#475569; vertical-align:top;">Nama Lengkap Siswa</td>
+            <td style="width:14px; padding:3px 0; color:#000000; vertical-align:top;">:</td>
+            <td style="padding:3px 0; font-weight:bold; font-size:12.5px; color:#0f172a; vertical-align:top;">${escapeHtml(student.nama)}</td>
+          </tr>
+          <tr>
+            <td style="padding:3px 0; font-weight:bold; color:#475569; vertical-align:top;">Nomor Induk Siswa Nasional (NISN)</td>
+            <td style="padding:3px 0; color:#000000; vertical-align:top;">:</td>
+            <td style="padding:3px 0; font-family:'Courier New', Courier, monospace; font-weight:bold; color:#000000; vertical-align:top;">${escapeHtml(student.nisn || '-')}</td>
+          </tr>
+          <tr>
+            <td style="padding:3px 0; font-weight:bold; color:#475569; vertical-align:top;">Kelas / Jenjang Pendidikan</td>
+            <td style="padding:3px 0; color:#000000; vertical-align:top;">:</td>
+            <td style="padding:3px 0; color:#000000; vertical-align:top;">Kelas ${escapeHtml(student.kelas)} / Jenjang ${escapeHtml(student.jenjang)} SMP</td>
+          </tr>
+          <tr>
+            <td style="padding:3px 0; font-weight:bold; color:#475569; vertical-align:top;">Jenis Kelamin</td>
+            <td style="padding:3px 0; color:#000000; vertical-align:top;">:</td>
+            <td style="padding:3px 0; color:#000000; vertical-align:top;">${student.gender === 'L' ? 'Laki-laki (L)' : 'Perempuan (P)'}</td>
+          </tr>
+          <tr>
+            <td style="padding:3px 0; font-weight:bold; color:#475569; vertical-align:top;">Nama Orang Tua / Wali</td>
+            <td style="padding:3px 0; color:#000000; vertical-align:top;">:</td>
+            <td style="padding:3px 0; font-weight:bold; color:#000000; vertical-align:top;">${escapeHtml(student.namaOrtu || '-')}</td>
+          </tr>
+          <tr>
+            <td style="padding:3px 0; font-weight:bold; color:#475569; vertical-align:top;">No. WhatsApp Orang Tua / Wali</td>
+            <td style="padding:3px 0; color:#000000; vertical-align:top;">:</td>
+            <td style="padding:3px 0; font-family:'Courier New', Courier, monospace; color:#000000; vertical-align:top;">${escapeHtml(student.noWaOrtu || '-')}</td>
+          </tr>
+          <tr>
+            <td style="padding:3px 0; font-weight:bold; color:#475569; vertical-align:top;">Alamat Rumah Tinggal</td>
+            <td style="padding:3px 0; color:#000000; vertical-align:top;">:</td>
+            <td style="padding:3px 0; color:#000000; vertical-align:top;">${escapeHtml(student.alamat || '-')}</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- II. Rekapitulasi Status Kedisiplinan -->
+      <div style="border:1px solid #000000; margin-bottom:16px; font-family:Arial, Helvetica, sans-serif;">
+        <div style="background-color:#f1f5f9; padding:7px 10px; font-weight:bold; text-transform:uppercase; font-size:11px; border-bottom:1px solid #000000; color:#000000;">
+          II. REKAPITULASI STATUS KEDISIPLINAN PESERTA DIDIK
+        </div>
+        <table style="width:100%; border-collapse:collapse; table-layout:fixed; text-align:center;">
+          <tr>
+            <td style="width:25%; padding:10px 6px; border-right:1px solid #000000; vertical-align:middle;">
+              <div style="font-size:9.5px; color:#475569; text-transform:uppercase; font-weight:bold;">Presensi Harian</div>
+              <div style="font-size:14px; font-weight:bold; color:#0f172a; margin-top:3px;">${escapeHtml(statusKehadiran)}</div>
+            </td>
+            <td style="width:25%; padding:10px 6px; border-right:1px solid #000000; vertical-align:middle;">
+              <div style="font-size:9.5px; color:#475569; text-transform:uppercase; font-weight:bold;">Pelanggaran Ringan</div>
+              <div style="font-size:14px; font-weight:bold; color:#0f172a; margin-top:3px;">${countRingan} Kasus</div>
+            </td>
+            <td style="width:25%; padding:10px 6px; border-right:1px solid #000000; vertical-align:middle;">
+              <div style="font-size:9.5px; color:#475569; text-transform:uppercase; font-weight:bold;">Pelanggaran Sedang</div>
+              <div style="font-size:14px; font-weight:bold; color:#0f172a; margin-top:3px;">${countSedang} Kasus</div>
+            </td>
+            <td style="width:25%; padding:10px 6px; vertical-align:middle;">
+              <div style="font-size:9.5px; color:#475569; text-transform:uppercase; font-weight:bold;">Pelanggaran Berat</div>
+              <div style="font-size:14px; font-weight:bold; color:${hasBerat ? '#b91c1c' : '#0f172a'}; margin-top:3px;">${countBerat} Kasus</div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- III. Daftar Riwayat Pelanggaran -->
+      <div style="font-family:Arial, Helvetica, sans-serif; margin-bottom:22px;">
+        <div style="font-weight:bold; font-size:11px; text-transform:uppercase; margin-bottom:6px; color:#000000;">
+          III. DAFTAR RIWAYAT PELANGGARAN TATA TERTIB RESMI
+        </div>
+        <table style="width:100%; border-collapse:collapse; border:1px solid #000000; font-size:10.5px;">
+          <thead>
+            <tr style="background-color:#f1f5f9;">
+              <th style="border:1px solid #000000; padding:6px; text-align:center; width:34px; font-weight:bold; color:#000000;">No</th>
+              <th style="border:1px solid #000000; padding:6px; text-align:center; width:115px; font-weight:bold; color:#000000;">Waktu &amp; Tempat</th>
+              <th style="border:1px solid #000000; padding:6px; text-align:left; font-weight:bold; color:#000000;">Pasal &amp; Deskripsi Pelanggaran</th>
+              <th style="border:1px solid #000000; padding:6px; text-align:center; width:82px; font-weight:bold; color:#000000;">Klasifikasi</th>
+              <th style="border:1px solid #000000; padding:6px; text-align:left; width:165px; font-weight:bold; color:#000000;">Bentuk Pembinaan &amp; SOP</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Blok Tanda Tangan Resmi -->
+      <div style="font-family:Arial, Helvetica, sans-serif; padding-top:14px; border-top:1px solid #000000;">
+        <table style="width:100%; border-collapse:collapse; table-layout:fixed; text-align:center; font-size:10.5px;">
+          <tr>
+            <td style="width:25%; vertical-align:top; padding:0 4px;">
+              Mengetahui,<br />
+              <strong>Orang Tua / Wali</strong>
+              <div style="height:56px;"></div>
+              <div style="font-weight:bold; text-decoration:underline;">( ${escapeHtml(student.namaOrtu || '......................')} )</div>
+            </td>
+            <td style="width:25%; vertical-align:top; padding:0 4px;">
+              Mengetahui,<br />
+              <strong>${bkTitle}</strong>
+              <div style="height:56px;"></div>
+              <div style="font-weight:bold; text-decoration:underline;">( ${bkName} )</div>
+              <div style="font-size:9.5px; color:#475569; font-family:'Courier New', Courier, monospace; margin-top:2px;">NIP. ${bkNip}</div>
+            </td>
+            <td style="width:25%; vertical-align:top; padding:0 4px;">
+              Mengetahui,<br />
+              <strong>${timTitle}</strong>
+              <div style="height:56px;"></div>
+              <div style="font-weight:bold; text-decoration:underline;">( ${timName} )</div>
+              <div style="font-size:9.5px; color:#475569; font-family:'Courier New', Courier, monospace; margin-top:2px;">NIP. ${timNip}</div>
+            </td>
+            <td style="width:25%; vertical-align:top; padding:0 4px;">
+              Kandangan, ${escapeHtml(dateStr)}<br />
+              <strong>Kepala Sekolah</strong>
+              <div style="height:56px;"></div>
+              <div style="font-weight:bold; text-decoration:underline;">( ${principalName} )</div>
+              <div style="font-size:9.5px; color:#475569; font-family:'Courier New', Courier, monospace; margin-top:2px;">NIP. ${principalNip}</div>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 /**
  * Export complete individual student violation slip and dossier to official Word (.doc) format
- * Includes official government school KOP (Pemerintah Kabupaten Temanggung), complete student bio,
- * disciplinary summary, full violation table with dates/pasal/uraian/pencatat, and formal signature blocks.
+ * Identical 1:1 with the in-app Lembar Rapor preview and PDF download.
  */
 export function exportStudentSlipToWord(
   student: Student,
   violations: ViolationRecord[],
-  schoolConfig: SchoolProfile = SCHOOL_CONFIG
+  schoolConfig: SchoolProfile = SCHOOL_CONFIG,
+  resolvedStats?: StudentSlipResolvedStats
 ): void {
-  const dateStr = new Intl.DateTimeFormat('id-ID', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  }).format(new Date());
-
-  const studentViolations = (violations || [])
-    .filter(v => v && v.studentId === student.id)
-    .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
-
-  const hasBerat = (student.totalPelanggaranBerat || 0) > 0;
-  const hasSedang = (student.totalPelanggaranSedang || 0) > 0;
-  const hasRingan = (student.totalPelanggaranRingan || 0) > 0;
-
-  let statusDisiplin = 'Sangat Disiplin (Nihil Catatan)';
-  let keteranganDisiplin = 'Peserta didik tertib dan mematuhi seluruh norma Budaya Sekolah Aman dan Nyaman (BSAN).';
-  if (hasBerat) {
-    statusDisiplin = 'Peringatan Khusus / Sidang Kesiswaan (Tingkat Berat)';
-    keteranganDisiplin = 'Memerlukan penanganan terpadu Kepala Sekolah, Tim Kesiswaan, dan pemanggilan orang tua.';
-  } else if (hasSedang) {
-    statusDisiplin = 'Perhatian Khusus / Konseling BK (Tingkat Sedang)';
-    keteranganDisiplin = 'Memerlukan pembinaan intensif Guru BK dan penandatanganan kontrak perilaku.';
-  } else if (hasRingan) {
-    statusDisiplin = 'Tingkat Pembinaan Ringan';
-    keteranganDisiplin = 'Dalam pendampingan Wali Kelas dan Guru Piket dengan penugasan edukatif.';
-  }
-
-  const rows = studentViolations.map((v, i) => `
-    <tr>
-      <td style="border:1px solid #333; padding:6px; text-align:center;">${i + 1}</td>
-      <td style="border:1px solid #333; padding:6px;">
-        <strong>${v.tanggal}</strong><br>
-        <span style="font-size:8.5pt; color:#444;">${v.waktu || ''} WIB</span><br>
-        <span style="font-size:8.5pt; color:#555; font-style:italic;">Lokasi: ${v.lokasi || 'Lingkungan Sekolah'}</span>
-      </td>
-      <td style="border:1px solid #333; padding:6px;">
-        <strong>${v.kodePasal}</strong> - ${v.pasalTitle}
-      </td>
-      <td style="border:1px solid #333; padding:6px;">
-        ${v.uraian}
-        ${v.catatanKhusus ? `<div style="font-size:8.5pt; margin-top:4px; color:#92400E; background:#FEF3C7; padding:3px 6px; border-radius:4px;"><strong>Catatan Penanganan:</strong> ${v.catatanKhusus}</div>` : ''}
-      </td>
-      <td style="border:1px solid #333; padding:6px; text-align:center; font-weight:bold; color:${v.tingkat === 'Berat' ? '#DC2626' : v.tingkat === 'Sedang' ? '#D97706' : '#16A34A'};">
-        ${v.tingkat}
-      </td>
-      <td style="border:1px solid #333; padding:6px;">
-        <strong>${v.tahapPembinaan}</strong>
-      </td>
-      <td style="border:1px solid #333; padding:6px; text-align:center;">
-        ${v.guruPencatat}
-      </td>
-    </tr>
-  `).join('');
+  const bodyContent = buildStudentSlipBodyHtml(student, violations, schoolConfig, resolvedStats);
 
   const wordHtml = `
     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
     <head>
       <meta charset='utf-8'>
-      <title>Slip_Kedisiplinan_${student.nama}_${student.kelas}</title>
+      <title>Slip_Kedisiplinan_${escapeHtml(student.nama)}_${escapeHtml(student.kelas)}</title>
       <style>
-        body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.3; color: #000; margin: 15mm; }
-        .kop-table { width: 100%; border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 16px; text-align: center; }
-        .kop-instansi { font-size: 11pt; font-weight: bold; text-transform: uppercase; margin: 0; }
-        .kop-sekolah { font-size: 15pt; font-weight: bold; letter-spacing: 0.5px; color: #1E3A8A; margin: 2px 0; }
-        .kop-sub { font-size: 9pt; margin: 1px 0; color: #222; }
-        h1 { font-size: 13pt; text-align: center; text-transform: uppercase; margin: 14px 0 2px 0; font-weight: bold; }
-        .doc-no { text-align: center; font-size: 9.5pt; margin-bottom: 16px; color: #333; }
-        .section-title { font-size: 10.5pt; font-weight: bold; text-transform: uppercase; background-color: #F1F5F9; padding: 4px 8px; border: 1px solid #CBD5E1; margin-top: 14px; margin-bottom: 6px; }
-        table.bio-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 10pt; }
-        table.bio-table td { padding: 4px 6px; vertical-align: top; border: 1px solid #E2E8F0; }
-        table.data-table { width: 100%; border-collapse: collapse; margin-top: 6px; margin-bottom: 16px; font-size: 9.5pt; }
-        table.data-table th { border: 1px solid #333; padding: 6px; background-color: #E2E8F0; text-align: center; font-weight: bold; }
-        .summary-box { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 10pt; }
-        .summary-box td { border: 1px solid #333; padding: 6px; text-align: center; }
-        .ttd-table { width: 100%; margin-top: 28px; border: none; font-size: 10pt; }
-        .ttd-table td { border: none; text-align: center; vertical-align: top; width: 25%; }
-        .ttd-space { height: 60px; }
+        @page { size: A4 portrait; margin: 1.5cm; }
+        body { font-family: 'Times New Roman', Times, serif; margin: 0; padding: 0; color: #000000; background-color: #ffffff; }
+        table { border-collapse: collapse; }
       </style>
     </head>
     <body>
-      <!-- Official School Letterhead (KOP) -->
-      <table class="kop-table">
-        <tr>
-          <td>
-            <div class="kop-instansi">PEMERINTAH KABUPATEN TEMANGGUNG</div>
-            <div class="kop-instansi">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
-            <div class="kop-sekolah">SMPN 1 KANDANGAN</div>
-            <div class="kop-sub">NPSN: ${schoolConfig.npsn || '20321456'} · Status Akreditasi: ${schoolConfig.accreditation || 'A'}</div>
-            <div class="kop-sub">${schoolConfig.address || 'Jl. Raya Kandangan'}, ${schoolConfig.city || 'Kabupaten Temanggung'}, ${schoolConfig.province || 'Jawa Tengah'} ${schoolConfig.postalCode || '56281'}</div>
-            <div class="kop-sub">Telp: ${schoolConfig.phone || '-'} · Email: ${schoolConfig.email || '-'} · Website: ${schoolConfig.website || '-'}</div>
-          </td>
-        </tr>
-      </table>
-
-      <h1>RAPOR REKAPITULASI & SLIP KONTROL KEDISIPLINAN SISWA</h1>
-      <div class="doc-no">Nomor: 421.3 / ${student.nisn || '000'} / BSAN-GRISAKA / ${new Date().getFullYear()} · Dicetak: ${dateStr}</div>
-
-      <!-- I. Identitas Siswa -->
-      <div class="section-title">I. IDENTITAS PESERTA DIDIK</div>
-      <table class="bio-table">
-        <tr>
-          <td style="width: 20%; font-weight: bold; background: #F8FAFC;">Nama Lengkap</td>
-          <td style="width: 30%;"><strong>${student.nama}</strong></td>
-          <td style="width: 20%; font-weight: bold; background: #F8FAFC;">Kelas / Jenjang</td>
-          <td style="width: 30%;">Kelas ${student.kelas} / Jenjang ${student.jenjang} SMP</td>
-        </tr>
-        <tr>
-          <td style="font-weight: bold; background: #F8FAFC;">NISN</td>
-          <td style="font-family: Courier New, monospace;">${student.nisn}</td>
-          <td style="font-weight: bold; background: #F8FAFC;">Jenis Kelamin</td>
-          <td>${student.gender === 'L' ? 'Laki-laki (L)' : 'Perempuan (P)'}</td>
-        </tr>
-        <tr>
-          <td style="font-weight: bold; background: #F8FAFC;">Nama Orang Tua / Wali</td>
-          <td>${student.namaOrtu}</td>
-          <td style="font-weight: bold; background: #F8FAFC;">No. WhatsApp Wali</td>
-          <td style="font-family: Courier New, monospace;">${student.noWaOrtu}</td>
-        </tr>
-        <tr>
-          <td style="font-weight: bold; background: #F8FAFC;">Presensi Hari Ini</td>
-          <td><strong>${student.statusKehadiran}</strong></td>
-          <td style="font-weight: bold; background: #F8FAFC;">Alamat Rumah</td>
-          <td>${student.alamat}</td>
-        </tr>
-      </table>
-
-      <!-- II. Rekapitulasi Status Kedisiplinan -->
-      <div class="section-title">II. REKAPITULASI STATUS KEDISIPLINAN (BSAN)</div>
-      <table class="summary-box">
-        <tr style="background: #F1F5F9; font-weight: bold;">
-          <td style="width: 25%;">Presensi Harian</td>
-          <td style="width: 25%;">Kasus Ringan</td>
-          <td style="width: 25%;">Kasus Sedang</td>
-          <td style="width: 25%;">Kasus Berat</td>
-        </tr>
-        <tr>
-          <td><strong>${student.statusKehadiran}</strong></td>
-          <td><strong style="color: #2563EB;">${student.totalPelanggaranRingan || 0} Kasus</strong></td>
-          <td><strong style="color: #D97706;">${student.totalPelanggaranSedang || 0} Kasus</strong></td>
-          <td><strong style="color: #DC2626;">${student.totalPelanggaranBerat || 0} Kasus</strong></td>
-        </tr>
-        <tr>
-          <td colspan="4" style="text-align: left; padding: 8px; font-size: 9.5pt; background: #FAFAFA;">
-            <strong>Status Evaluasi:</strong> <span style="font-weight: bold;">${statusDisiplin}</span><br>
-            <span style="font-style: italic; color: #4B5563;">${keteranganDisiplin}</span>
-          </td>
-        </tr>
-      </table>
-
-      <!-- III. Riwayat Pelanggaran -->
-      <div class="section-title">III. DAFTAR LENGKAP RIWAYAT PELANGGARAN TATA TERTIB</div>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th style="width: 4%;">No</th>
-            <th style="width: 14%;">Waktu & Tempat</th>
-            <th style="width: 20%;">Pasal Tata Tertib</th>
-            <th style="width: 28%;">Uraian Pelanggaran & Catatan</th>
-            <th style="width: 10%;">Klasifikasi</th>
-            <th style="width: 14%;">Tahap Pembinaan</th>
-            <th style="width: 10%;">Pencatat</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows || '<tr><td colspan="7" style="text-align:center; padding:12px; font-style:italic; color:#4B5563;">Nihil catatan pelanggaran tata tertib sekolah. Peserta didik menunjukkan kepatuhan dan integritas yang tinggi dalam menerapkan norma Budaya Sekolah Aman dan Nyaman (BSAN).</td></tr>'}
-        </tbody>
-      </table>
-
-      <!-- IV. Tanda Tangan Resmi -->
-      <table class="ttd-table">
-        <tr>
-          <td>
-            Mengetahui,<br>
-            <strong>Orang Tua / Wali Siswa</strong>
-            <div class="ttd-space"></div>
-            <u><strong>( ${student.namaOrtu} )</strong></u>
-          </td>
-          <td>
-            Mengetahui,<br>
-            <strong>${schoolConfig.bkTitle || 'Guru BK / Konselor'}</strong>
-            <div class="ttd-space"></div>
-            <u><strong>( ${schoolConfig.bkName || 'Sri Wahyuni, S.Pd., M.Si.'} )</strong></u><br>
-            <span style="font-size: 8.5pt;">NIP. ${schoolConfig.bkNip || '19780824 200501 2 008'}</span>
-          </td>
-          <td>
-            Mengetahui,<br>
-            <strong>${schoolConfig.timKesiswaanTitle || 'Tim Kesiswaan'}</strong>
-            <div class="ttd-space"></div>
-            <u><strong>( ${schoolConfig.timKesiswaanName || schoolConfig.wakasekName || 'Drs. Subagyo, M.Pd.'} )</strong></u><br>
-            <span style="font-size: 8.5pt;">NIP. ${schoolConfig.timKesiswaanNip || schoolConfig.wakasekNip || '19700315 199601 1 002'}</span>
-          </td>
-          <td>
-            Kandangan, ${dateStr}<br>
-            <strong>Kepala Sekolah</strong>
-            <div class="ttd-space"></div>
-            <u><strong>( ${schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'} )</strong></u><br>
-            <span style="font-size: 8.5pt;">NIP. ${schoolConfig.principalNip || '19740512 199802 2 003'}</span>
-          </td>
-        </tr>
-      </table>
+      ${bodyContent}
     </body>
     </html>
   `;
 
   const blob = new Blob(['\ufeff' + wordHtml], { type: 'application/msword;charset=utf-8' });
-  const filename = `Slip_Kedisiplinan_${student.nama.replace(/\s+/g, '_')}_${student.kelas}.doc`;
+  const filename = `Rapor_Disiplin_${student.nama.replace(/\s+/g, '_')}_${student.kelas}.doc`;
   triggerFileDownload(blob, filename);
 }
 
@@ -770,223 +877,166 @@ export function exportStudentSlipToExcel(
 }
 
 /**
- * Export student slip directly to official PDF with Temanggung school KOP, bio, full violation table, and signatures
+ * Export pure HTML (hex-only) document to PDF inside a lightweight isolated iframe.
+ * Avoids Tailwind oklch parsing and prevents browser UI freezes.
+ */
+async function renderIsolatedHtmlToPDF(
+  bodyHtml: string,
+  filename: string
+): Promise<{ success: boolean; blobUrl?: string }> {
+  const cleanFilename = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
+
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.position = 'fixed';
+  iframe.style.left = '-10000px';
+  iframe.style.top = '0';
+  iframe.style.width = '794px';
+  iframe.style.height = '1200px';
+  iframe.style.border = 'none';
+  iframe.style.pointerEvents = 'none';
+  iframe.style.backgroundColor = '#ffffff';
+  document.body.appendChild(iframe);
+
+  try {
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      return { success: false };
+    }
+
+    iframeDoc.open();
+    iframeDoc.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 794px;
+      background-color: #ffffff;
+      color: #000000;
+    }
+    #pdf-sheet-root {
+      width: 794px;
+      padding: 46px 50px;
+      background-color: #ffffff;
+      color: #000000;
+    }
+  </style>
+</head>
+<body>
+  <div id="pdf-sheet-root">${bodyHtml}</div>
+</body>
+</html>`);
+    iframeDoc.close();
+
+    // Wait for images inside isolated iframe with timeout protection
+    const imgs = Array.from(iframeDoc.querySelectorAll('img'));
+    await Promise.all(
+      imgs.map(
+        (img) =>
+          new Promise<void>((resolve) => {
+            if (img.complete) {
+              resolve();
+              return;
+            }
+            const timer = setTimeout(resolve, 1500);
+            img.onload = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+            img.onerror = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+          })
+      )
+    );
+
+    // Yield a frame so loading state renders before canvas capture
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+    const sheetRoot = iframeDoc.getElementById('pdf-sheet-root') as HTMLElement | null;
+    if (!sheetRoot) {
+      return { success: false };
+    }
+
+    const totalHeight = Math.max(sheetRoot.scrollHeight, 1123);
+    const canvas = await html2canvas(sheetRoot, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: false,
+      logging: false,
+      backgroundColor: '#ffffff',
+      width: 794,
+      height: totalHeight,
+      windowWidth: 794,
+      windowHeight: totalHeight,
+      scrollX: 0,
+      scrollY: 0,
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.96);
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    if (imgHeight <= pdfHeight + 6) {
+      // Fit cleanly onto 1 A4 page without spawning an almost-blank 2nd page
+      const fitScale = Math.min(1, pdfHeight / imgHeight);
+      const drawWidth = pdfWidth * fitScale;
+      const drawHeight = imgHeight * fitScale;
+      const offsetX = (pdfWidth - drawWidth) / 2;
+      pdf.addImage(imgData, 'JPEG', offsetX, 0, drawWidth, drawHeight);
+    } else {
+      let heightLeft = imgHeight;
+      let position = 0;
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 3) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+    }
+
+    const blob = pdf.output('blob');
+    const blobUrl = URL.createObjectURL(blob);
+    triggerFileDownload(blob, cleanFilename);
+    return { success: true, blobUrl };
+  } catch (err) {
+    console.error('Isolated PDF generation failed:', err);
+    return { success: false };
+  } finally {
+    if (document.body.contains(iframe)) {
+      document.body.removeChild(iframe);
+    }
+  }
+}
+
+/**
+ * Export student slip directly to official PDF matching Preview and Word 1:1
  */
 export async function exportStudentSlipToPDF(
   student: Student,
   violations: ViolationRecord[],
   schoolConfig: SchoolProfile = SCHOOL_CONFIG,
-  existingElement?: HTMLElement | null
+  _existingElement?: HTMLElement | null,
+  resolvedStats?: StudentSlipResolvedStats
 ): Promise<{ success: boolean; blobUrl?: string }> {
   const filename = `Rapor_Disiplin_${student.nama.replace(/\s+/g, '_')}_${student.kelas}`;
-
-  if (existingElement) {
-    return exportElementToPDF(existingElement, filename);
-  }
-
-  // If no existing element provided, find it in DOM or build a pristine offscreen element
-  const domEl = document.getElementById('student-slip-printable-area');
-  if (domEl) {
-    return exportElementToPDF(domEl, filename);
-  }
-
-  // Create clean offscreen element with complete school KOP and tables
-  const container = document.createElement('div');
-  container.id = 'temp-pdf-export-container';
-  container.style.position = 'fixed';
-  container.style.top = '-99999px';
-  container.style.left = '0';
-  container.style.width = '794px';
-  container.style.backgroundColor = '#ffffff';
-  container.style.color = '#000000';
-  container.style.padding = '32px';
-  container.style.fontFamily = "'Times New Roman', Times, serif";
-
-  const dateStr = new Intl.DateTimeFormat('id-ID', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  }).format(new Date());
-
-  const studentViolations = (violations || [])
-    .filter(v => v && v.studentId === student.id)
-    .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
-
-  const hasBerat = (student.totalPelanggaranBerat || 0) > 0;
-
-  const rowsHtml = studentViolations.length === 0
-    ? `<tr><td colspan="5" style="border:1px solid #000; padding:10px; text-align:center; font-style:italic;">Nihil catatan pelanggaran tata tertib sekolah. Peserta didik menunjukkan kepatuhan dan integritas yang tinggi dalam menerapkan norma Budaya Sekolah Aman dan Nyaman (BSAN).</td></tr>`
-    : studentViolations.map((v, i) => `
-      <tr>
-        <td style="border:1px solid #000; padding:6px; text-align:center; font-family:Courier New, monospace;">${i + 1}</td>
-        <td style="border:1px solid #000; padding:6px; font-size:9pt;">
-          <strong>${v.tanggal}</strong><br>
-          ${v.waktu ? `${v.waktu} WIB<br>` : ''}
-          <span style="font-style:italic; font-size:8.5pt;">${v.lokasi || 'Sekolah'}</span>
-        </td>
-        <td style="border:1px solid #000; padding:6px; font-size:9pt;">
-          <strong>${v.kodePasal} - ${v.pasalTitle}</strong><br>
-          ${v.uraian}
-          ${v.catatanKhusus ? `<br><small style="color:#b45309; font-style:italic;">Catatan: ${v.catatanKhusus}</small>` : ''}
-        </td>
-        <td style="border:1px solid #000; padding:6px; text-align:center; font-weight:bold; font-size:9pt;">
-          ${v.tingkat}
-        </td>
-        <td style="border:1px solid #000; padding:6px; font-size:8.5pt;">
-          <strong>${v.tahapPembinaan}</strong><br>
-          <span style="color:#555;">Pencatat: ${v.guruPencatat}</span>
-        </td>
-      </tr>
-    `).join('');
-
-  container.innerHTML = `
-    <div style="border-bottom: 3px double #000; padding-bottom: 8px; margin-bottom: 14px; text-align: center;">
-      <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">PEMERINTAH KABUPATEN TEMANGGUNG</div>
-      <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
-      <div style="font-size: 15pt; font-weight: bold; color: #000; margin: 2px 0;">SMPN 1 KANDANGAN</div>
-      <div style="font-size: 9pt;">NPSN: ${schoolConfig.npsn || '20321456'} · Status Akreditasi: ${schoolConfig.accreditation || 'A'}</div>
-      <div style="font-size: 9pt;">${schoolConfig.address || 'Jl. Raya Kandangan'}, ${schoolConfig.city || 'Kabupaten Temanggung'} · Jawa Tengah 56281</div>
-      <div style="font-size: 8.5pt;">Telp: ${schoolConfig.phone || '-'} · Email: ${schoolConfig.email || '-'} · Website: ${schoolConfig.website || '-'}</div>
-    </div>
-
-    <div style="text-align: center; margin-bottom: 14px;">
-      <div style="font-size: 13pt; font-weight: bold; text-decoration: underline; text-transform: uppercase;">
-        LEMBAR KONTROL & RAPOR KEDISIPLINAN SISWA (BSAN)
-      </div>
-      <div style="font-size: 9pt; margin-top: 2px;">
-        Dokumen Resmi Bimbingan Konseling & Kesiswaan · Dicetak pada: ${dateStr}
-      </div>
-    </div>
-
-    <div style="border: 1px solid #000; padding: 8px 12px; margin-bottom: 12px; font-size: 9.5pt; font-family: Arial, sans-serif; background: #fafafa;">
-      <div style="font-weight: bold; text-transform: uppercase; font-size: 10pt; border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px;">
-        I. IDENTITAS PESERTA DIDIK
-      </div>
-      <table style="width: 100%; font-size: 9.5pt; border-collapse: collapse;">
-        <tr>
-          <td style="width: 25%; padding: 2px 0;">Nama Lengkap</td>
-          <td style="width: 3%;">:</td>
-          <td style="width: 32%; font-weight: bold; font-size: 10.5pt;">${student.nama}</td>
-          <td style="width: 18%; padding: 2px 0;">Kelas / Rombel</td>
-          <td style="width: 3%;">:</td>
-          <td style="width: 19%;">Kelas ${student.kelas} (Jenjang ${student.jenjang})</td>
-        </tr>
-        <tr>
-          <td style="padding: 2px 0;">NISN</td>
-          <td>:</td>
-          <td style="font-family: monospace; font-weight: bold;">${student.nisn}</td>
-          <td style="padding: 2px 0;">Jenis Kelamin</td>
-          <td>:</td>
-          <td>${student.gender === 'L' ? 'Laki-laki (L)' : 'Perempuan (P)'}</td>
-        </tr>
-        <tr>
-          <td style="padding: 2px 0;">Nama Orang Tua/Wali</td>
-          <td>:</td>
-          <td style="font-weight: bold;">${student.namaOrtu}</td>
-          <td style="padding: 2px 0;">No. WhatsApp Wali</td>
-          <td>:</td>
-          <td style="font-family: monospace;">${student.noWaOrtu}</td>
-        </tr>
-        <tr>
-          <td style="padding: 2px 0;">Alamat Rumah</td>
-          <td>:</td>
-          <td colspan="4">${student.alamat}</td>
-        </tr>
-      </table>
-    </div>
-
-    <div style="border: 1px solid #000; margin-bottom: 12px; font-size: 9.5pt; font-family: Arial, sans-serif;">
-      <div style="background: #f1f5f9; padding: 4px 8px; font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #000;">
-        II. REKAPITULASI STATUS KEDISIPLINAN PESERTA DIDIK
-      </div>
-      <table style="width: 100%; text-align: center; border-collapse: collapse;">
-        <tr>
-          <td style="border-right: 1px solid #000; padding: 6px; width: 25%;">
-            <div style="font-size: 8pt; text-transform: uppercase; color: #555;">Presensi Harian</div>
-            <div style="font-weight: bold; font-size: 11pt; margin-top: 2px;">${student.statusKehadiran}</div>
-          </td>
-          <td style="border-right: 1px solid #000; padding: 6px; width: 25%;">
-            <div style="font-size: 8pt; text-transform: uppercase; color: #555;">Pelanggaran Ringan</div>
-            <div style="font-weight: bold; font-size: 11pt; color: #2563eb; margin-top: 2px;">${student.totalPelanggaranRingan || 0} Kasus</div>
-          </td>
-          <td style="border-right: 1px solid #000; padding: 6px; width: 25%;">
-            <div style="font-size: 8pt; text-transform: uppercase; color: #555;">Pelanggaran Sedang</div>
-            <div style="font-weight: bold; font-size: 11pt; color: #d97706; margin-top: 2px;">${student.totalPelanggaranSedang || 0} Kasus</div>
-          </td>
-          <td style="padding: 6px; width: 25%;">
-            <div style="font-size: 8pt; text-transform: uppercase; color: #555;">Pelanggaran Berat</div>
-            <div style="font-weight: bold; font-size: 11pt; color: ${hasBerat ? '#dc2626' : '#111'}; margin-top: 2px;">${student.totalPelanggaranBerat || 0} Kasus</div>
-          </td>
-        </tr>
-      </table>
-    </div>
-
-    <div style="margin-bottom: 14px; font-family: Arial, sans-serif;">
-      <div style="font-weight: bold; font-size: 9.5pt; text-transform: uppercase; margin-bottom: 4px;">
-        III. DAFTAR RIWAYAT PELANGGARAN TATA TERTIB RESMI
-      </div>
-      <table style="width: 100%; border-collapse: collapse; border: 1px solid #000; font-size: 9pt;">
-        <thead>
-          <tr style="background: #f1f5f9;">
-            <th style="border: 1px solid #000; padding: 5px; width: 4%;">No</th>
-            <th style="border: 1px solid #000; padding: 5px; width: 18%;">Waktu & Tempat</th>
-            <th style="border: 1px solid #000; padding: 5px;">Pasal & Deskripsi Pelanggaran</th>
-            <th style="border: 1px solid #000; padding: 5px; width: 12%;">Klasifikasi</th>
-            <th style="border: 1px solid #000; padding: 5px; width: 26%;">Bentuk Pembinaan & SOP</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rowsHtml}
-        </tbody>
-      </table>
-    </div>
-
-    <div style="margin-top: 20px; font-family: Arial, sans-serif; font-size: 9.5pt;">
-      <table style="width: 100%; border-collapse: collapse; text-align: center;">
-        <tr>
-          <td style="width: 25%; vertical-align: top;">
-            Mengetahui,<br>
-            <strong>Orang Tua / Wali</strong>
-            <div style="height: 50px;"></div>
-            <u><strong>( ${student.namaOrtu} )</strong></u>
-          </td>
-          <td style="width: 25%; vertical-align: top;">
-            Mengetahui,<br>
-            <strong>Guru BK / Konselor</strong>
-            <div style="height: 50px;"></div>
-            <u><strong>( ${schoolConfig.bkName || 'Sri Wahyuni, S.Pd., M.Si.'} )</strong></u><br>
-            <span style="font-size: 8pt; font-family: monospace;">NIP. ${schoolConfig.bkNip || '19780824 200501 2 008'}</span>
-          </td>
-          <td style="width: 25%; vertical-align: top;">
-            Mengetahui,<br>
-            <strong>Tim Kesiswaan</strong>
-            <div style="height: 50px;"></div>
-            <u><strong>( ${schoolConfig.timKesiswaanName || schoolConfig.wakasekName || 'Tim Kesiswaan'} )</strong></u><br>
-            <span style="font-size: 8pt; font-family: monospace;">NIP. ${schoolConfig.timKesiswaanNip || schoolConfig.wakasekNip || '-'}</span>
-          </td>
-          <td style="width: 25%; vertical-align: top;">
-            Kandangan, ${dateStr}<br>
-            <strong>Kepala Sekolah</strong>
-            <div style="height: 50px;"></div>
-            <u><strong>( ${schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'} )</strong></u><br>
-            <span style="font-size: 8pt; font-family: monospace;">NIP. ${schoolConfig.principalNip || '19740512 199802 2 003'}</span>
-          </td>
-        </tr>
-      </table>
-    </div>
-  `;
-
-  document.body.appendChild(container);
-  try {
-    const res = await exportElementToPDF(container, filename);
-    document.body.removeChild(container);
-    return res;
-  } catch (err) {
-    if (document.body.contains(container)) {
-      document.body.removeChild(container);
-    }
-    throw err;
-  }
+  const bodyHtml = buildStudentSlipBodyHtml(student, violations, schoolConfig, resolvedStats);
+  return renderIsolatedHtmlToPDF(bodyHtml, filename);
 }
 
 /**
@@ -1351,7 +1401,8 @@ export function triggerFileDownload(blobOrUrl: Blob | string, filename: string):
     const url = typeof blobOrUrl === 'string' ? blobOrUrl : URL.createObjectURL(blobOrUrl);
     const link = document.createElement('a');
     link.href = url;
-    link.download = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
+    const hasExtension = /\.[a-z0-9]{2,5}$/i.test(filename);
+    link.download = hasExtension ? filename : `${filename}.pdf`;
     // Do NOT set target="_blank" so the browser immediately downloads the file directly without opening preview tabs or dialogs
     link.style.display = 'none';
     document.body.appendChild(link);
@@ -1364,7 +1415,7 @@ export function triggerFileDownload(blobOrUrl: Blob | string, filename: string):
       if (typeof blobOrUrl !== 'string') {
         URL.revokeObjectURL(url);
       }
-    }, 1500);
+    }, 4000);
   } catch (err) {
     console.error('Failed triggering file download', err);
   }
@@ -1372,7 +1423,7 @@ export function triggerFileDownload(blobOrUrl: Blob | string, filename: string):
 
 /**
  * High-definition client-side direct PDF file generator for slip and cards
- * Automatically saves and triggers browser download
+ * Automatically saves and triggers browser download without freezing the main UI
  */
 export async function exportElementToPDF(
   element: HTMLElement,
@@ -1381,29 +1432,28 @@ export async function exportElementToPDF(
 ): Promise<{ success: boolean; blobUrl?: string }> {
   const cleanFilename = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
 
-  // Wait for web fonts to load
   try {
     if (document.fonts?.ready) {
       await document.fonts.ready;
     }
-  } catch (e) {
+  } catch {
     // ignore
   }
 
   const isSinglePage = Boolean(
-    options?.singlePage || 
-    cleanFilename.includes('surat_pernyataan') || 
-    cleanFilename.includes('panggilan_ortu') || 
-    cleanFilename.includes('slip_pelanggaran')
+    options?.singlePage ||
+      cleanFilename.includes('surat_pernyataan') ||
+      cleanFilename.includes('panggilan_ortu') ||
+      cleanFilename.includes('slip_pelanggaran')
   );
 
   // Create isolated offscreen container with exact A4 dimensions
   const offscreen = document.createElement('div');
   offscreen.id = 'pdf-render-canvas-holder';
   offscreen.style.position = 'fixed';
-  offscreen.style.left = '0';
+  offscreen.style.left = '-10000px';
   offscreen.style.top = '0';
-  offscreen.style.width = '794px'; // Standard A4 width @ 96 DPI
+  offscreen.style.width = '794px';
   if (isSinglePage) {
     offscreen.style.height = '1123px';
     offscreen.style.maxHeight = '1123px';
@@ -1416,7 +1466,6 @@ export async function exportElementToPDF(
   offscreen.style.pointerEvents = 'none';
 
   const clone = element.cloneNode(true) as HTMLElement;
-  // Crucial: remove print-area class so clone never triggers duplicate print pages
   clone.classList.remove('print-area');
   clone.classList.add('pdf-render-clone');
 
@@ -1426,14 +1475,14 @@ export async function exportElementToPDF(
   if (isSinglePage) {
     clone.style.height = '1123px';
     clone.style.maxHeight = '1123px';
-    clone.style.padding = '57px'; // Exact 1.5 cm margins (15mm = 56.7px @ 96DPI)
+    clone.style.padding = '57px';
     clone.style.boxSizing = 'border-box';
     clone.style.overflow = 'hidden';
   } else {
     clone.style.minHeight = 'auto';
     clone.style.height = 'auto';
     clone.style.overflow = 'visible';
-    clone.style.padding = '32px';
+    clone.style.padding = '36px';
   }
   clone.style.transform = 'none';
   clone.style.boxShadow = 'none';
@@ -1445,7 +1494,6 @@ export async function exportElementToPDF(
   clone.style.display = 'block';
   clone.style.visibility = 'visible';
 
-  // Remove any interactive or no-print buttons
   const noPrintItems = clone.querySelectorAll('.no-print, .exclude-pdf, button');
   noPrintItems.forEach((btn) => {
     if (btn.classList.contains('no-print') || btn.tagName === 'BUTTON') {
@@ -1453,16 +1501,22 @@ export async function exportElementToPDF(
     }
   });
 
-  // Attach offscreen element to active document DOM first so computed styles can be accurately inspected
   offscreen.appendChild(clone);
   document.body.appendChild(offscreen);
 
-  // Helper to convert any modern CSS color (oklch, color, lab, lch) to standard sRGB hex or rgb
+  // Reusable 1x1 canvas & cache for fast modern CSS color resolution (no repeated allocations)
+  const colorCache = new Map<string, string>();
+  const probeCanvas = document.createElement('canvas');
+  probeCanvas.width = 1;
+  probeCanvas.height = 1;
+  const probeCtx = probeCanvas.getContext('2d');
+
   const convertCssColor = (colorStr: string): string => {
     if (!colorStr) return '';
     const trimmed = colorStr.trim();
     if (
       !trimmed.includes('oklch') &&
+      !trimmed.includes('oklab') &&
       !trimmed.includes('color(') &&
       !trimmed.includes('lab(') &&
       !trimmed.includes('lch(')
@@ -1470,44 +1524,48 @@ export async function exportElementToPDF(
       return trimmed;
     }
 
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1;
-      canvas.height = 1;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#000000';
-        ctx.fillStyle = trimmed;
-        const res = ctx.fillStyle;
+    const cached = colorCache.get(trimmed);
+    if (cached) return cached;
+
+    if (probeCtx) {
+      try {
+        probeCtx.fillStyle = '#000000';
+        probeCtx.fillStyle = trimmed;
+        const res = probeCtx.fillStyle;
         if (
           res &&
           !res.includes('oklch') &&
+          !res.includes('oklab') &&
           !res.includes('color(') &&
           !res.includes('lab') &&
           !res.includes('lch')
         ) {
+          colorCache.set(trimmed, res);
           return res;
         }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore canvas error
     }
 
-    // Algorithmic fallback for oklch colors based on lightness
+    let fallback = '#000000';
     if (trimmed.includes('oklch')) {
-      if (trimmed.includes('/ 0') || trimmed.includes(' 0%')) return 'transparent';
-      const match = trimmed.match(/oklch\(\s*([\d.]+)/);
-      if (match) {
-        const lightness = parseFloat(match[1]);
-        if (lightness > 0.85) return '#f8fafc';
-        if (lightness < 0.3) return '#1e293b';
-        return '#64748b';
+      if (trimmed.includes('/ 0') || trimmed.includes(' 0%')) {
+        fallback = 'transparent';
+      } else {
+        const match = trimmed.match(/oklch\(\s*([\d.]+)/);
+        if (match) {
+          const lightness = parseFloat(match[1]);
+          if (lightness > 0.85) fallback = '#f8fafc';
+          else if (lightness < 0.3) fallback = '#1e293b';
+          else fallback = '#64748b';
+        }
       }
     }
-    return '#000000';
+    colorCache.set(trimmed, fallback);
+    return fallback;
   };
 
-  // Thorough sanitization for html2canvas compatibility
   const sanitizeNodeColors = (root: HTMLElement, win: Window = window) => {
     if (!root) return;
     const allNodes = [root, ...Array.from(root.querySelectorAll('*'))] as HTMLElement[];
@@ -1523,14 +1581,13 @@ export async function exportElementToPDF(
       '-webkit-text-stroke-color',
       'fill',
       'stroke',
-      'stop-color'
+      'stop-color',
     ];
 
     for (let i = 0; i < allNodes.length; i++) {
       const el = allNodes[i];
       if (!el || !el.style) continue;
 
-      // Disable box-shadow and text-shadow (which embed oklch colors in Tailwind v4)
       el.style.setProperty('box-shadow', 'none', 'important');
       el.style.setProperty('text-shadow', 'none', 'important');
 
@@ -1550,6 +1607,7 @@ export async function exportElementToPDF(
           if (
             val &&
             (val.includes('oklch') ||
+              val.includes('oklab') ||
               val.includes('color(') ||
               val.includes('lab(') ||
               val.includes('lch('))
@@ -1565,17 +1623,17 @@ export async function exportElementToPDF(
     }
   };
 
-  // First pass: sanitize attached offscreen clone
+  // First pass on ONLY the offscreen clone (~80 nodes, never the whole document!)
   sanitizeNodeColors(clone, window);
 
-  // Short delay for DOM repaint
-  await new Promise((r) => setTimeout(r, 60));
+  // Yield a frame so UI loading feedback paints smoothly before canvas capture
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
   try {
     const totalHeight = isSinglePage ? 1123 : Math.max(clone.scrollHeight, clone.offsetHeight, 1050);
 
     const canvas = await html2canvas(clone, {
-      scale: options?.scale || 2,
+      scale: options?.scale || 1.75,
       useCORS: true,
       allowTaint: false,
       logging: false,
@@ -1586,8 +1644,22 @@ export async function exportElementToPDF(
       height: totalHeight,
       windowWidth: 794,
       windowHeight: totalHeight,
+      // CRITICAL: Ignore #root and all sibling DOM nodes so html2canvas never freezes traversing thousands of table rows
+      ignoreElements: (el) => {
+        return el.parentElement === document.body && el.id !== 'pdf-render-canvas-holder';
+      },
       onclone: (clonedDoc: Document, clonedEl: HTMLElement) => {
-        // Inject style override into cloned iframe document head
+        // Rewrite oklch/lab/lch/color() inside style sheets so html2canvas CSS parser never throws
+        const styles = clonedDoc.querySelectorAll('style');
+        styles.forEach((st) => {
+          if (st.textContent && /(oklch|oklab|lab|lch|color)\(/i.test(st.textContent)) {
+            st.textContent = st.textContent.replace(
+              /(?:oklch|oklab|lab|lch|color)\([^)]*\)/gi,
+              '#334155'
+            );
+          }
+        });
+
         const styleTag = clonedDoc.createElement('style');
         styleTag.innerHTML = `
           *, *::before, *::after {
@@ -1602,11 +1674,7 @@ export async function exportElementToPDF(
         `;
         clonedDoc.head.appendChild(styleTag);
 
-        // Second pass: sanitize elements inside html2canvas's own iframe document
         const targetWin = clonedDoc.defaultView || window;
-        if (clonedDoc.body) {
-          sanitizeNodeColors(clonedDoc.body, targetWin);
-        }
         sanitizeNodeColors(clonedEl, targetWin);
       },
     });
@@ -1615,30 +1683,34 @@ export async function exportElementToPDF(
       document.body.removeChild(offscreen);
     }
 
-    const imgData = canvas.toDataURL('image/jpeg', 0.98);
+    const imgData = canvas.toDataURL('image/jpeg', 0.96);
     const orientation = options?.landscape ? 'landscape' : 'portrait';
     const pdf = new jsPDF({
       orientation,
       unit: 'mm',
-      format: 'a4'
+      format: 'a4',
     });
 
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pdfWidth;
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
     if (isSinglePage) {
-      // Strictly 1 single page - exactly 1 copy, no 2nd page ever generated!
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+    } else if (imgHeight <= pdfHeight + 4) {
+      const fitScale = Math.min(1, pdfHeight / imgHeight);
+      const drawWidth = pdfWidth * fitScale;
+      const drawHeight = imgHeight * fitScale;
+      pdf.addImage(imgData, 'JPEG', (pdfWidth - drawWidth) / 2, 0, drawWidth, drawHeight);
     } else {
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
       let heightLeft = imgHeight;
       let position = 0;
 
       pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
       heightLeft -= pdfHeight;
 
-      while (heightLeft > 0) {
+      while (heightLeft > 3) {
         position = heightLeft - imgHeight;
         pdf.addPage();
         pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
@@ -1648,7 +1720,6 @@ export async function exportElementToPDF(
 
     const blob = pdf.output('blob');
     const blobUrl = URL.createObjectURL(blob);
-    // Direct, automated download without popup dialogs
     triggerFileDownload(blob, cleanFilename);
 
     return { success: true, blobUrl };
@@ -1657,7 +1728,6 @@ export async function exportElementToPDF(
       document.body.removeChild(offscreen);
     }
     console.error('PDF direct generation failed:', err);
-    // Do NOT trigger window.print() here to prevent unexpected print dialog popups
     return { success: false };
   }
 }

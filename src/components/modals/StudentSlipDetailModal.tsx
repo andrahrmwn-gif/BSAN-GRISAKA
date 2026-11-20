@@ -29,9 +29,9 @@ import {
 import { 
   exportStudentSlipToWord, 
   exportStudentSlipToExcel, 
-  exportStudentSlipToPDF 
+  exportStudentSlipToPDF,
+  buildStudentSlipBodyHtml
 } from '../../utils/exportDocs';
-import { LOGO_TEMANGGUNG_DATA_URL, LOGO_TUTWURI_DATA_URL } from '../../data/logoAssets';
 
 interface StudentSlipDetailModalProps {
   isOpen: boolean;
@@ -58,7 +58,16 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
   const [timelineFilter, setTimelineFilter] = useState<'all' | 'pelanggaran' | 'ketidakhadiran'>('all');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
+  const [pdfErrorMsg, setPdfErrorMsg] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPdfDownloadUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setPdfErrorMsg(null);
+  }, [student?.id, isOpen]);
 
   const todayStr = useMemo(() => {
     try {
@@ -346,6 +355,17 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
     return unifiedTimelineEvents;
   }, [unifiedTimelineEvents, timelineFilter]);
 
+  const previewSlipHtml = useMemo(() => {
+    if (!student) return '';
+    return buildStudentSlipBodyHtml(student, violations, schoolConfig, {
+      statusKehadiran: currentAttendance.status,
+      countRingan,
+      countSedang,
+      countBerat,
+      dateStr: todayStr,
+    });
+  }, [student, violations, schoolConfig, currentAttendance.status, countRingan, countSedang, countBerat, todayStr]);
+
   if (!isOpen || !student) return null;
 
   const hasBerat = countBerat > 0;
@@ -404,23 +424,41 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
   };
 
   const handleDownloadPdf = async () => {
+    if (isExportingPdf) return;
     setIsExportingPdf(true);
+    setPdfErrorMsg(null);
     try {
-      const printArea = document.getElementById('student-slip-printable-area');
-      const res = await exportStudentSlipToPDF(student, violations, schoolConfig, printArea);
-      if (res?.blobUrl) {
-        setPdfDownloadUrl(res.blobUrl);
+      const res = await exportStudentSlipToPDF(student, violations, schoolConfig, null, {
+        statusKehadiran: currentAttendance.status,
+        countRingan,
+        countSedang,
+        countBerat,
+        dateStr: todayStr,
+      });
+      if (res?.success && res.blobUrl) {
+        setPdfDownloadUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return res.blobUrl || null;
+        });
+      } else {
+        setPdfErrorMsg('Gagal memproses file PDF secara langsung. Silakan coba lagi atau gunakan tombol Cetak.');
       }
     } catch (err) {
       console.error('Error generating PDF slip', err);
-      window.print();
+      setPdfErrorMsg('Terjadi kendala saat membuat file PDF. Silakan coba lagi.');
     } finally {
       setIsExportingPdf(false);
     }
   };
 
   const handleDownloadWord = () => {
-    exportStudentSlipToWord(student, violations, schoolConfig);
+    exportStudentSlipToWord(student, violations, schoolConfig, {
+      statusKehadiran: currentAttendance.status,
+      countRingan,
+      countSedang,
+      countBerat,
+      dateStr: todayStr,
+    });
   };
 
   const handleDownloadExcel = () => {
@@ -531,23 +569,33 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
 
         {/* Automatic PDF Download Notification Banner */}
         {pdfDownloadUrl && (
-          <div className="bg-[#1E3A8A] border-b border-blue-800 text-white px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="no-print bg-[#1E3A8A] border-b border-blue-800 text-white px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-300 animate-ping"></span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
               <span className="font-semibold text-blue-100">
-                File PDF resmi telah diproses dan diunduh secara otomatis.
+                File PDF resmi ({`Rapor_Disiplin_${student.nama.replace(/\s+/g, '_')}_${student.kelas}.pdf`}) telah diproses dan langsung diunduh otomatis.
               </span>
             </div>
             <a
               href={pdfDownloadUrl}
               download={`Rapor_Disiplin_${student.nama.replace(/\s+/g, '_')}_${student.kelas}.pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-3 py-1 bg-white text-[#3B5BDB] hover:bg-blue-50 font-bold rounded-lg transition-transform active:scale-95 text-[11px] shadow-xs"
             >
-              <span>Buka / Unduh Ulang PDF</span>
+              <span>Unduh Ulang PDF</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
+          </div>
+        )}
+
+        {pdfErrorMsg && (
+          <div className="no-print bg-rose-50 border-b border-rose-200 text-rose-800 px-6 py-2.5 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span className="font-semibold">{pdfErrorMsg}</span>
+            </div>
+            <button onClick={() => setPdfErrorMsg(null)} className="text-rose-500 hover:text-rose-700 cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 
@@ -966,26 +1014,21 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: PRATINJAU LEMBAR RAPOR RESMI (PRINT-READY PREVIEW) - Always mounted in DOM for 100% identical PDF & Word export */}
-          <div
-            className={
-              activeTab === 'document'
-                ? 'flex flex-col items-center space-y-4'
-                : 'fixed -left-[9999px] top-0 opacity-0 pointer-events-none w-[794px]'
-            }
-          >
-            {/* Document View Top Action Bar */}
-            <div className="no-print bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-xs max-w-[210mm] w-full flex flex-wrap items-center justify-between gap-3">
+          {/* TAB 2: PRATINJAU LEMBAR RAPOR RESMI - 100% Identical to PDF & Word (.doc) */}
+          {activeTab === 'document' && (
+            <div className="flex flex-col items-center space-y-4">
+              {/* Document View Top Action Bar */}
+              <div className="no-print bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-xs max-w-[794px] w-full flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
                     <FileText className="w-4 h-4" />
                   </div>
                   <div>
                     <div className="font-bold text-xs text-slate-800">
-                      Pratinjau Lembar Rapor Resmi
+                      Pratinjau Lembar Rapor Resmi (Ukuran A4 Presisi)
                     </div>
                     <div className="text-[11px] text-slate-500">
-                      Sesuai standar cetak A4 Bimbingan Konseling & Kesiswaan SMPN 1 Kandangan
+                      Tampilan pratinjau, unduhan PDF, dan unduhan Word (.doc) identik 100%
                     </div>
                   </div>
                 </div>
@@ -1030,221 +1073,18 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Printable Paper Area (A4) */}
-              <div id="student-slip-printable-area" className="print-area bg-white text-black w-full max-w-[210mm] min-h-[297mm] p-8 sm:p-10 lg:p-12 border border-[#d1d5db] font-serif leading-relaxed text-xs">
-                {/* Official School Letterhead (Kop Surat) - PEMKAB TEMANGGUNG */}
-                <div className="border-b-[3px] border-double border-black pb-4 mb-6 text-center flex items-center justify-between gap-4">
-                  <div className="w-16 h-16 shrink-0 flex items-center justify-center">
-                    <img
-                      src={LOGO_TEMANGGUNG_DATA_URL}
-                      alt="Logo Pemda Temanggung"
-                      className="max-h-16 max-w-16 object-contain"
-                    />
-                  </div>
-
-                  <div className="flex-1 text-center font-serif">
-                    <div className="text-xs uppercase tracking-wider font-bold text-black">PEMERINTAH KABUPATEN TEMANGGUNG</div>
-                    <div className="text-xs uppercase tracking-wider font-bold text-black">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>
-                    <div className="text-lg sm:text-xl font-black uppercase tracking-wide text-black mt-0.5">
-                      SMPN 1 KANDANGAN
-                    </div>
-                    <div className="text-[11px] text-black mt-0.5 font-sans">
-                      NPSN: {schoolConfig.npsn || '20321456'} · Status Akreditasi: {schoolConfig.accreditation || 'A'}
-                    </div>
-                    <div className="text-[10.5px] text-black">
-                      {schoolConfig.address || 'Jl. Raya Kandangan - Temanggung, Kec. Kandangan'}, {schoolConfig.city || 'Kabupaten Temanggung'} · Jawa Tengah {schoolConfig.postalCode || '56281'}
-                    </div>
-                    <div className="text-[9.5px] text-black font-sans">
-                      Telp: {schoolConfig.phone || '(0293) 490123'} · Website: {schoolConfig.website || 'smpn1kandangan-tmg.sch.id'} · Email: {schoolConfig.email || 'smpn1kandangan@temanggungkab.go.id'}
-                    </div>
-                  </div>
-
-                  <div className="w-16 h-16 shrink-0 flex items-center justify-center">
-                    <img
-                      src={schoolConfig.logoUrl || LOGO_TUTWURI_DATA_URL}
-                      alt="Logo Sekolah"
-                      className="max-h-16 max-w-16 object-contain"
-                    />
-                  </div>
-                </div>
-
-                {/* Report Document Title */}
-                <div className="text-center mb-6">
-                  <div className="text-base font-bold uppercase underline tracking-wide">
-                    LEMBAR KONTROL & RAPOR KEDISIPLINAN SISWA (BSAN)
-                  </div>
-                  <div className="text-xs font-sans text-slate-600 mt-1">
-                    Dokumen Resmi Bimbingan Konseling & Kesiswaan · Dicetak pada: {todayStr}
-                  </div>
-                </div>
-
-                {/* Student Personal Dossier Table */}
-                <div className="border border-black p-4 mb-6 font-sans text-xs bg-slate-50/50">
-                  <div className="font-bold uppercase text-[11px] mb-2 border-b border-black pb-1">
-                    I. IDENTITAS PESERTA DIDIK
-                  </div>
-                  <table className="w-full">
-                    <tbody>
-                      <tr>
-                        <td className="w-44 py-1 font-semibold text-slate-600">Nama Lengkap Siswa</td>
-                        <td className="w-4 py-1">:</td>
-                        <td className="py-1 font-bold text-slate-900 text-sm">{student.nama}</td>
-                      </tr>
-                      <tr>
-                        <td className="py-1 font-semibold text-slate-600">Nomor Induk Siswa Nasional (NISN)</td>
-                        <td className="py-1">:</td>
-                        <td className="py-1 font-mono font-bold">{student.nisn}</td>
-                      </tr>
-                      <tr>
-                        <td className="py-1 font-semibold text-slate-600">Kelas / Jenjang Pendidikan</td>
-                        <td className="py-1">:</td>
-                        <td className="py-1">Kelas {student.kelas} / Jenjang {student.jenjang} SMP</td>
-                      </tr>
-                      <tr>
-                        <td className="py-1 font-semibold text-slate-600">Jenis Kelamin</td>
-                        <td className="py-1">:</td>
-                        <td className="py-1">{student.gender === 'L' ? 'Laki-laki (L)' : 'Perempuan (P)'}</td>
-                      </tr>
-                      <tr>
-                        <td className="py-1 font-semibold text-slate-600">Nama Orang Tua / Wali</td>
-                        <td className="py-1">:</td>
-                        <td className="py-1 font-bold">{student.namaOrtu}</td>
-                      </tr>
-                      <tr>
-                        <td className="py-1 font-semibold text-slate-600">No. WhatsApp Orang Tua / Wali</td>
-                        <td className="py-1">:</td>
-                        <td className="py-1 font-mono">{student.noWaOrtu}</td>
-                      </tr>
-                      <tr>
-                        <td className="py-1 font-semibold text-slate-600">Alamat Rumah Tinggal</td>
-                        <td className="py-1">:</td>
-                        <td className="py-1">{student.alamat}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Disciplinary Summary Ledger - ZERO POINTS */}
-                <div className="border border-black mb-6 font-sans text-xs">
-                  <div className="bg-slate-100 p-2 font-bold uppercase text-[11px] border-b border-black">
-                    II. REKAPITULASI STATUS KEDISIPLINAN PESERTA DIDIK
-                  </div>
-                  <div className="grid grid-cols-4 text-center divide-x divide-black p-3">
-                    <div>
-                      <div className="text-[10px] text-slate-600 uppercase font-bold">Presensi Harian</div>
-                      <div className="text-base font-bold text-slate-900 mt-0.5">{currentAttendance.status}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-600 uppercase font-bold">Pelanggaran Ringan</div>
-                      <div className="text-base font-bold text-slate-900 mt-0.5">{countRingan} Kasus</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-600 uppercase font-bold">Pelanggaran Sedang</div>
-                      <div className="text-base font-bold text-slate-900 mt-0.5">{countSedang} Kasus</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-600 uppercase font-bold">Pelanggaran Berat</div>
-                      <div className={`text-base font-bold mt-0.5 ${hasBerat ? 'text-red-700' : 'text-slate-900'}`}>
-                        {countBerat} Kasus
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Detailed Violations Ledger Table - ZERO POINTS */}
-                <div className="font-sans mb-8">
-                  <div className="font-bold text-xs uppercase mb-2">
-                    III. DAFTAR RIWAYAT PELANGGARAN TATA TERTIB RESMI
-                  </div>
-                  <table className="w-full border-collapse border border-black text-[11px]">
-                    <thead>
-                      <tr className="bg-slate-100">
-                        <th className="border border-black p-1.5 text-center w-8">No</th>
-                        <th className="border border-black p-1.5 text-center w-28">Waktu & Tempat</th>
-                        <th className="border border-black p-1.5 text-left">Pasal & Deskripsi Pelanggaran</th>
-                        <th className="border border-black p-1.5 text-center w-20">Klasifikasi</th>
-                        <th className="border border-black p-1.5 text-left w-48">Bentuk Pembinaan & SOP</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {studentViolations.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="border border-black p-4 text-center text-slate-500 italic">
-                            Nihil catatan pelanggaran tata tertib. Siswa tercatat mematuhi norma BSAN dengan baik.
-                          </td>
-                        </tr>
-                      ) : (
-                        studentViolations.map((v, i) => (
-                          <tr key={v.id}>
-                            <td className="border border-black p-1.5 text-center font-mono">{i + 1}</td>
-                            <td className="border border-black p-1.5 text-center">
-                              <div>{v.tanggal}</div>
-                              <div className="text-[10px] text-slate-600 font-mono">{v.waktu} WIB</div>
-                              <div className="text-[10px] italic">{v.lokasi}</div>
-                            </td>
-                            <td className="border border-black p-1.5">
-                              <strong>{v.kodePasal} - {v.pasalTitle}:</strong> {v.uraian}
-                              {v.catatanKhusus && (
-                                <div className="text-[10px] text-slate-600 italic mt-0.5">
-                                  Catatan: {v.catatanKhusus}
-                                </div>
-                              )}
-                            </td>
-                            <td className="border border-black p-1.5 text-center font-semibold">{v.tingkat}</td>
-                            <td className="border border-black p-1.5 text-[10px]">
-                              <div className="font-semibold">{v.tahapPembinaan}</div>
-                              <div className="text-slate-600">Oleh: {v.guruPencatat}</div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Formal Signatures Block */}
-                <div className="font-sans text-xs pt-4 border-t border-black">
-                  <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
-                    <div>
-                      Mengetahui,<br />
-                      <strong>Orang Tua / Wali</strong>
-                      <div className="h-16"></div>
-                      <div className="font-bold underline">( {student.namaOrtu} )</div>
-                    </div>
-
-                    <div>
-                      Mengetahui,<br />
-                      <strong>{schoolConfig.bkTitle || 'Guru BK / Konselor'}</strong>
-                      <div className="h-16"></div>
-                      <div className="font-bold underline">( {schoolConfig.bkName || 'Sri Wahyuni, S.Pd., M.Si.'} )</div>
-                      <div className="text-[10px] text-slate-600 font-mono">NIP. {schoolConfig.bkNip || '19780824 200501 2 008'}</div>
-                    </div>
-
-                    <div>
-                      Mengetahui,<br />
-                      <strong>{schoolConfig.timKesiswaanTitle || 'Tim Kesiswaan'}</strong>
-                      <div className="h-16"></div>
-                      <div className="font-bold underline">( {schoolConfig.timKesiswaanName || schoolConfig.wakasekName || 'Drs. Subagyo, M.Pd.'} )</div>
-                      <div className="text-[10px] text-slate-600 font-mono">NIP. {schoolConfig.timKesiswaanNip || schoolConfig.wakasekNip || '19700315 199601 1 002'}</div>
-                    </div>
-
-                    <div>
-                      Kandangan, {todayStr}<br />
-                      <strong>Kepala Sekolah</strong>
-                      <div className="h-16"></div>
-                      <div className="font-bold underline">
-                        ( {schoolConfig.principalName || 'Yuliana Dewi Marithawati, S.Pd., M.Pd.'} )
-                      </div>
-                      <div className="text-[10px] text-slate-600 font-mono">
-                        NIP. {schoolConfig.principalNip || '19740512 199802 2 003'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              {/* Printable Paper Area (Exact A4 794px width matching PDF & Word 1:1) */}
+              <div className="w-full overflow-x-auto pb-2">
+                <div
+                  id="student-slip-printable-area"
+                  className="print-area bg-white text-black w-[794px] min-h-[1123px] mx-auto p-[46px_50px] border border-[#d1d5db] shadow-xs box-border"
+                  dangerouslySetInnerHTML={{ __html: previewSlipHtml }}
+                />
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
+    </div>
   );
 };
