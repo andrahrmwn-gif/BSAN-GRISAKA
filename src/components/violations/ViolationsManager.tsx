@@ -5,6 +5,7 @@ import { getWhatsAppUrl, generateViolationMessage } from '../../utils/whatsapp';
 import { exportViolationsToWord, exportViolationsToPrintPDF, exportToCSV, exportElementToPDF } from '../../utils/exportDocs';
 import { useRealtimeDateTracker, formatIndoFullDate } from '../../utils/dateUtils';
 import { isAdminUser, getCurrentUser } from '../../services/authService';
+import { UserAccount } from '../../types/auth';
 import { 
   ShieldAlert, 
   Search, 
@@ -22,13 +23,16 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  CalendarDays
+  CalendarDays,
+  Lock
 } from 'lucide-react';
 
 interface ViolationsManagerProps {
   violations: ViolationRecord[];
   students: Student[];
   schoolConfig?: SchoolProfile;
+  isDataLocked?: boolean;
+  currentUser?: UserAccount | null;
   onOpenRecordModal: () => void;
   onOpenSuratModal: (violation: ViolationRecord) => void;
   onUpdateViolationStatus: (violationId: string, newStatus: 'Draft' | 'Diterbitkan' | 'Selesai') => void;
@@ -40,12 +44,16 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
   violations,
   students,
   schoolConfig = SCHOOL_CONFIG,
+  isDataLocked = true,
+  currentUser: propCurrentUser,
   onOpenRecordModal,
   onOpenSuratModal,
   onUpdateViolationStatus,
   onDeleteViolation,
   onClearAllViolations,
 }) => {
+  const isAdmin = isAdminUser(propCurrentUser || getCurrentUser());
+  const isDeleteLockedForUser = isDataLocked && !isAdmin;
   const [searchTerm, setSearchTerm] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [pasalFilter, setPasalFilter] = useState<string>('all');
@@ -224,6 +232,15 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
 
         </div>
       </div>
+
+      {isDeleteLockedForUser && (
+        <div className="px-4 py-2.5 rounded-2xl border border-blue-200 bg-blue-50/80 text-blue-900 flex items-center gap-2.5 text-xs">
+          <Lock className="w-4 h-4 text-[#1E3A8A] shrink-0" />
+          <span>
+            <strong>Proteksi Arsip Pelanggaran Aktif:</strong> Anda dapat mencatat pelanggaran baru, mencetak slip/surat, dan memperbarui status pembinaan. Penghapusan arsip pelanggaran yang sudah tersimpan dikunci khusus Administrator.
+          </span>
+        </div>
+      )}
 
       {/* Disciplinary Level Guide Card (Purely Ringan, Sedang, Berat - No Points) */}
       <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
@@ -576,7 +593,7 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
                           </a>
 
                           {/* Manual Delete Violation Button */}
-                          {onDeleteViolation && (
+                          {onDeleteViolation && !isDeleteLockedForUser && (
                             <button
                               onClick={() => setDeletingViolationId(v.id)}
                               className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-800 transition-colors border border-rose-200 cursor-pointer"

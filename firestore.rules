@@ -1,8 +1,185 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // =========================================================================
+    // Helper Functions: Strict ID & Schema Validation
+    // Note: Daily login uses custom staff PIN accounts against `accounts`
+    // (Firebase Auth is optional for Google Workspace Sheets backup only).
+    // =========================================================================
+    function isValidId(id) {
+      return id is string && id.size() >= 2 && id.size() <= 120 && id.matches('^[A-Za-z0-9._-]+$');
+    }
+
+    function isStr(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isOptStr(data, key, maxLen) {
+      return !(key in data) || data[key] == null || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isOptInt(data, key, minVal, maxVal) {
+      return !(key in data) || data[key] == null || (data[key] is number && data[key] >= minVal && data[key] <= maxVal);
+    }
+
+    function isValidStudent(data, studentId) {
+      return data.id is string
+        && data.id == studentId
+        && isStr(data.nama, 1, 160)
+        && isStr(data.kelas, 1, 20)
+        && isOptStr(data, 'nisn', 40)
+        && isOptStr(data, 'gender', 10)
+        && isOptStr(data, 'statusKehadiran', 20)
+        && isOptStr(data, 'statusKehadiranDate', 20)
+        && isOptStr(data, 'keteranganKehadiran', 500)
+        && isOptStr(data, 'namaOrtu', 160)
+        && isOptStr(data, 'noWaOrtu', 40)
+        && isOptStr(data, 'alamat', 500)
+        && isOptInt(data, 'jenjang', 1, 12)
+        && isOptInt(data, 'totalPelanggaranRingan', 0, 10000)
+        && isOptInt(data, 'totalPelanggaranSedang', 0, 10000)
+        && isOptInt(data, 'totalPelanggaranBerat', 0, 10000)
+        && isOptInt(data, 'totalPoinPelanggaran', 0, 100000);
+    }
+
+    function isValidViolation(data, violationId) {
+      return data.id is string
+        && data.id == violationId
+        && isStr(data.studentId, 1, 120)
+        && isStr(data.studentName, 1, 160)
+        && isStr(data.kelas, 1, 20)
+        && data.tingkat in ['Ringan', 'Sedang', 'Berat']
+        && isStr(data.tanggal, 4, 30)
+        && isOptStr(data, 'uraian', 1000)
+        && isOptStr(data, 'catatanKhusus', 2000)
+        && isOptStr(data, 'statusSurat', 30)
+        && isOptInt(data, 'poin', 0, 10000);
+    }
+
+    function isValidWaLog(data, logId) {
+      return data.id is string
+        && data.id == logId
+        && isStr(data.studentName, 1, 160)
+        && isStr(data.message, 1, 5000)
+        && isOptStr(data, 'recipientPhone', 40)
+        && isOptStr(data, 'status', 30);
+    }
+
+    function isValidAttendanceSheet(data, sheetId) {
+      return data.id is string
+        && data.id == sheetId
+        && isStr(data.date, 4, 20)
+        && isStr(data.kelas, 1, 20)
+        && data.entries is list
+        && data.entries.size() <= 100
+        && data.summary is map
+        && isOptInt(data, 'revision', 0, 1000000);
+    }
+
+    function isValidActivity(data, activityId) {
+      return data.id is string
+        && data.id == activityId
+        && isStr(data.title, 1, 200)
+        && isStr(data.startDate, 4, 30)
+        && isOptStr(data, 'description', 2000);
+    }
+
+    function isValidAccount(data, accountId) {
+      return data.id is string
+        && data.id == accountId
+        && isStr(data.name, 1, 160)
+        && isStr(data.username, 3, 60)
+        && isStr(data.role, 1, 100)
+        && isOptStr(data, 'pin', 64)
+        && data.isActive is bool
+        && data.canEdit is bool
+        && (accountId != 'usr-admin' || (data.username == 'admin' && data.isActive == true));
+    }
+
+    function isValidAuditLog(data, logId) {
+      return data.id is string
+        && data.id == logId
+        && isStr(data.isoTimestamp, 4, 60)
+        && isStr(data.userId, 1, 120)
+        && isStr(data.actionType, 1, 40)
+        && isStr(data.module, 1, 60)
+        && isStr(data.description, 1, 1000)
+        && isOptStr(data, 'details', 2000);
+    }
+
+    function isValidSchoolConfig(data, configId) {
+      return (
+        configId == 'profile'
+        && isStr(data.name, 1, 200)
+        && isOptStr(data, 'logoUrl', 3000000)
+      ) || (
+        configId == 'system_meta'
+        && (!('isDataLocked' in data) || data.isDataLocked is bool)
+        && (!('studentsInitialized' in data) || data.studentsInitialized is bool)
+        && (!('accountsInitialized' in data) || data.accountsInitialized is bool)
+        && (!('isCleanReset' in data) || data.isCleanReset is bool)
+        && isOptStr(data, 'updatedAt', 60)
+      );
+    }
+
+    // Collection Rules
+    match /students/{studentId} {
+      allow read: if true;
+      allow create, update: if isValidId(studentId) && isValidStudent(request.resource.data, studentId);
+      allow delete: if isValidId(studentId);
+    }
+
+    match /violations/{violationId} {
+      allow read: if true;
+      allow create, update: if isValidId(violationId) && isValidViolation(request.resource.data, violationId);
+      allow delete: if isValidId(violationId);
+    }
+
+    match /wa_logs/{logId} {
+      allow read: if true;
+      allow create, update: if isValidId(logId) && isValidWaLog(request.resource.data, logId);
+      allow delete: if isValidId(logId);
+    }
+
+    match /attendance_sheets/{sheetId} {
+      allow read: if true;
+      allow create, update: if isValidId(sheetId) && isValidAttendanceSheet(request.resource.data, sheetId);
+      allow delete: if isValidId(sheetId);
+    }
+
+    match /school_config/{configId} {
+      allow read: if configId in ['profile', 'system_meta'];
+      allow create, update: if configId in ['profile', 'system_meta'] && isValidSchoolConfig(request.resource.data, configId);
+      allow delete: if false;
+    }
+
+    match /activities/{activityId} {
+      allow read: if true;
+      allow create, update: if isValidId(activityId) && isValidActivity(request.resource.data, activityId);
+      allow delete: if isValidId(activityId);
+    }
+
+    match /accounts/{accountId} {
+      allow read: if true;
+      allow create, update: if isValidId(accountId) && isValidAccount(request.resource.data, accountId);
+      allow delete: if isValidId(accountId) && accountId != 'usr-admin';
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if true;
+      allow create, update: if isValidId(logId) && isValidAuditLog(request.resource.data, logId);
+      allow delete: if isValidId(logId);
+    }
+
+    // Connection check document (read-only)
+    match /test/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Default deny catch-all
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

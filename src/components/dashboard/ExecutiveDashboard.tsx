@@ -50,7 +50,8 @@ import {
   SchoolActivity 
 } from '../../services/announcementService';
 import { playSchoolChimeSound } from '../../utils/soundNotification';
-import { isGuestMode } from '../../services/authService';
+import { isGuestMode, isAdminUser, isStaffGuruTendikAccount, getStoredAccounts, getCurrentUser } from '../../services/authService';
+import { UserAccount } from '../../types/auth';
 import {
   ResponsiveContainer,
   BarChart,
@@ -69,6 +70,9 @@ interface ExecutiveDashboardProps {
   students: Student[];
   violations: ViolationRecord[];
   schoolConfig: SchoolProfile;
+  accounts?: UserAccount[];
+  isDataLocked?: boolean;
+  currentUser?: UserAccount | null;
   onNavigate: (view: ViewMode) => void;
   onOpenQuickViolation: () => void;
   onSelectStudentProfile: (student: Student) => void;
@@ -78,6 +82,9 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   students,
   violations,
   schoolConfig,
+  accounts,
+  isDataLocked = true,
+  currentUser: propCurrentUser,
   onNavigate,
   onOpenQuickViolation,
   onSelectStudentProfile,
@@ -124,6 +131,11 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   const [editingActivity, setEditingActivity] = useState<SchoolActivity | null>(null);
   const [deletingActivity, setDeletingActivity] = useState<SchoolActivity | null>(null);
   const isGuest = isGuestMode();
+  const isAdmin = isAdminUser(propCurrentUser || getCurrentUser());
+  const guruTendikCount = useMemo(() => {
+    const source = accounts && accounts.length > 0 ? accounts : getStoredAccounts();
+    return source.filter(isStaffGuruTendikAccount).length;
+  }, [accounts]);
   const [activityForm, setActivityForm] = useState({
     title: '',
     date: getRealtimeDateYMD(),
@@ -484,11 +496,16 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   };
 
   const handleDeleteActivity = (act: SchoolActivity) => {
+    if (isDataLocked && !isAdmin) {
+      alert('Data Master Terkunci: Penghapusan agenda pengumuman hanya dapat dilakukan oleh Administrator.');
+      return;
+    }
     setDeletingActivity(act);
   };
 
   const handleConfirmDeleteActivity = () => {
     if (!deletingActivity) return;
+    if (isDataLocked && !isAdmin) return;
     const updated = deleteActivity(deletingActivity.id);
     setActivities(updated);
     setDeletingActivity(null);
@@ -679,20 +696,27 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </div>
         </button>
 
-        {/* KPI 4: Guru & Tendik */}
+        {/* KPI 4: Guru & Tendik (Tersinkron Live dari Manajemen Akun Petugas Admin) */}
         <div 
-          className="bg-gradient-to-br from-[#581C87] via-[#7E22CE] to-[#A855F7] text-white p-4 sm:p-5 rounded-2xl border border-white/20 shadow-md shadow-purple-900/20 hover:scale-[1.02] transition-all flex items-center gap-3.5"
-          title="Total Guru dan Tenaga Kependidikan DAPODIK"
+          onClick={isAdmin ? () => onNavigate('settings') : undefined}
+          className={`bg-gradient-to-br from-[#581C87] via-[#7E22CE] to-[#A855F7] text-white p-4 sm:p-5 rounded-2xl border border-white/20 shadow-md shadow-purple-900/20 hover:scale-[1.02] transition-all flex items-center gap-3.5 ${
+            isAdmin ? 'cursor-pointer group' : ''
+          }`}
+          title={
+            isAdmin
+              ? `Total ${guruTendikCount} akun Guru & Tendik aktif di Manajemen Akun Petugas (klik untuk kelola)`
+              : `Total ${guruTendikCount} akun Guru & Tendik aktif terdaftar di sistem`
+          }
         >
-          <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-xs text-white flex items-center justify-center shadow-inner shrink-0 group-hover:scale-105 transition-transform">
             <GraduationCap className="w-6 h-6 stroke-[2.2]" />
           </div>
           <div className="min-w-0">
             <span className="text-xs font-bold text-purple-100 uppercase tracking-wider block truncate">Guru & Tendik</span>
             <div className="text-2xl sm:text-3xl font-black text-white leading-tight">
-              45
+              {guruTendikCount}
             </div>
-            <span className="text-[11px] font-bold text-purple-200 block truncate">Petugas Resmi</span>
+            <span className="text-[11px] font-bold text-purple-200 block truncate">Petugas Resmi Aktif</span>
           </div>
         </div>
 
@@ -1701,14 +1725,16 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteActivity(act)}
-                              className="p-1 hover:bg-white text-slate-500 hover:text-rose-600 rounded-md transition-colors cursor-pointer"
-                              title="Hapus Kegiatan"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {(!isDataLocked || isAdmin) && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteActivity(act)}
+                                className="p-1 hover:bg-white text-slate-500 hover:text-rose-600 rounded-md transition-colors cursor-pointer"
+                                title="Hapus Kegiatan"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         ) : null}
                       </div>

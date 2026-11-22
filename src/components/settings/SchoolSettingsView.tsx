@@ -38,13 +38,15 @@ import { AuditLogTable } from './AuditLogTable';
 import { isGuestMode, isAdminUser, isDefaultPassword, getCurrentUser, updateAccountAsync } from '../../services/authService';
 import { logAudit } from '../../services/auditLogger';
 import { UserAccount } from '../../types/auth';
-import { Users, Shield, History, Lock, Key, Eye, EyeOff, AtSign } from 'lucide-react';
+import { Users, Shield, History, Lock, Unlock, Key, Eye, EyeOff, AtSign } from 'lucide-react';
 
 interface SchoolSettingsViewProps {
   schoolConfig: SchoolProfile;
   students?: Student[];
   violations?: ViolationRecord[];
   currentUser?: UserAccount | null;
+  isDataLocked?: boolean;
+  onToggleDataLock?: (locked: boolean) => void | Promise<void>;
   onUpdateSchoolConfig: (newConfig: SchoolProfile) => void;
   onPullDataFromSheets?: (
     newStudents: Student[], 
@@ -60,6 +62,8 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
   students = [],
   violations = [],
   currentUser: propCurrentUser,
+  isDataLocked = true,
+  onToggleDataLock,
   onUpdateSchoolConfig,
   onPullDataFromSheets,
   onResetData,
@@ -88,6 +92,7 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
   );
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(getStoredLastSync());
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isTogglingLock, setIsTogglingLock] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [isPullConfirmOpen, setIsPullConfirmOpen] = useState(false);
 
@@ -515,6 +520,71 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
       {/* TAB 1: PROFIL SEKOLAH & GOOGLE SHEETS / DRIVE SYNC (KHUSUS ADMIN) */}
       {isAdmin && activeSettingsTab === 'profile_db' && (
         <div className="space-y-6">
+          {/* SECTION: KUNCI KEAMANAN DATA MASTER & KONKURENSI MULTI-USER (KHUSUS ADMIN) */}
+          {onToggleDataLock && (
+            <div className={`p-6 rounded-3xl border-2 shadow-sm space-y-4 transition-colors ${
+              isDataLocked
+                ? 'bg-gradient-to-br from-white via-blue-50/40 to-indigo-50/50 border-blue-200'
+                : 'bg-gradient-to-br from-white via-amber-50/50 to-orange-50/40 border-amber-300'
+            }`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-xs shrink-0 ${
+                    isDataLocked ? 'bg-[#1E3A8A] text-white' : 'bg-amber-600 text-white'
+                  }`}>
+                    {isDataLocked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-bold text-sm text-slate-900">
+                        Kunci Keamanan Data Master &amp; Konkurensi Multi-User
+                      </h3>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                        isDataLocked
+                          ? 'bg-blue-100 text-[#1E3A8A] border-blue-300'
+                          : 'bg-amber-100 text-amber-900 border-amber-300'
+                      }`}>
+                        {isDataLocked ? 'TERKUNCI (MODE AMAN)' : 'TERBUKA SEMENTARA'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                      {isDataLocked
+                        ? 'Seluruh biodata siswa existing, arsip pelanggaran tersimpan, arsip presensi tanggal lampau, serta riwayat notifikasi terkunci dari ubah/hapus oleh akun non-admin saat diakses bersamaan. Input harian (pelanggaran baru, presensi hari ini, tambah siswa baru, dan ubah password sendiri) tetap berjalan lancar.'
+                        : 'Mode kunci dibuka sementara oleh Admin. Akun petugas resmi sementara dapat mengedit atau menghapus catatan yang sudah ada. Sangat disarankan untuk mengunci kembali setelah selesai.'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isTogglingLock}
+                  onClick={async () => {
+                    setIsTogglingLock(true);
+                    try {
+                      await onToggleDataLock(!isDataLocked);
+                    } finally {
+                      setIsTogglingLock(false);
+                    }
+                  }}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-2 disabled:opacity-50 ${
+                    isDataLocked
+                      ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                      : 'bg-[#1E3A8A] hover:bg-[#2563EB] text-white'
+                  }`}
+                >
+                  {isDataLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                  <span>
+                    {isTogglingLock
+                      ? 'Memproses...'
+                      : isDataLocked
+                      ? 'Buka Kunci Sementara'
+                      : 'Aktifkan Kunci Data Master'}
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* SECTION: INTEGRASI GOOGLE DRIVE & GOOGLE SHEETS SEBAGAI DATABASE */}
           <div className="bg-gradient-to-br from-white via-emerald-50/30 to-teal-50/40 p-6 rounded-3xl border-2 border-emerald-200 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-emerald-100">

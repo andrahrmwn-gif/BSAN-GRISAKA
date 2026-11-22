@@ -1,5 +1,10 @@
 import { UserAccount, UserRole, OFFICIAL_JABATAN_LIST } from '../types/auth';
-import { syncAccountToFirestore, deleteAccountFromFirestore, bulkSyncAccountsToFirestore } from './firebase';
+import {
+  syncAccountToFirestore,
+  updateAccountFieldsInFirestore,
+  deleteAccountFromFirestore,
+  bulkSyncAccountsToFirestore,
+} from './firebase';
 import { secureStorage } from './secureStorage';
 
 const STORAGE_KEYS = {
@@ -768,7 +773,13 @@ export const canUserModify = (): boolean => {
 const validateAndBuildAccountUpdate = (
   id: string,
   updates: Partial<UserAccount>
-): { success: boolean; message: string; updatedAcc?: UserAccount; accounts?: UserAccount[] } => {
+): {
+  success: boolean;
+  message: string;
+  updatedAcc?: UserAccount;
+  normalizedUpdates?: Partial<UserAccount>;
+  accounts?: UserAccount[];
+} => {
   const accounts = getStoredAccounts();
   const index = accounts.findIndex(a => a.id === id);
   if (index === -1) {
@@ -818,7 +829,7 @@ const validateAndBuildAccountUpdate = (
 
   const updatedAcc = { ...currentAcc, ...normalizedUpdates };
   accounts[index] = updatedAcc;
-  return { success: true, message: 'Valid', updatedAcc, accounts };
+  return { success: true, message: 'Valid', updatedAcc, normalizedUpdates, accounts };
 };
 
 export const addAccount = (newAccount: Omit<UserAccount, 'id'>): { success: boolean; message: string; account?: UserAccount } => {
@@ -859,7 +870,7 @@ export const addAccount = (newAccount: Omit<UserAccount, 'id'>): { success: bool
     };
   }
 
-  const id = `usr-${String(Date.now()).slice(-6)}`;
+  const id = `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const created: UserAccount = {
     ...newAccount,
     username: cleanUsername,
@@ -888,7 +899,11 @@ export const updateAccount = (id: string, updates: Partial<UserAccount>): { succ
   }
 
   saveAccounts(validation.accounts);
-  syncAccountToFirestore(validation.updatedAcc).catch((err) => {
+  updateAccountFieldsInFirestore(
+    id,
+    validation.normalizedUpdates || updates,
+    validation.updatedAcc
+  ).catch((err) => {
     console.error('Failed syncing updated account to Firestore', err);
   });
 
@@ -908,7 +923,11 @@ export const updateAccountAsync = async (id: string, updates: Partial<UserAccoun
   saveAccounts(validation.accounts);
 
   try {
-    await syncAccountToFirestore(validation.updatedAcc);
+    await updateAccountFieldsInFirestore(
+      id,
+      validation.normalizedUpdates || updates,
+      validation.updatedAcc
+    );
   } catch (err) {
     console.error('Failed syncing updated account to Firestore', err);
   }
@@ -958,6 +977,16 @@ export const isAdminUser = (user: UserAccount | null): boolean => {
   const uname = (user.username || '').trim().toLowerCase();
   const role = (user.role || '').trim().toLowerCase();
   return user.id === 'usr-admin' || uname === 'admin' || role === 'administrator sistem' || role === 'admin';
+};
+
+/**
+ * Counts active Guru & Tendik accounts (excludes internal Administrator Sistem account)
+ */
+export const isStaffGuruTendikAccount = (acc: UserAccount | null | undefined): boolean => {
+  if (!acc || acc.isActive === false) return false;
+  const uname = (acc.username || '').trim().toLowerCase();
+  const role = (acc.role || '').trim().toLowerCase();
+  return acc.id !== 'usr-admin' && uname !== 'admin' && role !== 'administrator sistem';
 };
 
 /**

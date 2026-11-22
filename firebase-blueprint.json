@@ -2,7 +2,7 @@
   "entities": {
     "Student": {
       "title": "Student",
-      "description": "Student roster and violation status",
+      "description": "Student roster, attendance status, and discipline counters",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -21,7 +21,8 @@
         "totalPelanggaranRingan": { "type": "number" },
         "totalPelanggaranSedang": { "type": "number" },
         "totalPelanggaranBerat": { "type": "number" },
-        "totalPoinPelanggaran": { "type": "number" }
+        "totalPoinPelanggaran": { "type": "number" },
+        "updatedAt": { "type": "string" }
       },
       "required": ["id", "nama", "kelas"]
     },
@@ -34,19 +35,24 @@
         "studentId": { "type": "string" },
         "studentName": { "type": "string" },
         "kelas": { "type": "string" },
-        "category": { "type": "string" },
-        "ruleId": { "type": "string" },
-        "ruleDescription": { "type": "string" },
-        "points": { "type": "number" },
-        "date": { "type": "string" },
-        "time": { "type": "string" },
-        "location": { "type": "string" },
-        "reportedBy": { "type": "string" },
-        "actionTaken": { "type": "string" },
-        "followUpStatus": { "type": "string" },
-        "notes": { "type": "string" }
+        "pasalId": { "type": "string" },
+        "pasalNumber": { "type": "number" },
+        "pasalTitle": { "type": "string" },
+        "kodePasal": { "type": "string" },
+        "uraian": { "type": "string" },
+        "tingkat": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "waktu": { "type": "string" },
+        "lokasi": { "type": "string" },
+        "guruPencatat": { "type": "string" },
+        "tahapPembinaan": { "type": "string" },
+        "statusSurat": { "type": "string" },
+        "catatanKhusus": { "type": "string" },
+        "noWaOrtu": { "type": "string" },
+        "namaOrtu": { "type": "string" },
+        "poin": { "type": "number" }
       },
-      "required": ["id", "studentId", "points", "date"]
+      "required": ["id", "studentId", "studentName", "kelas", "tingkat", "tanggal"]
     },
     "WhatsAppMessageLog": {
       "title": "WhatsAppMessageLog",
@@ -54,15 +60,18 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "recipientPhone": { "type": "string" },
-        "recipientName": { "type": "string" },
+        "studentId": { "type": "string" },
         "studentName": { "type": "string" },
+        "kelas": { "type": "string" },
+        "recipientName": { "type": "string" },
+        "recipientPhone": { "type": "string" },
+        "category": { "type": "string" },
         "message": { "type": "string" },
-        "sentAt": { "type": "string" },
+        "timestamp": { "type": "string" },
         "status": { "type": "string" },
-        "category": { "type": "string" }
+        "triggerType": { "type": "string" }
       },
-      "required": ["id", "recipientPhone", "message", "sentAt"]
+      "required": ["id", "studentName", "message", "timestamp"]
     },
     "AttendanceSheet": {
       "title": "AttendanceSheet",
@@ -74,22 +83,32 @@
         "kelas": { "type": "string" },
         "recordedBy": { "type": "string" },
         "recordedByNip": { "type": "string" },
-        "recordedAt": { "type": "string" }
+        "recordedAt": { "type": "string" },
+        "entries": { "type": "array" },
+        "summary": { "type": "object" },
+        "revision": { "type": "number" },
+        "updatedAt": { "type": "string" }
       },
-      "required": ["id", "date", "kelas"]
+      "required": ["id", "date", "kelas", "entries", "summary"]
     },
-    "SchoolProfile": {
-      "title": "SchoolProfile",
-      "description": "School settings, letterhead, and official signatories",
+    "SchoolConfig": {
+      "title": "SchoolConfig",
+      "description": "School profile settings (profile) and master security lock metadata (system_meta)",
       "type": "object",
       "properties": {
-        "schoolName": { "type": "string" },
+        "name": { "type": "string" },
+        "shortName": { "type": "string" },
         "npsn": { "type": "string" },
-        "alamat": { "type": "string" },
-        "kepsekName": { "type": "string" },
-        "kepsekNip": { "type": "string" }
-      },
-      "required": ["schoolName"]
+        "address": { "type": "string" },
+        "principalName": { "type": "string" },
+        "principalNip": { "type": "string" },
+        "studentsInitialized": { "type": "boolean" },
+        "accountsInitialized": { "type": "boolean" },
+        "isCleanReset": { "type": "boolean" },
+        "isDataLocked": { "type": "boolean" },
+        "dataLockedUpdatedBy": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
     },
     "SchoolActivity": {
       "title": "SchoolActivity",
@@ -98,6 +117,7 @@
       "properties": {
         "id": { "type": "string" },
         "title": { "type": "string" },
+        "date": { "type": "string" },
         "startDate": { "type": "string" },
         "endDate": { "type": "string" },
         "time": { "type": "string" },
@@ -125,7 +145,7 @@
         "canManageSettings": { "type": "boolean" },
         "avatarColor": { "type": "string" }
       },
-      "required": ["id", "name", "role", "username"]
+      "required": ["id", "name", "role", "username", "isActive", "canEdit"]
     },
     "AuditLogEntry": {
       "title": "AuditLogEntry",
@@ -165,8 +185,8 @@
       "description": "Class daily attendance sheets"
     },
     "/school_config/{configId}": {
-      "schema": "SchoolProfile",
-      "description": "School profile and operational configurations"
+      "schema": "SchoolConfig",
+      "description": "School profile and system_meta operational lock configurations"
     },
     "/activities/{activityId}": {
       "schema": "SchoolActivity",

@@ -31,6 +31,7 @@ import { UserAccount } from '../../types/auth';
 interface StudentCentralHubProps {
   students: Student[];
   currentUser?: UserAccount | null;
+  isDataLocked?: boolean;
   onAddStudent: (student: Student) => void;
   onUpdateStudent: (student: Student) => void;
   onDeleteStudent: (studentId: string) => void;
@@ -42,6 +43,7 @@ interface StudentCentralHubProps {
 export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
   students,
   currentUser: propCurrentUser,
+  isDataLocked = true,
   onAddStudent,
   onUpdateStudent,
   onDeleteStudent,
@@ -50,6 +52,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
   onSelectStudentProfile,
 }) => {
   const isAdmin = isAdminUser(propCurrentUser || getCurrentUser());
+  const isMasterLockedForUser = isDataLocked && !isAdmin;
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [jenjangFilter, setJenjangFilter] = useState<string>('all');
@@ -154,7 +157,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
     } else {
       const newStd: Student = {
         ...formData,
-        id: `std-${Date.now()}`,
+        id: `std-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         statusKehadiranDate: todayYMD,
         jenjang: parseInt(formData.kelas.charAt(0)) || 7,
         totalPoinPelanggaran: 0,
@@ -172,6 +175,10 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
   const openEditModal = (student: Student) => {
     if (isGuestMode()) {
       alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 55 akun petugas resmi yang berhak mengubah biodata siswa.');
+      return;
+    }
+    if (isMasterLockedForUser) {
+      alert('Data Master Terkunci: Perubahan biodata siswa yang sudah tersimpan dikunci khusus untuk Administrator.');
       return;
     }
     setEditingStudent(student);
@@ -360,6 +367,18 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Banner Kunci Keamanan Data Master untuk Non-Admin */}
+      {isMasterLockedForUser && (
+        <div className="px-4 py-3 rounded-2xl border border-blue-200 bg-blue-50/80 text-blue-900 flex items-center gap-3 text-xs">
+          <div className="w-8 h-8 rounded-xl bg-[#1E3A8A] text-white flex items-center justify-center shrink-0">
+            <Lock className="w-4 h-4" />
+          </div>
+          <div className="flex-1 leading-relaxed">
+            <strong className="font-bold">Data Master Terkunci (Proteksi Multi-Akun Aktif):</strong> Anda tetap dapat menambahkan siswa baru, melihat slip kedisiplinan, dan mencatat pelanggaran. Pengeditan biodata maupun penghapusan data siswa yang sudah ada dikunci khusus oleh Administrator.
+          </div>
+        </div>
+      )}
 
       {/* Feedback Banner for Upload Database Murid */}
       {uploadFeedback && (
@@ -668,14 +687,23 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
                         </button>
                         <button
                           onClick={() => openEditModal(student)}
-                          className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-700 hover:bg-slate-100 transition-colors"
-                          title="Edit Data Siswa"
+                          disabled={isMasterLockedForUser}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            isMasterLockedForUser
+                              ? 'text-slate-300 cursor-not-allowed'
+                              : 'text-slate-600 hover:text-emerald-700 hover:bg-slate-100 cursor-pointer'
+                          }`}
+                          title={
+                            isMasterLockedForUser
+                              ? 'Edit Biodata Terkunci (Khusus Admin saat Kunci Data Master Aktif)'
+                              : 'Edit Data Siswa'
+                          }
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => onOpenRecordViolation(student.id)}
-                          className="p-1.5 rounded-lg text-amber-600 hover:text-amber-800 hover:bg-amber-50 transition-colors"
+                          className="p-1.5 rounded-lg text-amber-600 hover:text-amber-800 hover:bg-amber-50 transition-colors cursor-pointer"
                           title="Catat Pelanggaran Siswa"
                         >
                           <Plus className="w-3.5 h-3.5" />
@@ -686,10 +714,23 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
                               alert('Akses Ditolak: Anda sedang dalam Mode Tamu (Guest - View Only). Hanya 55 akun petugas resmi yang berhak menghapus data siswa.');
                               return;
                             }
+                            if (isMasterLockedForUser) {
+                              alert('Data Master Terkunci: Penghapusan data siswa hanya dapat dilakukan oleh Administrator.');
+                              return;
+                            }
                             setDeletingStudent(student);
                           }}
-                          className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
-                          title="Hapus Siswa"
+                          disabled={isMasterLockedForUser}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            isMasterLockedForUser
+                              ? 'text-slate-300 cursor-not-allowed'
+                              : 'text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer'
+                          }`}
+                          title={
+                            isMasterLockedForUser
+                              ? 'Hapus Siswa Terkunci (Khusus Admin saat Kunci Data Master Aktif)'
+                              : 'Hapus Siswa'
+                          }
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

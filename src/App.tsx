@@ -21,26 +21,28 @@ import {
   subscribeToActivities,
   subscribeToAccounts,
   subscribeToAuditLogs,
+  subscribeToSystemMeta,
+  setDataLockInFirestore,
   syncStudentToFirestore,
-  updateStudentFieldsInFirestore,
+  updateStudentBiodataInFirestore,
   batchUpdateStudentsAttendanceInFirestore,
   batchResetStudentViolationCountersInFirestore,
   deleteStudentFromFirestore,
   syncViolationToFirestore,
-  deleteViolationFromFirestore,
+  saveViolationAtomicInFirestore,
+  deleteViolationAtomicInFirestore,
   syncWaLogToFirestore,
   deleteWaLogFromFirestore,
   syncSchoolConfigToFirestore,
   syncAccountToFirestore,
   bulkImportStudentsToFirestore,
   replaceAllStudentsInFirestore,
-  bulkSyncAccountsToFirestore,
+  seedAccountsIfEmptyTransaction,
   clearCollectionFromFirestore,
   clearAllFirestoreData,
   getSystemMetaFromServer,
   setSystemMeta,
   checkServerStudentsCount,
-  getAccountDirectlyFromFirestore,
   swapClass7BAnd7FInFirestoreOnce,
 } from './services/firebase';
 import { INITIAL_STUDENTS } from './data/initialStudents';
@@ -54,6 +56,7 @@ import { saveActivities } from './services/announcementService';
 import { sortByClassAndName } from './utils/sortUtils';
 import { 
   getCurrentUser, 
+  getStoredAccounts,
   isGuestMode, 
   isAdminUser,
   ensureAdminAccount,
@@ -81,7 +84,7 @@ import { LogoutConfirmModal } from './components/modals/LogoutConfirmModal';
 import { SessionTimeoutModal } from './components/modals/SessionTimeoutModal';
 import { LoginPage } from './components/auth/LoginPage';
 import { generateViolationMessage } from './utils/whatsapp';
-import { RotateCcw, AlertTriangle, CheckCircle2, X, ShieldAlert, Menu } from 'lucide-react';
+import { RotateCcw, AlertTriangle, CheckCircle2, X, ShieldAlert, Menu, Lock, Unlock } from 'lucide-react';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>('dashboard');
@@ -90,8 +93,11 @@ export default function App() {
   const [violations, setViolations] = useState<ViolationRecord[]>(() => getStoredViolations());
   const [waLogs, setWaLogs] = useState<WhatsAppMessageLog[]>(() => getStoredWaLogs());
   const [schoolConfig, setSchoolConfig] = useState<SchoolProfile>(() => getStoredSchoolConfig());
+  const [accounts, setAccounts] = useState<UserAccount[]>(() => getStoredAccounts());
+  const [isDataLocked, setIsDataLocked] = useState<boolean>(true);
   const { todayStr } = useRealtimeDateTracker();
   const hasChecked7B7FSwapRef = useRef(false);
+  const isViolationsServerSyncedRef = useRef(false);
 
   // User Authentication & Session Unlocked state (Requirement 6: Login page first)
   const [isSessionUnlocked, setIsSessionUnlocked] = useState<boolean>(() => {
@@ -224,12 +230,22 @@ export default function App() {
           })
           .catch(console.error);
       } else {
-        setStudents([]);
+        // Never wipe student list on a transient empty snapshot unless server confirms clean reset with 0 docs
+        Promise.all([getSystemMetaFromServer(), checkServerStudentsCount()])
+          .then(([sysMeta, serverCount]) => {
+            if (!isCancelled && serverCount === 0 && Boolean(sysMeta?.isCleanReset)) {
+              setStudents([]);
+            }
+          })
+          .catch(console.error);
       }
     });
 
-    const unsubViolations = subscribeToViolations((remoteViolations) => {
+    const unsubViolations = subscribeToViolations((remoteViolations, meta) => {
       if (!isCancelled) {
+        if (!meta.fromCache) {
+          isViolationsServerSyncedRef.current = true;
+        }
         setViolations(remoteViolations);
       }
     });
@@ -246,6 +262,12 @@ export default function App() {
       }
     });
 
+    const unsubSystemMeta = subscribeToSystemMeta((meta) => {
+      if (!isCancelled) {
+        setIsDataLocked(meta?.isDataLocked ?? true);
+      }
+    });
+
     const handleLocalAttendanceSync = (e: Event) => {
       if (isCancelled) return;
       const customEvt = e as CustomEvent<AttendanceSheet[]>;
@@ -256,6 +278,17 @@ export default function App() {
       }
     };
     window.addEventListener('bsan_attendance_sheets_synced', handleLocalAttendanceSync);
+
+    const handleLocalAccountsChanged = (e: Event) => {
+      if (isCancelled) return;
+      const customEvt = e as CustomEvent<UserAccount[]>;
+      if (Array.isArray(customEvt.detail)) {
+        setAccounts(customEvt.detail);
+      } else {
+        setAccounts(getStoredAccounts());
+      }
+    };
+    window.addEventListener('bsan_accounts_changed', handleLocalAccountsChanged);
 
     const unsubAttendance = subscribeToAttendanceSheets((remoteSheets) => {
       if (isCancelled) return;
@@ -277,6 +310,7 @@ export default function App() {
       if (remoteAccounts && remoteAccounts.length > 0) {
         const { accounts: merged, addedAdmin } = ensureAdminAccount(remoteAccounts);
         saveAccountsLocalOnly(merged);
+        setAccounts(merged);
         if (addedAdmin) {
           syncAccountToFirestore(ADMIN_ACCOUNT).catch(console.error);
         }
@@ -290,12 +324,14 @@ export default function App() {
         });
       } else if (!isInitialAccountSeedChecked) {
         isInitialAccountSeedChecked = true;
-        getAccountDirectlyFromFirestore('usr-admin')
-          .then((existingAdmin) => {
-            if (isCancelled) return;
-            if (!existingAdmin) {
+        seedAccountsIfEmptyTransaction(DEFAULT_ACCOUNTS)
+          .then((seeded) => {
+            if (!isCancelled && seeded) {
               saveAccountsLocalOnly(DEFAULT_ACCOUNTS);
-              bulkSyncAccountsToFirestore(DEFAULT_ACCOUNTS).catch(console.error);
+              setAccounts(DEFAULT_ACCOUNTS);
+              try {
+                window.dispatchEvent(new CustomEvent('bsan_accounts_changed', { detail: DEFAULT_ACCOUNTS }));
+              } catch {}
             }
           })
           .catch(console.error);
@@ -311,10 +347,12 @@ export default function App() {
     return () => {
       isCancelled = true;
       window.removeEventListener('bsan_attendance_sheets_synced', handleLocalAttendanceSync);
+      window.removeEventListener('bsan_accounts_changed', handleLocalAccountsChanged);
       unsubStudents();
       unsubViolations();
       unsubWaLogs();
       unsubConfig();
+      unsubSystemMeta();
       unsubAttendance();
       unsubActivities();
       unsubAccounts();
@@ -338,7 +376,11 @@ export default function App() {
   }, [students, attendanceSheets, todayStr]);
 
   // Real-time synchronization of student violation counts from actual violations ledger
+  // Guarded so empty initial cache before server violations arrive never resets cached student counters.
   useEffect(() => {
+    if (!isViolationsServerSyncedRef.current && (!violations || violations.length === 0)) {
+      return;
+    }
     setStudents((prev) => {
       if (!prev || prev.length === 0) return prev;
       let changed = false;
@@ -484,11 +526,44 @@ export default function App() {
       return;
     }
 
+    if (isDataLocked && !isAdminUser(currentUser)) {
+      setResetErrorToast('Data Master Terkunci: Perubahan biodata siswa yang sudah ada hanya dapat dilakukan oleh Administrator.');
+      setTimeout(() => setResetErrorToast(null), 5000);
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Siswa',
+        description: `Percobaan edit biodata siswa (${updatedStudent.nama}) ditolak karena Kunci Keamanan Data Master aktif.`,
+        status: 'BLOCKED',
+      });
+      return;
+    }
+
     setStudents((prev) =>
-      sortByClassAndName(prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)))
+      sortByClassAndName(
+        prev.map((s) =>
+          s.id === updatedStudent.id
+            ? {
+                ...s,
+                nisn: updatedStudent.nisn,
+                nama: updatedStudent.nama,
+                kelas: updatedStudent.kelas,
+                jenjang: updatedStudent.jenjang,
+                gender: updatedStudent.gender,
+                noHpSiswa: updatedStudent.noHpSiswa,
+                namaOrtu: updatedStudent.namaOrtu,
+                noWaOrtu: updatedStudent.noWaOrtu,
+                alamat: updatedStudent.alamat,
+              }
+            : s
+        )
+      )
     );
-    // Real-time sync to Firestore
-    syncStudentToFirestore(updatedStudent).catch(console.error);
+    // Atomic partial update of ONLY biodata fields so concurrent attendance/violation updates are never overwritten
+    updateStudentBiodataInFirestore(updatedStudent.id, updatedStudent).catch((err) => {
+      console.error('Gagal menyimpan biodata siswa ke cloud:', err);
+      setResetErrorToast('Koneksi bermasalah: Perubahan biodata belum tersinkron ke server. Coba lagi.');
+      setTimeout(() => setResetErrorToast(null), 5000);
+    });
 
     logAudit({
       actionType: 'UPDATE',
@@ -512,10 +587,26 @@ export default function App() {
       return;
     }
 
+    if (isDataLocked && !isAdminUser(currentUser)) {
+      setResetErrorToast('Data Master Terkunci: Penghapusan data siswa hanya dapat dilakukan oleh Administrator.');
+      setTimeout(() => setResetErrorToast(null), 5000);
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Siswa',
+        description: `Percobaan hapus siswa ID #${studentId} ditolak karena Kunci Keamanan Data Master aktif.`,
+        status: 'BLOCKED',
+      });
+      return;
+    }
+
     const target = students.find((s) => s.id === studentId);
     setStudents((prev) => prev.filter((s) => s.id !== studentId));
     // Real-time delete from Firestore
-    deleteStudentFromFirestore(studentId).catch(console.error);
+    deleteStudentFromFirestore(studentId).catch((err) => {
+      console.error('Gagal menghapus siswa dari cloud:', err);
+      setResetErrorToast('Gagal menghapus data siswa di server cloud. Silakan periksa koneksi Anda.');
+      setTimeout(() => setResetErrorToast(null), 5000);
+    });
 
     logAudit({
       actionType: 'DELETE',
@@ -630,8 +721,6 @@ export default function App() {
       saveViolations(next);
       return next;
     });
-    // Real-time sync violation to Firestore
-    syncViolationToFirestore(newViolation).catch(console.error);
 
     const target = students.find(
       (s) =>
@@ -670,17 +759,33 @@ export default function App() {
 
     if (updatedTargetStudent) {
       const studentObj: Student = updatedTargetStudent;
-      // Update ONLY violation counters on Firestore so concurrent name/attendance edits are never overwritten
-      updateStudentFieldsInFirestore(studentObj.id, {
-        totalPoinPelanggaran: studentObj.totalPoinPelanggaran,
-        totalPelanggaranRingan: studentObj.totalPelanggaranRingan,
-        totalPelanggaranSedang: studentObj.totalPelanggaranSedang,
-        totalPelanggaranBerat: studentObj.totalPelanggaranBerat,
-      }).catch(console.error);
       if (detailedSlipStudent && (detailedSlipStudent.id === studentObj.id || detailedSlipStudent.nama?.trim().toLowerCase() === studentObj.nama?.trim().toLowerCase())) {
         setDetailedSlipStudent(studentObj);
       }
     }
+
+    // Atomic transaction: writes violation AND increments authoritative server counters in one commit
+    saveViolationAtomicInFirestore(newViolation)
+      .then((res) => {
+        if (res.studentUpdated && res.updatedCounters) {
+          const authCounters = res.updatedCounters;
+          setStudents((prev) => {
+            const reconciled = prev.map((s) =>
+              s.id === newViolation.studentId ? { ...s, ...authCounters } : s
+            );
+            saveStudents(reconciled);
+            return reconciled;
+          });
+          setDetailedSlipStudent((prev) =>
+            prev && prev.id === newViolation.studentId ? { ...prev, ...authCounters } : prev
+          );
+        }
+      })
+      .catch((err) => {
+        console.error('Gagal menyimpan pelanggaran secara atomik:', err);
+        setResetErrorToast('Peringatan: Koneksi server terganggu saat mencatat pelanggaran. Periksa koneksi internet Anda.');
+        setTimeout(() => setResetErrorToast(null), 5000);
+      });
 
     logAudit({
       actionType: 'CREATE',
@@ -793,6 +898,18 @@ export default function App() {
       return;
     }
 
+    if (isDataLocked && !isAdminUser(currentUser)) {
+      setResetErrorToast('Data Master Terkunci: Penghapusan catatan pelanggaran yang sudah tersimpan hanya dapat dilakukan oleh Administrator.');
+      setTimeout(() => setResetErrorToast(null), 5000);
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Pelanggaran',
+        description: `Percobaan hapus catatan pelanggaran #${violationId} ditolak karena Kunci Keamanan Data Master aktif.`,
+        status: 'BLOCKED',
+      });
+      return;
+    }
+
     const targetV = violations.find((v) => v.id === violationId);
     if (!targetV) return;
 
@@ -801,8 +918,6 @@ export default function App() {
       saveViolations(next);
       return next;
     });
-    // Real-time delete violation from Firestore
-    deleteViolationFromFirestore(violationId).catch(console.error);
 
     const target = students.find(
       (s) =>
@@ -841,16 +956,33 @@ export default function App() {
 
     if (updatedTargetStudent) {
       const studentObj: Student = updatedTargetStudent;
-      updateStudentFieldsInFirestore(studentObj.id, {
-        totalPoinPelanggaran: studentObj.totalPoinPelanggaran,
-        totalPelanggaranRingan: studentObj.totalPelanggaranRingan,
-        totalPelanggaranSedang: studentObj.totalPelanggaranSedang,
-        totalPelanggaranBerat: studentObj.totalPelanggaranBerat,
-      }).catch(console.error);
       if (detailedSlipStudent && (detailedSlipStudent.id === studentObj.id || detailedSlipStudent.nama?.trim().toLowerCase() === studentObj.nama?.trim().toLowerCase())) {
         setDetailedSlipStudent(studentObj);
       }
     }
+
+    // Atomic transaction: deletes violation AND decrements authoritative server counters in one commit
+    deleteViolationAtomicInFirestore(violationId)
+      .then((res) => {
+        if (res.deleted && res.studentId && res.updatedCounters) {
+          const authCounters = res.updatedCounters;
+          setStudents((prev) => {
+            const reconciled = prev.map((s) =>
+              s.id === res.studentId ? { ...s, ...authCounters } : s
+            );
+            saveStudents(reconciled);
+            return reconciled;
+          });
+          setDetailedSlipStudent((prev) =>
+            prev && prev.id === res.studentId ? { ...prev, ...authCounters } : prev
+          );
+        }
+      })
+      .catch((err) => {
+        console.error('Gagal menghapus pelanggaran di cloud:', err);
+        setResetErrorToast('Gagal menyinkronkan penghapusan pelanggaran ke server. Periksa koneksi internet Anda.');
+        setTimeout(() => setResetErrorToast(null), 5000);
+      });
 
     logAudit({
       actionType: 'DELETE',
@@ -930,6 +1062,17 @@ export default function App() {
       setTimeout(() => setResetErrorToast(null), 4000);
       return;
     }
+    if (isDataLocked && !isAdminUser(currentUser)) {
+      setResetErrorToast('Data Master Terkunci: Penghapusan riwayat WhatsApp hanya dapat dilakukan oleh Administrator.');
+      setTimeout(() => setResetErrorToast(null), 5000);
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'WhatsApp',
+        description: `Percobaan hapus riwayat WhatsApp #${logId} ditolak karena Kunci Data Master aktif.`,
+        status: 'BLOCKED',
+      });
+      return;
+    }
     setWaLogs((prev) => prev.filter((l) => l.id !== logId));
     deleteWaLogFromFirestore(logId).catch(console.error);
     setResetSuccessToast('Riwayat pesan WhatsApp berhasil dihapus.');
@@ -956,6 +1099,17 @@ export default function App() {
       setTimeout(() => setResetErrorToast(null), 4000);
       return;
     }
+    if (isDataLocked && !isAdminUser(currentUser)) {
+      setResetErrorToast('Data Master Terkunci: Pembersihan seluruh riwayat WhatsApp hanya dapat dilakukan oleh Administrator.');
+      setTimeout(() => setResetErrorToast(null), 5000);
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'WhatsApp',
+        description: 'Percobaan membersihkan seluruh riwayat WhatsApp ditolak karena Kunci Data Master aktif.',
+        status: 'BLOCKED',
+      });
+      return;
+    }
     waLogs.forEach((l) => deleteWaLogFromFirestore(l.id).catch(console.error));
     setWaLogs([]);
     setResetSuccessToast('Seluruh riwayat pesan WhatsApp berhasil dibersihkan.');
@@ -980,10 +1134,52 @@ export default function App() {
     setIsRecordModalOpen(true);
   };
 
-  // Settings update
+  // Settings update (STRICTLY ADMIN ONLY)
   const handleUpdateSchoolConfig = (newConfig: SchoolProfile) => {
+    if (!isAdminUser(currentUser)) {
+      setResetErrorToast('Akses Ditolak: Hanya Administrator (admin) yang berhak mengubah Profil Sekolah.');
+      setTimeout(() => setResetErrorToast(null), 5000);
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Pengaturan',
+        description: 'Percobaan mengubah Profil Sekolah ditolak karena bukan akun Administrator.',
+        status: 'BLOCKED',
+      });
+      return;
+    }
     setSchoolConfig(newConfig);
     syncSchoolConfigToFirestore(newConfig).catch(console.error);
+  };
+
+  // Master Data Lock Toggle (STRICTLY ADMIN ONLY)
+  const handleToggleDataLock = async (locked: boolean) => {
+    if (!isAdminUser(currentUser)) {
+      setResetErrorToast('Akses Ditolak: Hanya Administrator (admin) yang berhak mengubah status Kunci Data Master.');
+      setTimeout(() => setResetErrorToast(null), 5000);
+      return;
+    }
+    try {
+      setIsDataLocked(locked);
+      await setDataLockInFirestore(locked, currentUser?.name || 'Administrator');
+      logAudit({
+        actionType: 'UPDATE',
+        module: 'Pengaturan',
+        description: locked
+          ? 'Administrator MENGAKTIFKAN Kunci Keamanan Data Master (data master, biodata existing, riwayat, & arsip lampau dilindungi dari hapus/ubah non-admin).'
+          : 'Administrator MEMBUKA sementara Kunci Data Master.',
+        status: 'SUCCESS',
+      });
+      setResetSuccessToast(
+        locked
+          ? 'Kunci Keamanan Data Master AKTIF! Seluruh data terproteksi dari perubahan atau penghapusan tidak sengaja.'
+          : 'Kunci Data Master dibuka sementara oleh Admin.'
+      );
+      setTimeout(() => setResetSuccessToast(null), 5000);
+    } catch (err) {
+      console.error('Toggle lock error:', err);
+      setResetErrorToast('Gagal memperbarui status Kunci Data Master ke server.');
+      setTimeout(() => setResetErrorToast(null), 5000);
+    }
   };
 
   // Trigger Reset Data with In-App Confirmation Modal (STRICTLY ADMIN ONLY)
@@ -1317,6 +1513,9 @@ export default function App() {
               students={effectiveStudents}
               violations={violations}
               schoolConfig={schoolConfig}
+              accounts={accounts}
+              isDataLocked={isDataLocked}
+              currentUser={currentUser}
               onNavigate={(view) => navigateToView(view)}
               onOpenQuickViolation={() => handleTriggerQuickViolation()}
               onSelectStudentProfile={(student) => {
@@ -1329,6 +1528,7 @@ export default function App() {
             <StudentCentralHub
               students={effectiveStudents}
               currentUser={currentUser}
+              isDataLocked={isDataLocked}
               onAddStudent={handleAddStudent}
               onUpdateStudent={handleUpdateStudent}
               onDeleteStudent={handleDeleteStudent}
@@ -1342,6 +1542,8 @@ export default function App() {
             <AttendanceManagerView
               students={effectiveStudents}
               schoolConfig={schoolConfig}
+              isDataLocked={isDataLocked}
+              currentUser={currentUser}
               onUpdateStudentsAttendance={(updated, changedOnly) => {
                 // Only update attendance fields for the affected students so concurrent edits
                 // to student names, imports, or violation counters in other classes are NEVER overwritten
@@ -1370,7 +1572,11 @@ export default function App() {
                     statusKehadiranDate: s.statusKehadiranDate || todayStr,
                     keteranganKehadiran: s.keteranganKehadiran || '',
                   }))
-                ).catch(console.error);
+                ).catch((err) => {
+                  console.error('Gagal batch update presensi siswa:', err);
+                  setResetErrorToast('Koneksi server terganggu saat menyimpan presensi. Silakan klik Simpan lagi.');
+                  setTimeout(() => setResetErrorToast(null), 5000);
+                });
 
                 if (detailedSlipStudent) {
                   const refreshed = affectedMap.get(detailedSlipStudent.id);
@@ -1397,6 +1603,8 @@ export default function App() {
               violations={violations}
               students={effectiveStudents}
               schoolConfig={schoolConfig}
+              isDataLocked={isDataLocked}
+              currentUser={currentUser}
               onOpenRecordModal={() => handleTriggerQuickViolation()}
               onOpenSuratModal={handleOpenSuratModal}
               onUpdateViolationStatus={handleUpdateViolationStatus}
@@ -1440,6 +1648,8 @@ export default function App() {
               students={effectiveStudents}
               violations={violations}
               currentUser={currentUser}
+              isDataLocked={isDataLocked}
+              onToggleDataLock={handleToggleDataLock}
               onUpdateSchoolConfig={handleUpdateSchoolConfig}
               onResetData={isAdminUser(currentUser) ? handleTriggerResetData : undefined}
               onUserUpdated={(updatedUser) => setCurrentUser(updatedUser)}
@@ -1473,6 +1683,21 @@ export default function App() {
             <span className="inline-flex items-center gap-1 text-emerald-700 font-medium bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 text-[10px]">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               Penyimpanan Terproteksi & Terenkripsi
+            </span>
+            <span
+              className={`inline-flex items-center gap-1 font-semibold px-2.5 py-0.5 rounded-full border text-[10px] ${
+                isDataLocked
+                  ? 'text-blue-800 bg-blue-50 border-blue-200'
+                  : 'text-amber-800 bg-amber-50 border-amber-200'
+              }`}
+              title={
+                isDataLocked
+                  ? 'Kunci Keamanan Data Master aktif: data siswa & arsip terlindungi dari edit/hapus tidak sengaja'
+                  : 'Kunci Data Master dibuka sementara oleh Admin'
+              }
+            >
+              {isDataLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+              <span>{isDataLocked ? 'Data Master Terkunci' : 'Kunci Data Dibuka Admin'}</span>
             </span>
             {isAdminUser(currentUser) && (
               <>
@@ -1540,6 +1765,8 @@ export default function App() {
         student={effectiveStudents.find((s) => s.id === detailedSlipStudent?.id) || detailedSlipStudent}
         violations={violations}
         schoolConfig={schoolConfig}
+        isDataLocked={isDataLocked}
+        currentUser={currentUser}
         onOpenRecordViolation={(studentId) => {
           setDetailedSlipStudent(null);
           handleTriggerQuickViolation(studentId);

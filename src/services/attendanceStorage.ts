@@ -108,7 +108,10 @@ export const saveAttendanceSheets = (sheets: AttendanceSheet[]): void => {
   }
 };
 
-export const saveSingleAttendanceSheet = (sheet: AttendanceSheet): AttendanceSheet[] => {
+export const saveSingleAttendanceSheet = (
+  sheet: AttendanceSheet,
+  onCloudError?: (err: unknown) => void
+): AttendanceSheet[] => {
   const existing = getStoredAttendanceSheets();
   const index = existing.findIndex(s => s.id === sheet.id || (s.date === sheet.date && s.kelas === sheet.kelas));
   
@@ -123,7 +126,10 @@ export const saveSingleAttendanceSheet = (sheet: AttendanceSheet): AttendanceShe
   try {
     secureStorage.setItem(STORAGE_KEYS.ATTENDANCE, updated);
     emitLocalAttendanceChanged(updated);
-    syncAttendanceSheetToFirestore(sheet).catch(console.error);
+    syncAttendanceSheetToFirestore(sheet).catch((err) => {
+      console.error('Failed syncing attendance sheet to Firestore', err);
+      if (onCloudError) onCloudError(err);
+    });
   } catch (err) {
     console.error('Failed saving attendance sheet', err);
   }

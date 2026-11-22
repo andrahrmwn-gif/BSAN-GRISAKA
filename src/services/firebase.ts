@@ -1,7 +1,10 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { 
-  getFirestore, 
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   collection, 
   doc, 
   setDoc, 
@@ -12,7 +15,8 @@ import {
   onSnapshot, 
   writeBatch,
   getDocs,
-  runTransaction
+  runTransaction,
+  Firestore
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Student, ViolationRecord, WhatsAppMessageLog, SchoolProfile, AttendanceSheet, AttendanceStatus } from '../types';
@@ -25,7 +29,21 @@ const app = initializeApp(firebaseConfig);
 
 // CRITICAL: The app will break without specifying firestoreDatabaseId
 const firestoreDbId = (firebaseConfig as { firestoreDatabaseId?: string }).firestoreDatabaseId || '(default)';
-export const db = getFirestore(app, firestoreDbId);
+let dbInstance: Firestore;
+try {
+  dbInstance = initializeFirestore(
+    app,
+    {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    },
+    firestoreDbId
+  );
+} catch {
+  dbInstance = getFirestore(app, firestoreDbId);
+}
+export const db = dbInstance;
 export const auth = getAuth(app);
 
 // Operation types enum for Firestore error handling conforming to SKILL.md
@@ -139,9 +157,12 @@ const COLLECTIONS = {
 };
 
 export interface SystemMeta {
-  studentsInitialized: boolean;
-  isCleanReset: boolean;
+  studentsInitialized?: boolean;
+  accountsInitialized?: boolean;
+  isCleanReset?: boolean;
   class7B7FSwapFixV1?: boolean;
+  isDataLocked?: boolean;
+  dataLockedUpdatedBy?: string;
   updatedAt: string;
 }
 
@@ -164,7 +185,7 @@ export const getSystemMetaFromServer = async (): Promise<SystemMeta | null> => {
   }
 };
 
-export const setSystemMeta = async (meta: SystemMeta): Promise<void> => {
+export const setSystemMeta = async (meta: Partial<SystemMeta> & { updatedAt: string }): Promise<void> => {
   const path = `${COLLECTIONS.SETTINGS}/system_meta`;
   try {
     await setDoc(doc(db, COLLECTIONS.SETTINGS, 'system_meta'), sanitizeForFirestore(meta), { merge: true });
@@ -173,8 +194,54 @@ export const setSystemMeta = async (meta: SystemMeta): Promise<void> => {
   }
 };
 
+export const subscribeToSystemMeta = (onUpdate: (meta: SystemMeta | null) => void) => {
+  const docRef = doc(db, COLLECTIONS.SETTINGS, 'system_meta');
+  return onSnapshot(
+    docRef,
+    (snapshot) => {
+      if (snapshot.metadata.fromCache && !snapshot.exists()) {
+        return;
+      }
+      onUpdate(snapshot.exists() ? (snapshot.data() as SystemMeta) : null);
+    },
+    (err) => {
+      logFirestoreListenerError(err, OperationType.GET, `${COLLECTIONS.SETTINGS}/system_meta`);
+    }
+  );
+};
+
+export const setDataLockInFirestore = async (isLocked: boolean, updatedBy: string): Promise<void> => {
+  const path = `${COLLECTIONS.SETTINGS}/system_meta`;
+  try {
+    await runTransaction(db, async (tx) => {
+      const metaRef = doc(db, COLLECTIONS.SETTINGS, 'system_meta');
+      tx.set(
+        metaRef,
+        sanitizeForFirestore({
+          isDataLocked: isLocked,
+          dataLockedUpdatedBy: updatedBy,
+          updatedAt: new Date().toISOString(),
+        }),
+        { merge: true }
+      );
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+};
+
 export const checkServerStudentsCount = async (): Promise<number | null> => {
   const colRef = collection(db, COLLECTIONS.STUDENTS);
+  try {
+    const snap = await getDocsFromServer(colRef);
+    return snap.size;
+  } catch {
+    return null;
+  }
+};
+
+export const checkServerAccountsCount = async (): Promise<number | null> => {
+  const colRef = collection(db, COLLECTIONS.ACCOUNTS);
   try {
     const snap = await getDocsFromServer(colRef);
     return snap.size;
@@ -213,7 +280,9 @@ export const subscribeToStudents = (
 /**
  * Subscribe to real-time violations updates across all devices
  */
-export const subscribeToViolations = (onUpdate: (violations: ViolationRecord[]) => void) => {
+export const subscribeToViolations = (
+  onUpdate: (violations: ViolationRecord[], meta: { fromCache: boolean; empty: boolean }) => void
+) => {
   const colRef = collection(db, COLLECTIONS.VIOLATIONS);
   return onSnapshot(
     colRef,
@@ -233,7 +302,10 @@ export const subscribeToViolations = (onUpdate: (violations: ViolationRecord[]) 
         const cmp = dbDate.localeCompare(da);
         return cmp !== 0 ? cmp : (b.id || '').localeCompare(a.id || '');
       });
-      onUpdate(list);
+      onUpdate(list, {
+        fromCache: snapshot.metadata.fromCache,
+        empty: snapshot.empty,
+      });
     },
     (err) => {
       logFirestoreListenerError(err, OperationType.GET, COLLECTIONS.VIOLATIONS);
@@ -454,6 +526,42 @@ export const updateStudentFieldsInFirestore = async (
 };
 
 /**
+ * Update ONLY biodata fields of a student inside a transaction so concurrent attendance or violation counter updates are never overwritten.
+ */
+export const updateStudentBiodataInFirestore = async (
+  studentId: string,
+  student: Student
+): Promise<void> => {
+  const path = `${COLLECTIONS.STUDENTS}/${studentId}`;
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, COLLECTIONS.STUDENTS, studentId);
+      const snap = await tx.get(ref);
+      const biodataPayload = sanitizeForFirestore({
+        id: student.id,
+        nisn: student.nisn,
+        nama: student.nama,
+        kelas: student.kelas,
+        jenjang: student.jenjang,
+        gender: student.gender,
+        noHpSiswa: student.noHpSiswa,
+        namaOrtu: student.namaOrtu,
+        noWaOrtu: student.noWaOrtu,
+        alamat: student.alamat,
+        updatedAt: new Date().toISOString(),
+      });
+      if (!snap.exists()) {
+        tx.set(ref, sanitizeForFirestore(student), { merge: true });
+      } else {
+        tx.set(ref, biodataPayload, { merge: true });
+      }
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, path);
+  }
+};
+
+/**
  * Batch-update ONLY attendance fields for specific students (e.g., 1 class)
  * NEVER touches nama, nisn, kelas, or violation counters of any student!
  */
@@ -553,6 +661,100 @@ export const deleteViolationFromFirestore = async (violationId: string): Promise
 };
 
 /**
+ * Atomically save a violation AND increment the target student's server violation counters inside one Firestore transaction.
+ * Guarantees concurrent teachers logging violations for the same student never lose increments.
+ */
+export const saveViolationAtomicInFirestore = async (
+  violation: ViolationRecord
+): Promise<{
+  studentUpdated: boolean;
+  updatedCounters?: Pick<
+    Student,
+    'totalPoinPelanggaran' | 'totalPelanggaranRingan' | 'totalPelanggaranSedang' | 'totalPelanggaranBerat'
+  >;
+}> => {
+  const path = `${COLLECTIONS.VIOLATIONS}/${violation.id}`;
+  try {
+    return await runTransaction(db, async (tx) => {
+      const violRef = doc(db, COLLECTIONS.VIOLATIONS, violation.id);
+      const violSnap = await tx.get(violRef);
+      const studentRef = violation.studentId ? doc(db, COLLECTIONS.STUDENTS, violation.studentId) : null;
+      const studentSnap = studentRef ? await tx.get(studentRef) : null;
+
+      tx.set(violRef, sanitizeForFirestore(violation), { merge: true });
+
+      if (studentRef && studentSnap && studentSnap.exists() && !violSnap.exists()) {
+        const sData = studentSnap.data() as Student;
+        const isRingan = violation.tingkat === 'Ringan' ? 1 : 0;
+        const isSedang = violation.tingkat === 'Sedang' ? 1 : 0;
+        const isBerat = violation.tingkat === 'Berat' ? 1 : 0;
+        const updatedCounters = {
+          totalPoinPelanggaran: (sData.totalPoinPelanggaran || 0) + (violation.poin || 0),
+          totalPelanggaranRingan: (sData.totalPelanggaranRingan || 0) + isRingan,
+          totalPelanggaranSedang: (sData.totalPelanggaranSedang || 0) + isSedang,
+          totalPelanggaranBerat: (sData.totalPelanggaranBerat || 0) + isBerat,
+        };
+        tx.set(studentRef, updatedCounters, { merge: true });
+        return { studentUpdated: true, updatedCounters };
+      }
+      return { studentUpdated: false };
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+    return { studentUpdated: false };
+  }
+};
+
+/**
+ * Atomically delete a violation AND decrement the target student's server violation counters inside one Firestore transaction.
+ */
+export const deleteViolationAtomicInFirestore = async (
+  violationId: string
+): Promise<{
+  deleted: boolean;
+  studentId?: string;
+  updatedCounters?: Pick<
+    Student,
+    'totalPoinPelanggaran' | 'totalPelanggaranRingan' | 'totalPelanggaranSedang' | 'totalPelanggaranBerat'
+  >;
+}> => {
+  const path = `${COLLECTIONS.VIOLATIONS}/${violationId}`;
+  try {
+    return await runTransaction(db, async (tx) => {
+      const violRef = doc(db, COLLECTIONS.VIOLATIONS, violationId);
+      const violSnap = await tx.get(violRef);
+      if (!violSnap.exists()) {
+        return { deleted: false };
+      }
+      const targetV = violSnap.data() as ViolationRecord;
+      const studentRef = targetV.studentId ? doc(db, COLLECTIONS.STUDENTS, targetV.studentId) : null;
+      const studentSnap = studentRef ? await tx.get(studentRef) : null;
+
+      tx.delete(violRef);
+
+      if (studentRef && studentSnap && studentSnap.exists()) {
+        const sData = studentSnap.data() as Student;
+        const isRingan = targetV.tingkat === 'Ringan' ? 1 : 0;
+        const isSedang = targetV.tingkat === 'Sedang' ? 1 : 0;
+        const isBerat = targetV.tingkat === 'Berat' ? 1 : 0;
+        const updatedCounters = {
+          totalPoinPelanggaran: Math.max(0, (sData.totalPoinPelanggaran || 0) - (targetV.poin || 0)),
+          totalPelanggaranRingan: Math.max(0, (sData.totalPelanggaranRingan || 0) - isRingan),
+          totalPelanggaranSedang: Math.max(0, (sData.totalPelanggaranSedang || 0) - isSedang),
+          totalPelanggaranBerat: Math.max(0, (sData.totalPelanggaranBerat || 0) - isBerat),
+        };
+        tx.set(studentRef, updatedCounters, { merge: true });
+        return { deleted: true, studentId: targetV.studentId, updatedCounters };
+      }
+      return { deleted: true, studentId: targetV.studentId };
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+    return { deleted: false };
+  }
+};
+
+/**
  * Save WhatsApp log to Firestore
  */
 export const syncWaLogToFirestore = async (log: WhatsAppMessageLog): Promise<void> => {
@@ -589,12 +791,24 @@ export const syncSchoolConfigToFirestore = async (config: SchoolProfile): Promis
 };
 
 /**
- * Save or update Attendance Sheet to Firestore
+ * Save or update Attendance Sheet to Firestore inside a transaction with monotonic revision tracking
  */
 export const syncAttendanceSheetToFirestore = async (sheet: AttendanceSheet): Promise<void> => {
   const path = `${COLLECTIONS.ATTENDANCE}/${sheet.id}`;
   try {
-    await setDoc(doc(db, COLLECTIONS.ATTENDANCE, sheet.id), sanitizeForFirestore(sheet));
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, COLLECTIONS.ATTENDANCE, sheet.id);
+      const snap = await tx.get(ref);
+      const prevRev = snap.exists() ? Number((snap.data() as { revision?: number }).revision || 0) : 0;
+      tx.set(
+        ref,
+        sanitizeForFirestore({
+          ...sheet,
+          revision: prevRev + 1,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+    });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -681,6 +895,71 @@ export const syncAccountToFirestore = async (account: UserAccount): Promise<void
     await setDoc(doc(db, COLLECTIONS.ACCOUNTS, account.id), sanitizeForFirestore(account), { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
+  }
+};
+
+/**
+ * Atomically update ONLY specific fields of a staff account inside a Firestore transaction.
+ * Ensures self-service username/PIN updates never overwrite concurrent Admin permission/role changes.
+ */
+export const updateAccountFieldsInFirestore = async (
+  accountId: string,
+  fields: Partial<UserAccount>,
+  fallbackFullAccount?: UserAccount
+): Promise<void> => {
+  const path = `${COLLECTIONS.ACCOUNTS}/${accountId}`;
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, COLLECTIONS.ACCOUNTS, accountId);
+      const snap = await tx.get(ref);
+      if (!snap.exists() && fallbackFullAccount) {
+        tx.set(ref, sanitizeForFirestore({ ...fallbackFullAccount, ...fields }), { merge: true });
+      } else {
+        tx.set(ref, sanitizeForFirestore(fields), { merge: true });
+      }
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, path);
+  }
+};
+
+/**
+ * Atomically seed default staff accounts ONLY when Firestore accounts collection is genuinely empty (0 server docs)
+ * and `system_meta.accountsInitialized` is not yet set. NEVER overwrites customized PINs or usernames.
+ */
+export const seedAccountsIfEmptyTransaction = async (defaultAccounts: UserAccount[]): Promise<boolean> => {
+  const serverCount = await checkServerAccountsCount();
+  if (serverCount === null || serverCount > 0) {
+    return false;
+  }
+  const metaRef = doc(db, COLLECTIONS.SETTINGS, 'system_meta');
+  const adminRef = doc(db, COLLECTIONS.ACCOUNTS, 'usr-admin');
+  try {
+    return await runTransaction(db, async (tx) => {
+      const [metaSnap, adminSnap] = await Promise.all([tx.get(metaRef), tx.get(adminRef)]);
+      if (adminSnap.exists() || (metaSnap.exists() && Boolean((metaSnap.data() as SystemMeta).accountsInitialized))) {
+        return false;
+      }
+      const existingMeta = metaSnap.exists() ? (metaSnap.data() as Partial<SystemMeta>) : {};
+      tx.set(
+        metaRef,
+        sanitizeForFirestore({
+          studentsInitialized: existingMeta.studentsInitialized ?? false,
+          isCleanReset: existingMeta.isCleanReset ?? false,
+          accountsInitialized: true,
+          isDataLocked: existingMeta.isDataLocked ?? true,
+          updatedAt: new Date().toISOString(),
+        }),
+        { merge: true }
+      );
+      defaultAccounts.forEach((acc) => {
+        tx.set(doc(db, COLLECTIONS.ACCOUNTS, acc.id), sanitizeForFirestore(acc), { merge: true });
+      });
+      return true;
+    });
+  } catch (err) {
+    logFirestoreListenerError(err, OperationType.WRITE, COLLECTIONS.ACCOUNTS);
+    return false;
   }
 };
 

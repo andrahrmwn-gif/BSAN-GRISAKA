@@ -134,7 +134,7 @@ export function addActivity(activity: Partial<SchoolActivity> & { title: string;
     ...activity,
     startDate: effectiveDate,
     date: effectiveDate,
-    id: `act-${Date.now()}`,
+    id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     createdAt: new Date().toISOString(),
   };
   const updated = [newActivity, ...existing];

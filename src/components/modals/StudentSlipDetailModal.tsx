@@ -32,6 +32,8 @@ import {
   exportStudentSlipToPDF,
   buildStudentSlipBodyHtml
 } from '../../utils/exportDocs';
+import { isAdminUser, getCurrentUser } from '../../services/authService';
+import { UserAccount } from '../../types/auth';
 
 interface StudentSlipDetailModalProps {
   isOpen: boolean;
@@ -39,6 +41,8 @@ interface StudentSlipDetailModalProps {
   student: Student | null;
   violations: ViolationRecord[];
   schoolConfig: SchoolProfile;
+  isDataLocked?: boolean;
+  currentUser?: UserAccount | null;
   onOpenRecordViolation: (studentId: string) => void;
   onOpenSurat: (violation: ViolationRecord) => void;
   onDeleteViolation?: (violationId: string) => void;
@@ -50,10 +54,14 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
   student,
   violations,
   schoolConfig,
+  isDataLocked = true,
+  currentUser: propCurrentUser,
   onOpenRecordViolation,
   onOpenSurat,
   onDeleteViolation,
 }) => {
+  const isAdmin = isAdminUser(propCurrentUser || getCurrentUser());
+  const isDeleteLockedForUser = isDataLocked && !isAdmin;
   const [activeTab, setActiveTab] = useState<'timeline' | 'document'>('timeline');
   const [timelineFilter, setTimelineFilter] = useState<'all' | 'pelanggaran' | 'ketidakhadiran'>('all');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -926,7 +934,7 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
                               </div>
 
                               <div className="flex items-center gap-2">
-                                {isViolation && v && onDeleteViolation && (
+                                {isViolation && v && onDeleteViolation && !isDeleteLockedForUser && (
                                   confirmDeleteId === v.id ? (
                                     <div className="flex items-center gap-1.5 bg-rose-100 p-1 rounded-xl">
                                       <span className="text-[10px] text-rose-800 font-bold px-1">Yakin hapus?</span>

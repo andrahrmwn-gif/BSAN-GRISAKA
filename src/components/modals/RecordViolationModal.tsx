@@ -191,7 +191,7 @@ export const RecordViolationModal: React.FC<RecordViolationModalProps> = ({
     setIsSubmitting(true);
 
     const newViolation: ViolationRecord = {
-      id: `viol-${Date.now()}`,
+      id: `viol-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       studentId: currentStudent.id,
       studentName: currentStudent.nama,
       kelas: currentStudent.kelas,

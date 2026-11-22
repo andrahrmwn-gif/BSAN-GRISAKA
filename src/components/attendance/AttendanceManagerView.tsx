@@ -19,6 +19,7 @@ import {
   clearAllAttendanceSheets 
 } from '../../services/attendanceStorage';
 import { isGuestMode, isAdminUser, getCurrentUser } from '../../services/authService';
+import { UserAccount } from '../../types/auth';
 import { clearCollectionFromFirestore } from '../../services/firebase';
 import { logAudit } from '../../services/auditLogger';
 import { exportAttendanceToWord, exportAttendanceToExcel, getPeriodLabel } from '../../utils/exportAttendance';
@@ -55,6 +56,8 @@ import {
 interface AttendanceManagerViewProps {
   students: Student[];
   schoolConfig: SchoolProfile;
+  isDataLocked?: boolean;
+  currentUser?: UserAccount | null;
   onUpdateStudentsAttendance?: (updatedStudents: Student[], changedOnly?: Student[]) => void;
   onOpenAccountSwitchModal?: () => void;
 }
@@ -62,6 +65,8 @@ interface AttendanceManagerViewProps {
 export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
   students,
   schoolConfig,
+  isDataLocked = true,
+  currentUser: propCurrentUser,
   onUpdateStudentsAttendance,
   onOpenAccountSwitchModal,
 }) => {
@@ -81,6 +86,9 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
     handlePrevDay,
     handleNextDay,
   } = useRealtimeDateTracker();
+
+  const isAdmin = isAdminUser(propCurrentUser || getCurrentUser());
+  const isHistoricalDateLocked = Boolean(isDataLocked && !isAdmin && selectedDate !== todayStr);
   
   const [entries, setEntries] = useState<AttendanceStudentEntry[]>([]);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
@@ -193,6 +201,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
 
   // Handle single student attendance status change
   const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
+    if (isHistoricalDateLocked) return;
     setEntries((prev) =>
       prev.map((e) => (e.studentId === studentId ? { ...e, status } : e))
     );
@@ -200,6 +209,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
 
   // Handle single student note change
   const handleNoteChange = (studentId: string, note: string) => {
+    if (isHistoricalDateLocked) return;
     setEntries((prev) =>
       prev.map((e) => (e.studentId === studentId ? { ...e, keterangan: note } : e))
     );
@@ -207,6 +217,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
 
   // Quick Action: Mark all present
   const handleMarkAllHadir = () => {
+    if (isHistoricalDateLocked) return;
     setEntries((prev) =>
       prev.map((e) => ({
         ...e,
@@ -218,6 +229,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
 
   // Quick Action: Reset to initial
   const handleResetEntries = () => {
+    if (isHistoricalDateLocked) return;
     const fresh: AttendanceStudentEntry[] = classStudents.map((std) => ({
       studentId: std.id,
       nisn: std.nisn,
@@ -300,6 +312,21 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
     }
 
 
+    if (isHistoricalDateLocked) {
+      setActionFeedback({
+        type: 'error',
+        message: `Data Arsip Presensi Terkunci: Perubahan presensi tanggal lampau (${selectedDate}) hanya dapat dilakukan oleh Administrator. Silakan klik "Hari Ini" untuk mengisi presensi hari ini (${todayStr}).`,
+      });
+      setTimeout(() => setActionFeedback(null), 6000);
+      logAudit({
+        actionType: 'BLOCKED',
+        module: 'Presensi',
+        description: `Percobaan ubah presensi tanggal lampau Kelas ${selectedKelas} (${selectedDate}) ditolak karena Kunci Data Master aktif.`,
+        status: 'BLOCKED',
+      });
+      return;
+    }
+
     setIsSaving(true);
 
     const currentUser = getCurrentUser();
@@ -329,7 +356,13 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
       },
     };
 
-    saveSingleAttendanceSheet(newSheet);
+    saveSingleAttendanceSheet(newSheet, () => {
+      setActionFeedback({
+        type: 'error',
+        message: `Peringatan Koneksi: Presensi Kelas ${selectedKelas} tersimpan di perangkat ini namun gagal tersinkron ke server cloud. Periksa koneksi lalu simpan ulang.`,
+      });
+      setTimeout(() => setActionFeedback(null), 6000);
+    });
     setSaveTrigger((c) => c + 1);
 
     try {
@@ -619,7 +652,8 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
                 <button
                   type="button"
                   onClick={handleMarkAllHadir}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  disabled={isHistoricalDateLocked}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
                   title="Tandai seluruh siswa di kelas ini berstatus Hadir"
                 >
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -629,7 +663,8 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
                 <button
                   type="button"
                   onClick={handleResetEntries}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium transition-all cursor-pointer"
+                  disabled={isHistoricalDateLocked}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium transition-all cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
                   title="Kembalikan status awal"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -639,21 +674,33 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
                 <button
                   type="button"
                   onClick={handleSaveAttendance}
-                  disabled={isSaving}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 ${
-                    currentClassStatus.isDone
+                  disabled={isSaving || isHistoricalDateLocked}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isHistoricalDateLocked
+                      ? 'bg-slate-500 text-white'
+                      : currentClassStatus.isDone
                       ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                       : 'bg-[#3B5BDB] hover:bg-[#2563EB] text-white'
                   }`}
-                  title={currentClassStatus.isDone ? 'Presensi sudah dilakukan. Klik untuk memperbarui' : 'Simpan presensi kelas'}
+                  title={
+                    isHistoricalDateLocked
+                      ? 'Arsip tanggal lampau terkunci khusus Administrator'
+                      : currentClassStatus.isDone
+                      ? 'Presensi sudah dilakukan. Klik untuk memperbarui'
+                      : 'Simpan presensi kelas'
+                  }
                 >
-                  {currentClassStatus.isDone ? (
+                  {isHistoricalDateLocked ? (
+                    <Lock className="w-4 h-4 text-white" />
+                  ) : currentClassStatus.isDone ? (
                     <CheckCircle2 className="w-4 h-4 text-white" />
                   ) : (
                     <Save className="w-4 h-4 text-white" />
                   )}
                   <span>
-                    {isSaving
+                    {isHistoricalDateLocked
+                      ? 'Arsip Terkunci'
+                      : isSaving
                       ? 'Menyimpan...'
                       : currentClassStatus.isDone
                       ? '✓ Presensi Sudah Dilakukan'
@@ -782,6 +829,25 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
             )}
           </div>
 
+          {/* Historical Date Lock Banner */}
+          {isHistoricalDateLocked && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-900 shadow-xs">
+              <div className="flex items-start sm:items-center gap-2.5">
+                <Lock className="w-4 h-4 text-[#1E3A8A] shrink-0 mt-0.5 sm:mt-0" />
+                <span>
+                  <strong>Arsip Presensi Tanggal Lampau Terkunci ({selectedDate}):</strong> Anda hanya dapat meninjau catatan tanggal sebelumnya. Untuk mengisi atau memperbarui presensi hari ini (<strong>{todayStr}</strong>), kembali ke tanggal hari ini.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleGoToday}
+                className="px-3.5 py-1.5 bg-[#1E3A8A] hover:bg-[#2563EB] text-white rounded-xl text-[11px] font-bold shrink-0 cursor-pointer"
+              >
+                Kembali ke Hari Ini
+              </button>
+            </div>
+          )}
+
           {/* Success Banner */}
           {saveSuccessMsg && (
             <div className="flex items-center gap-2 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs font-bold text-emerald-800 animate-fade-in shadow-xs">
@@ -896,8 +962,9 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
                             {/* Hadir Button */}
                             <button
                               type="button"
+                              disabled={isHistoricalDateLocked}
                               onClick={() => handleStatusChange(entry.studentId, 'Hadir')}
-                              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer ${
                                 entry.status === 'Hadir'
                                   ? 'bg-emerald-600 text-white shadow-xs'
                                   : 'text-slate-600 hover:text-emerald-700 hover:bg-emerald-50'
@@ -909,8 +976,9 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
                             {/* Sakit Button */}
                             <button
                               type="button"
+                              disabled={isHistoricalDateLocked}
                               onClick={() => handleStatusChange(entry.studentId, 'Sakit')}
-                              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer ${
                                 entry.status === 'Sakit'
                                   ? 'bg-amber-500 text-white shadow-xs'
                                   : 'text-slate-600 hover:text-amber-700 hover:bg-amber-50'
@@ -922,8 +990,9 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
                             {/* Izin Button */}
                             <button
                               type="button"
+                              disabled={isHistoricalDateLocked}
                               onClick={() => handleStatusChange(entry.studentId, 'Izin')}
-                              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer ${
                                 entry.status === 'Izin'
                                   ? 'bg-blue-600 text-white shadow-xs'
                                   : 'text-slate-600 hover:text-blue-700 hover:bg-blue-50'
@@ -935,8 +1004,9 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
                             {/* Alfa Button */}
                             <button
                               type="button"
+                              disabled={isHistoricalDateLocked}
                               onClick={() => handleStatusChange(entry.studentId, 'Alfa')}
-                              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer ${
                                 entry.status === 'Alfa'
                                   ? 'bg-red-600 text-white shadow-xs'
                                   : 'text-slate-600 hover:text-red-700 hover:bg-red-50'
@@ -949,10 +1019,11 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
                         <td className="py-3 px-4">
                           <input
                             type="text"
+                            disabled={isHistoricalDateLocked}
                             placeholder="Catatan / surat izin dokter (opsional)"
                             value={entry.keterangan || ''}
                             onChange={(e) => handleNoteChange(entry.studentId, e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-65 disabled:cursor-not-allowed"
                           />
                         </td>
                       </tr>
@@ -997,20 +1068,26 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
               <button
                 type="button"
                 onClick={handleSaveAttendance}
-                disabled={isSaving}
-                className={`flex items-center gap-2.5 px-6 py-3 rounded-2xl text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 ${
-                  currentClassStatus.isDone
+                disabled={isSaving || isHistoricalDateLocked}
+                className={`flex items-center gap-2.5 px-6 py-3 rounded-2xl text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isHistoricalDateLocked
+                    ? 'bg-slate-500 text-white'
+                    : currentClassStatus.isDone
                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300'
                     : 'bg-[#3B5BDB] hover:bg-[#2563EB] text-white'
                 }`}
               >
-                {currentClassStatus.isDone ? (
+                {isHistoricalDateLocked ? (
+                  <Lock className="w-4 h-4 text-white" />
+                ) : currentClassStatus.isDone ? (
                   <CheckCircle2 className="w-4 h-4 text-white" />
                 ) : (
                   <Save className="w-4 h-4 text-white" />
                 )}
                 <span>
-                  {isSaving
+                  {isHistoricalDateLocked
+                    ? 'Arsip Tanggal Lampau Terkunci'
+                    : isSaving
                     ? 'Menyimpan...'
                     : currentClassStatus.isDone
                     ? '✓ Presensi Sudah Dilakukan (Klik untuk Perbarui Data)'
