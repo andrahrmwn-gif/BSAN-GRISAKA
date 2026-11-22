@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ViolationRecord, Student, SchoolProfile } from '../../types';
-import { SCHOOL_CONFIG } from '../../data/schoolConfig';
+import { SCHOOL_CONFIG, KELAS_LIST } from '../../data/schoolConfig';
 import { getWhatsAppUrl, generateViolationMessage } from '../../utils/whatsapp';
 import { exportViolationsToWord, exportViolationsToPrintPDF, exportToCSV, exportElementToPDF } from '../../utils/exportDocs';
 import { useRealtimeDateTracker, formatIndoFullDate } from '../../utils/dateUtils';
@@ -412,8 +412,8 @@ export const ViolationsManager: React.FC<ViolationsManagerProps> = ({
             onChange={(e) => setKelasFilter(e.target.value)}
             className="px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:outline-hidden text-slate-700 font-medium"
           >
-            <option value="all">Semua Rombel</option>
-            {['7A', '7B', '7C', '7D', '8A', '8B', '8C', '8D', '9A', '9B', '9C', '9D'].map((k) => (
+            <option value="all">Semua Rombel (24 Kelas)</option>
+            {KELAS_LIST.map((k) => (
               <option key={k} value={k}>
                 Kelas {k}
               </option>

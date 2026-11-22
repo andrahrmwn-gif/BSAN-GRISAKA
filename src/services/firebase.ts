@@ -11,7 +11,8 @@ import {
   getDocsFromServer,
   onSnapshot, 
   writeBatch,
-  getDocs
+  getDocs,
+  runTransaction
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Student, ViolationRecord, WhatsAppMessageLog, SchoolProfile, AttendanceSheet, AttendanceStatus } from '../types';
@@ -140,6 +141,7 @@ const COLLECTIONS = {
 export interface SystemMeta {
   studentsInitialized: boolean;
   isCleanReset: boolean;
+  class7B7FSwapFixV1?: boolean;
   updatedAt: string;
 }
 
@@ -456,7 +458,7 @@ export const updateStudentFieldsInFirestore = async (
  * NEVER touches nama, nisn, kelas, or violation counters of any student!
  */
 export const batchUpdateStudentsAttendanceInFirestore = async (
-  updates: Array<{ id: string; statusKehadiran: AttendanceStatus; keteranganKehadiran?: string }>
+  updates: Array<{ id: string; statusKehadiran: AttendanceStatus; statusKehadiranDate?: string; keteranganKehadiran?: string }>
 ): Promise<void> => {
   if (!updates || updates.length === 0) return;
   const CHUNK_SIZE = 350;
@@ -466,14 +468,14 @@ export const batchUpdateStudentsAttendanceInFirestore = async (
       const batch = writeBatch(db);
       chunk.forEach((u) => {
         const ref = doc(db, COLLECTIONS.STUDENTS, u.id);
-        batch.set(
-          ref,
-          {
-            statusKehadiran: u.statusKehadiran,
-            keteranganKehadiran: u.keteranganKehadiran || '',
-          },
-          { merge: true }
-        );
+        const payload: Record<string, unknown> = {
+          statusKehadiran: u.statusKehadiran,
+          keteranganKehadiran: u.keteranganKehadiran || '',
+        };
+        if (u.statusKehadiranDate) {
+          payload.statusKehadiranDate = u.statusKehadiranDate;
+        }
+        batch.set(ref, payload, { merge: true });
       });
       await batch.commit();
     }
@@ -845,9 +847,137 @@ export const clearAllFirestoreData = async (): Promise<void> => {
     await setSystemMeta({
       studentsInitialized: true,
       isCleanReset: true,
+      class7B7FSwapFixV1: true,
       updatedAt: new Date().toISOString(),
     });
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, 'all_collections');
   }
+};
+
+/**
+ * Atomically repairs swapped 7B <-> 7F classes in existing Firestore database exactly once
+ * using a transaction lock on school_config/system_meta.
+ */
+export const swapClass7BAnd7FInFirestoreOnce = async (): Promise<{ swappedStudents: number }> => {
+  const metaRef = doc(db, COLLECTIONS.SETTINGS, 'system_meta');
+  const shouldRun = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(metaRef);
+    const data = snap.exists() ? (snap.data() as SystemMeta) : null;
+    if (data?.class7B7FSwapFixV1 || data?.isCleanReset) {
+      return false;
+    }
+    tx.set(
+      metaRef,
+      {
+        studentsInitialized: true,
+        isCleanReset: false,
+        class7B7FSwapFixV1: true,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    return true;
+  });
+
+  if (!shouldRun) {
+    return { swappedStudents: 0 };
+  }
+
+  const swapKelasLabel = (k?: string): string | undefined => {
+    if (!k) return k;
+    const norm = k.trim().toUpperCase();
+    if (norm === '7B') return '7F';
+    if (norm === '7F') return '7B';
+    return k;
+  };
+
+  let swappedStudents = 0;
+  const CHUNK_SIZE = 350;
+
+  // 1. Swap 7B <-> 7F on students collection
+  const stdSnap = await getDocsFromServer(collection(db, COLLECTIONS.STUDENTS)).catch(() =>
+    getDocs(collection(db, COLLECTIONS.STUDENTS))
+  );
+  const stdToUpdate: Array<{ id: string; nextKelas: string }> = [];
+  stdSnap.forEach((d) => {
+    const data = d.data() as Student;
+    const swapped = swapKelasLabel(data.kelas);
+    if (swapped && swapped !== data.kelas) {
+      stdToUpdate.push({ id: d.id, nextKelas: swapped });
+    }
+  });
+  for (let i = 0; i < stdToUpdate.length; i += CHUNK_SIZE) {
+    const chunk = stdToUpdate.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach((item) => {
+      batch.set(doc(db, COLLECTIONS.STUDENTS, item.id), { kelas: item.nextKelas }, { merge: true });
+    });
+    await batch.commit();
+  }
+  swappedStudents = stdToUpdate.length;
+
+  // 2. Swap 7B <-> 7F on violations collection
+  const violSnap = await getDocsFromServer(collection(db, COLLECTIONS.VIOLATIONS)).catch(() =>
+    getDocs(collection(db, COLLECTIONS.VIOLATIONS))
+  );
+  const violToUpdate: Array<{ id: string; nextKelas: string }> = [];
+  violSnap.forEach((d) => {
+    const data = d.data() as ViolationRecord;
+    const swapped = swapKelasLabel(data.kelas);
+    if (swapped && swapped !== data.kelas) {
+      violToUpdate.push({ id: d.id, nextKelas: swapped });
+    }
+  });
+  for (let i = 0; i < violToUpdate.length; i += CHUNK_SIZE) {
+    const chunk = violToUpdate.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach((item) => {
+      batch.set(doc(db, COLLECTIONS.VIOLATIONS, item.id), { kelas: item.nextKelas }, { merge: true });
+    });
+    await batch.commit();
+  }
+
+  // 3. Swap 7B <-> 7F on attendance_sheets collection
+  const attSnap = await getDocsFromServer(collection(db, COLLECTIONS.ATTENDANCE)).catch(() =>
+    getDocs(collection(db, COLLECTIONS.ATTENDANCE))
+  );
+  const attSwappedDocs: Array<{ oldId: string; newSheet: AttendanceSheet }> = [];
+  attSnap.forEach((d) => {
+    const data = d.data() as AttendanceSheet;
+    const swappedKelas = swapKelasLabel(data.kelas);
+    if (swappedKelas && swappedKelas !== data.kelas) {
+      const nextId = `att-${data.date}-${swappedKelas}`;
+      attSwappedDocs.push({
+        oldId: d.id,
+        newSheet: {
+          ...data,
+          id: nextId,
+          kelas: swappedKelas,
+        },
+      });
+    }
+  });
+  if (attSwappedDocs.length > 0) {
+    const oldIds = new Set(attSwappedDocs.map((a) => a.oldId));
+    const newIds = new Set(attSwappedDocs.map((a) => a.newSheet.id));
+    for (let i = 0; i < attSwappedDocs.length; i += CHUNK_SIZE) {
+      const chunk = attSwappedDocs.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((item) => {
+        batch.set(doc(db, COLLECTIONS.ATTENDANCE, item.newSheet.id), sanitizeForFirestore(item.newSheet));
+      });
+      await batch.commit();
+    }
+    // Delete any orphaned old sheet IDs that aren't overwritten by the swapped counterpart
+    const toDeleteOldIds = Array.from(oldIds).filter((id) => !newIds.has(id));
+    for (let i = 0; i < toDeleteOldIds.length; i += CHUNK_SIZE) {
+      const chunk = toDeleteOldIds.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((id) => batch.delete(doc(db, COLLECTIONS.ATTENDANCE, id)));
+      await batch.commit();
+    }
+  }
+
+  return { swappedStudents };
 };

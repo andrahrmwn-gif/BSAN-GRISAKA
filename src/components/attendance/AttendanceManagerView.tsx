@@ -113,10 +113,13 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
     return Object.values(classStatusMap).filter((item) => item.isDone).length;
   }, [classStatusMap]);
 
-  // Recap View State
+  // Recap View State (uses realtime date tracker so midnight rollover updates recap cleanly)
   const [recapPeriod, setRecapPeriod] = useState<AttendancePeriod>('harian');
   const [recapKelas, setRecapKelas] = useState<string>('all');
-  const [recapDate, setRecapDate] = useState<string>(() => getRealtimeDateYMD());
+  const {
+    selectedDate: recapDate,
+    setSelectedDate: setRecapDate,
+  } = useRealtimeDateTracker();
   const [isPdfExporting, setIsPdfExporting] = useState(false);
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -124,11 +127,24 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
+    setPdfDownloadUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }, [recapPeriod, recapKelas, recapDate]);
+
+  useEffect(() => {
     const handleRemoteAttendanceSync = () => {
       setSaveTrigger((c) => c + 1);
     };
     window.addEventListener('bsan_attendance_sheets_synced', handleRemoteAttendanceSync);
-    return () => window.removeEventListener('bsan_attendance_sheets_synced', handleRemoteAttendanceSync);
+    window.addEventListener('bsan_attendance_saved', handleRemoteAttendanceSync);
+    window.addEventListener('bsan_midnight_rollover', handleRemoteAttendanceSync);
+    return () => {
+      window.removeEventListener('bsan_attendance_sheets_synced', handleRemoteAttendanceSync);
+      window.removeEventListener('bsan_attendance_saved', handleRemoteAttendanceSync);
+      window.removeEventListener('bsan_midnight_rollover', handleRemoteAttendanceSync);
+    };
   }, []);
 
   useEffect(() => {
@@ -153,7 +169,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
     return sortByName(filtered);
   }, [students, selectedKelas]);
 
-  // Load or initialize attendance entries when selectedKelas or selectedDate changes
+  // Load or initialize attendance entries when selectedKelas, selectedDate, or remote sync changes
   useEffect(() => {
     const existingSheet = getAttendanceByClassAndDate(selectedKelas, selectedDate);
     
@@ -162,18 +178,18 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
       const sortedEntries = sortByName(existingSheet.entries);
       setEntries(sortedEntries);
     } else {
-      // Initialize from current students database (already sorted by name)
+      // Fresh unrecorded date always initializes cleanly to normal ('Hadir', empty note)
       const newEntries: AttendanceStudentEntry[] = classStudents.map((std) => ({
         studentId: std.id,
         nisn: std.nisn,
         nama: std.nama,
         gender: std.gender,
-        status: std.statusKehadiran || 'Hadir',
-        keterangan: std.keteranganKehadiran || '',
+        status: selectedDate === todayStr && std.statusKehadiranDate === todayStr ? (std.statusKehadiran || 'Hadir') : 'Hadir',
+        keterangan: selectedDate === todayStr && std.statusKehadiranDate === todayStr ? (std.keteranganKehadiran || '') : '',
       }));
       setEntries(newEntries);
     }
-  }, [selectedKelas, selectedDate, classStudents]);
+  }, [selectedKelas, selectedDate, classStudents, saveTrigger, todayStr]);
 
   // Handle single student attendance status change
   const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
@@ -320,8 +336,8 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
       window.dispatchEvent(new CustomEvent('bsan_attendance_saved', { detail: newSheet }));
     } catch {}
 
-    // Synchronize ONLY the affected class students so other classes & violation counters are never overwritten
-    if (onUpdateStudentsAttendance) {
+    // Synchronize ONLY today's affected class students so editing historical dates never corrupts today's state
+    if (onUpdateStudentsAttendance && selectedDate === todayStr) {
       const changedClassStudents: Student[] = [];
       const updatedStudents = students.map((std) => {
         if (std.kelas === selectedKelas) {
@@ -332,6 +348,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
             const nextStd: Student = {
               ...std,
               statusKehadiran: matchedEntry.status,
+              statusKehadiranDate: selectedDate,
               keteranganKehadiran: matchedEntry.keterangan || '',
             };
             changedClassStudents.push(nextStd);
@@ -396,7 +413,7 @@ export const AttendanceManagerView: React.FC<AttendanceManagerViewProps> = ({
         totalPertemuan,
       },
     };
-  }, [students, recapPeriod, recapKelas, recapDate]);
+  }, [students, recapPeriod, recapKelas, recapDate, saveTrigger]);
 
   // Handle Export Word
   const handleExportWord = () => {

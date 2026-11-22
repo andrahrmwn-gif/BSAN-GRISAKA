@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ViewMode, Student, ViolationRecord, WhatsAppMessageLog, SchoolProfile } from './types';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { ViewMode, Student, ViolationRecord, WhatsAppMessageLog, SchoolProfile, AttendanceSheet } from './types';
 import { UserAccount } from './types/auth';
 import { 
   getStoredStudents, 
@@ -41,9 +41,15 @@ import {
   setSystemMeta,
   checkServerStudentsCount,
   getAccountDirectlyFromFirestore,
+  swapClass7BAnd7FInFirestoreOnce,
 } from './services/firebase';
 import { INITIAL_STUDENTS } from './data/initialStudents';
-import { saveAttendanceSheetsLocalOnly } from './services/attendanceStorage';
+import { 
+  saveAttendanceSheetsLocalOnly, 
+  getStoredAttendanceSheets, 
+  getEffectiveStudentAttendanceForDate 
+} from './services/attendanceStorage';
+import { useRealtimeDateTracker } from './utils/dateUtils';
 import { saveActivities } from './services/announcementService';
 import { sortByClassAndName } from './utils/sortUtils';
 import { 
@@ -80,9 +86,12 @@ import { RotateCcw, AlertTriangle, CheckCircle2, X, ShieldAlert, Menu } from 'lu
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>('dashboard');
   const [students, setStudents] = useState<Student[]>(() => getStoredStudents());
+  const [attendanceSheets, setAttendanceSheets] = useState<AttendanceSheet[]>(() => getStoredAttendanceSheets());
   const [violations, setViolations] = useState<ViolationRecord[]>(() => getStoredViolations());
   const [waLogs, setWaLogs] = useState<WhatsAppMessageLog[]>(() => getStoredWaLogs());
   const [schoolConfig, setSchoolConfig] = useState<SchoolProfile>(() => getStoredSchoolConfig());
+  const { todayStr } = useRealtimeDateTracker();
+  const hasChecked7B7FSwapRef = useRef(false);
 
   // User Authentication & Session Unlocked state (Requirement 6: Login page first)
   const [isSessionUnlocked, setIsSessionUnlocked] = useState<boolean>(() => {
@@ -176,6 +185,23 @@ export default function App() {
       if (remoteStudents.length > 0) {
         isInitialStudentSyncDone = true;
         setStudents(remoteStudents);
+        if (!meta.fromCache && !hasChecked7B7FSwapRef.current) {
+          hasChecked7B7FSwapRef.current = true;
+          swapClass7BAnd7FInFirestoreOnce()
+            .then((res) => {
+              if (!isCancelled && res.swappedStudents > 0) {
+                setResetSuccessToast(`Database siswa kelas 7B dan 7F (${res.swappedStudents} data siswa) berhasil diperbaiki & disinkronkan.`);
+                setTimeout(() => setResetSuccessToast(null), 6000);
+                logAudit({
+                  actionType: 'UPDATE',
+                  module: 'Siswa',
+                  description: `Perbaikan otomatis pertukaran kelas 7B ↔ 7F berhasil diterapkan pada ${res.swappedStudents} data siswa di cloud.`,
+                  status: 'SUCCESS',
+                });
+              }
+            })
+            .catch(console.error);
+        }
       } else if (!isInitialStudentSyncDone) {
         isInitialStudentSyncDone = true;
         // Verify directly on Firestore server whether DB was never initialized vs intentionally reset/empty
@@ -189,6 +215,7 @@ export default function App() {
               setSystemMeta({
                 studentsInitialized: true,
                 isCleanReset: false,
+                class7B7FSwapFixV1: true,
                 updatedAt: new Date().toISOString(),
               }).catch(console.error);
             } else if (serverCount === 0) {
@@ -219,11 +246,24 @@ export default function App() {
       }
     });
 
+    const handleLocalAttendanceSync = (e: Event) => {
+      if (isCancelled) return;
+      const customEvt = e as CustomEvent<AttendanceSheet[]>;
+      if (Array.isArray(customEvt.detail)) {
+        setAttendanceSheets(customEvt.detail);
+      } else {
+        setAttendanceSheets(getStoredAttendanceSheets());
+      }
+    };
+    window.addEventListener('bsan_attendance_sheets_synced', handleLocalAttendanceSync);
+
     const unsubAttendance = subscribeToAttendanceSheets((remoteSheets) => {
       if (isCancelled) return;
-      saveAttendanceSheetsLocalOnly(remoteSheets || []);
+      const sheets = remoteSheets || [];
+      saveAttendanceSheetsLocalOnly(sheets);
+      setAttendanceSheets(sheets);
       try {
-        window.dispatchEvent(new CustomEvent('bsan_attendance_sheets_synced', { detail: remoteSheets || [] }));
+        window.dispatchEvent(new CustomEvent('bsan_attendance_sheets_synced', { detail: sheets }));
       } catch {}
     });
 
@@ -270,6 +310,7 @@ export default function App() {
 
     return () => {
       isCancelled = true;
+      window.removeEventListener('bsan_attendance_sheets_synced', handleLocalAttendanceSync);
       unsubStudents();
       unsubViolations();
       unsubWaLogs();
@@ -280,6 +321,21 @@ export default function App() {
       unsubAuditLogs();
     };
   }, []);
+
+  // Derive date-aware today attendance for every student cleanly:
+  // If no sheet exists for todayStr (e.g., midnight rollover to a new day), status returns to 'Hadir' automatically
+  // while preserving all past days' attendance sheets intact in Firestore & recap.
+  const effectiveStudents = useMemo(() => {
+    return students.map((std) => {
+      const eff = getEffectiveStudentAttendanceForDate(std, todayStr, attendanceSheets);
+      return {
+        ...std,
+        statusKehadiran: eff.status,
+        keteranganKehadiran: eff.keterangan,
+        statusKehadiranDate: eff.isRecorded ? todayStr : undefined,
+      };
+    });
+  }, [students, attendanceSheets, todayStr]);
 
   // Real-time synchronization of student violation counts from actual violations ledger
   useEffect(() => {
@@ -504,6 +560,7 @@ export default function App() {
         await setSystemMeta({
           studentsInitialized: true,
           isCleanReset: false,
+          class7B7FSwapFixV1: true,
           updatedAt: new Date().toISOString(),
         });
 
@@ -531,6 +588,7 @@ export default function App() {
         await setSystemMeta({
           studentsInitialized: true,
           isCleanReset: false,
+          class7B7FSwapFixV1: true,
           updatedAt: new Date().toISOString(),
         });
 
@@ -1228,8 +1286,8 @@ export default function App() {
           navigateToView(view);
           setIsMobileSidebarOpen(false);
         }}
-        activeViolationsCount={violations.filter((v) => v.statusSurat !== 'Selesai').length}
-        pendingWaCount={students.filter((s) => s.statusKehadiran !== 'Hadir').length}
+        activeViolationsCount={violations.filter((v) => v.tanggal === todayStr && v.statusSurat !== 'Selesai').length}
+        pendingWaCount={effectiveStudents.filter((s) => s.statusKehadiran !== 'Hadir').length}
         schoolConfig={schoolConfig}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
@@ -1256,7 +1314,7 @@ export default function App() {
         <main className="flex-1 px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 max-w-7xl w-full mx-auto space-y-4 sm:space-y-6">
           {currentView === 'dashboard' && (
             <ExecutiveDashboard
-              students={students}
+              students={effectiveStudents}
               violations={violations}
               schoolConfig={schoolConfig}
               onNavigate={(view) => navigateToView(view)}
@@ -1269,7 +1327,7 @@ export default function App() {
 
           {currentView === 'students' && (
             <StudentCentralHub
-              students={students}
+              students={effectiveStudents}
               currentUser={currentUser}
               onAddStudent={handleAddStudent}
               onUpdateStudent={handleUpdateStudent}
@@ -1282,7 +1340,7 @@ export default function App() {
 
           {currentView === 'attendance' && (
             <AttendanceManagerView
-              students={students}
+              students={effectiveStudents}
               schoolConfig={schoolConfig}
               onUpdateStudentsAttendance={(updated, changedOnly) => {
                 // Only update attendance fields for the affected students so concurrent edits
@@ -1297,6 +1355,7 @@ export default function App() {
                     return {
                       ...std,
                       statusKehadiran: match.statusKehadiran,
+                      statusKehadiranDate: match.statusKehadiranDate || todayStr,
                       keteranganKehadiran: match.keteranganKehadiran || '',
                     };
                   });
@@ -1308,6 +1367,7 @@ export default function App() {
                   affectedList.map((s) => ({
                     id: s.id,
                     statusKehadiran: s.statusKehadiran,
+                    statusKehadiranDate: s.statusKehadiranDate || todayStr,
                     keteranganKehadiran: s.keteranganKehadiran || '',
                   }))
                 ).catch(console.error);
@@ -1320,6 +1380,7 @@ export default function App() {
                         ? {
                             ...prev,
                             statusKehadiran: refreshed.statusKehadiran,
+                            statusKehadiranDate: refreshed.statusKehadiranDate || todayStr,
                             keteranganKehadiran: refreshed.keteranganKehadiran || '',
                           }
                         : null
@@ -1334,7 +1395,7 @@ export default function App() {
           {currentView === 'violations' && (
             <ViolationsManager
               violations={violations}
-              students={students}
+              students={effectiveStudents}
               schoolConfig={schoolConfig}
               onOpenRecordModal={() => handleTriggerQuickViolation()}
               onOpenSuratModal={handleOpenSuratModal}
@@ -1353,7 +1414,7 @@ export default function App() {
 
           {currentView === 'whatsapp' && (
             <WhatsAppGateway
-              students={students}
+              students={effectiveStudents}
               violations={violations}
               waLogs={waLogs}
               schoolConfig={schoolConfig}
@@ -1367,7 +1428,7 @@ export default function App() {
 
           {currentView === 'reports' && (
             <ComprehensiveReports
-              students={students}
+              students={effectiveStudents}
               violations={violations}
               schoolConfig={schoolConfig}
             />
@@ -1376,7 +1437,7 @@ export default function App() {
           {currentView === 'settings' && (
             <SchoolSettingsView
               schoolConfig={schoolConfig}
-              students={students}
+              students={effectiveStudents}
               violations={violations}
               currentUser={currentUser}
               onUpdateSchoolConfig={handleUpdateSchoolConfig}
@@ -1453,7 +1514,7 @@ export default function App() {
           setIsRecordModalOpen(false);
           setPreselectedStudentId('');
         }}
-        students={students}
+        students={effectiveStudents}
         preselectedStudentId={preselectedStudentId}
         onSaveViolation={handleSaveViolation}
         onOpenSurat={(v) => handleOpenSuratModal(v)}
@@ -1476,7 +1537,7 @@ export default function App() {
       <StudentSlipDetailModal
         isOpen={!!detailedSlipStudent}
         onClose={() => setDetailedSlipStudent(null)}
-        student={students.find((s) => s.id === detailedSlipStudent?.id) || detailedSlipStudent}
+        student={effectiveStudents.find((s) => s.id === detailedSlipStudent?.id) || detailedSlipStudent}
         violations={violations}
         schoolConfig={schoolConfig}
         onOpenRecordViolation={(studentId) => {

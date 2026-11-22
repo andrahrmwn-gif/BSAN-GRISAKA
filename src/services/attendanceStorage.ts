@@ -75,9 +75,18 @@ export const saveAttendanceSheetsLocalOnly = (sheets: AttendanceSheet[]): void =
   }
 };
 
+const emitLocalAttendanceChanged = (sheets: AttendanceSheet[]) => {
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent('bsan_attendance_sheets_synced', { detail: sheets }));
+    } catch {}
+  }
+};
+
 export const clearAllAttendanceSheets = (): void => {
   try {
     secureStorage.setItem(STORAGE_KEYS.ATTENDANCE, []);
+    emitLocalAttendanceChanged([]);
   } catch (err) {
     console.error('Failed clearing attendance sheets', err);
   }
@@ -92,6 +101,7 @@ export const resetAttendanceToClean = (currentStudents?: Student[]): AttendanceS
 export const saveAttendanceSheets = (sheets: AttendanceSheet[]): void => {
   try {
     secureStorage.setItem(STORAGE_KEYS.ATTENDANCE, sheets);
+    emitLocalAttendanceChanged(sheets);
     bulkSyncAttendanceSheets(sheets).catch(console.error);
   } catch (err) {
     console.error('Failed saving attendance sheets', err);
@@ -112,6 +122,7 @@ export const saveSingleAttendanceSheet = (sheet: AttendanceSheet): AttendanceShe
 
   try {
     secureStorage.setItem(STORAGE_KEYS.ATTENDANCE, updated);
+    emitLocalAttendanceChanged(updated);
     syncAttendanceSheetToFirestore(sheet).catch(console.error);
   } catch (err) {
     console.error('Failed saving attendance sheet', err);
@@ -125,6 +136,79 @@ export const getAttendanceByClassAndDate = (kelas: string, date: string): Attend
 };
 
 /**
+ * Parse YYYY-MM-DD safely in local timezone (avoids UTC midnight off-by-one-day bugs)
+ */
+const parseLocalYMD = (dateStr: string): Date | null => {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return null;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
+};
+
+/**
+ * Match a student against an attendance sheet entry safely (avoiding false empty-NISN matches)
+ */
+const matchStudentEntry = (
+  entry: { studentId?: string; nisn?: string; nama?: string },
+  student: Student,
+  sheetKelas?: string
+): boolean => {
+  if (!entry) return false;
+  if (entry.studentId && student.id && entry.studentId === student.id) return true;
+  const stdNisn = (student.nisn || '').trim();
+  const entNisn = (entry.nisn || '').trim();
+  if (stdNisn && entNisn && stdNisn === entNisn) return true;
+  const stdNama = (student.nama || '').trim().toLowerCase();
+  const entNama = (entry.nama || '').trim().toLowerCase();
+  if (stdNama && entNama && stdNama === entNama && (!sheetKelas || sheetKelas === student.kelas)) {
+    return true;
+  }
+  return false;
+};
+
+/**
+ * Resolve a student's effective attendance for a specific date (defaulting cleanly to 'Hadir' on a new day
+ * when no sheet has been recorded yet so yesterday's Sakit/Izin/Alfa never leaks into today).
+ */
+export const getEffectiveStudentAttendanceForDate = (
+  student: Student,
+  targetDate: string,
+  sheets?: AttendanceSheet[]
+): { status: AttendanceStatus; keterangan: string; isRecorded: boolean } => {
+  const pool = sheets ?? getStoredAttendanceSheets();
+  const classSheet = pool.find((s) => s && s.date === targetDate && s.kelas === student.kelas);
+  if (classSheet && Array.isArray(classSheet.entries)) {
+    const entry = classSheet.entries.find((e) => matchStudentEntry(e, student, classSheet.kelas));
+    if (entry && entry.status) {
+      return {
+        status: entry.status,
+        keterangan: entry.keterangan || '',
+        isRecorded: true,
+      };
+    }
+  }
+
+  // Only honour student.statusKehadiran when it explicitly belongs to targetDate
+  if (student.statusKehadiranDate && student.statusKehadiranDate === targetDate) {
+    return {
+      status: (student.statusKehadiran || 'Hadir') as AttendanceStatus,
+      keterangan: student.keteranganKehadiran || '',
+      isRecorded: true,
+    };
+  }
+
+  return {
+    status: 'Hadir',
+    keterangan: '',
+    isRecorded: false,
+  };
+};
+
+/**
  * Filter attendance sheets based on period and class
  */
 export const filterAttendanceSheets = (
@@ -133,27 +217,30 @@ export const filterAttendanceSheets = (
   kelas: string, // 'all' or specific class e.g. '7A'
   targetDate: string // YYYY-MM-DD
 ): AttendanceSheet[] => {
-  const dateObj = new Date(targetDate);
+  const dateObj = parseLocalYMD(targetDate);
+  if (!dateObj) return [];
   const targetYear = dateObj.getFullYear();
   const targetMonth = dateObj.getMonth(); // 0-11
 
   return sheets.filter((sheet) => {
+    if (!sheet || !sheet.date) return false;
     // Class filter
     if (kelas !== 'all' && sheet.kelas !== kelas) return false;
-
-    const sheetDate = new Date(sheet.date);
-    const sheetYear = sheetDate.getFullYear();
-    const sheetMonth = sheetDate.getMonth();
 
     if (period === 'harian') {
       return sheet.date === targetDate;
     }
 
+    const sheetDate = parseLocalYMD(sheet.date);
+    if (!sheetDate) return false;
+    const sheetYear = sheetDate.getFullYear();
+    const sheetMonth = sheetDate.getMonth();
+
     if (period === 'mingguan') {
-      // 7 days window ending at targetDate or starting around Monday of the target week
-      const diffTime = Math.abs(dateObj.getTime() - sheetDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays <= 7 && sheetDate <= dateObj;
+      // Exact 7-day local calendar window ending on targetDate (inclusive)
+      const diffMs = dateObj.getTime() - sheetDate.getTime();
+      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && diffDays < 7;
     }
 
     if (period === 'bulanan') {
@@ -169,7 +256,6 @@ export const filterAttendanceSheets = (
     }
 
     if (period === 'tahunan') {
-      // School year: July to June of next year, or calendar year
       return sheetYear === targetYear;
     }
 
@@ -199,7 +285,8 @@ export const calculateStudentRecap = (
     let lastNote: string | undefined = undefined;
 
     filteredSheets.forEach((sheet) => {
-      const entry = sheet.entries.find(e => e.studentId === std.id || e.nisn === std.nisn);
+      if (!sheet || !Array.isArray(sheet.entries)) return;
+      const entry = sheet.entries.find((e) => matchStudentEntry(e, std, sheet.kelas));
       if (entry) {
         if (entry.status === 'Hadir') totalHadir++;
         else if (entry.status === 'Sakit') {
@@ -266,37 +353,20 @@ export interface DateAttendanceSummary {
  * Get unified attendance statistics, class breakdown, and individual records for ANY date
  * (today or any historical past date).
  */
-export const getDateAttendanceSummary = (targetDate: string, students: Student[]): DateAttendanceSummary => {
-  const allSheets = getStoredAttendanceSheets();
-  const dateSheets = allSheets.filter(s => s.date === targetDate);
-  const todayStr = getRealtimeDateYMD();
+export const getDateAttendanceSummary = (
+  targetDate: string,
+  students: Student[],
+  overrideSheets?: AttendanceSheet[]
+): DateAttendanceSummary => {
+  const allSheets = overrideSheets ?? getStoredAttendanceSheets();
+  const dateSheets = allSheets.filter((s) => s && s.date === targetDate);
 
-  const studentRecords = students.map(student => {
-    // 1. Check if an attendance sheet exists for this student's class on targetDate
-    const classSheet = dateSheets.find(s => s.kelas === student.kelas);
-    if (classSheet) {
-      const entry = classSheet.entries.find(e => e.studentId === student.id || e.nisn === student.nisn);
-      if (entry) {
-        return {
-          student,
-          status: entry.status,
-          keterangan: entry.keterangan
-        };
-      }
-    }
-    // 2. If it's today and no sheet entry found, fallback to student's current status
-    if (targetDate === todayStr) {
-      return {
-        student,
-        status: (student.statusKehadiran || 'Hadir') as AttendanceStatus,
-        keterangan: student.keteranganKehadiran
-      };
-    }
-    // 3. For other dates with no explicit sheet entry, default to Hadir
+  const studentRecords = students.map((student) => {
+    const resolved = getEffectiveStudentAttendanceForDate(student, targetDate, dateSheets);
     return {
       student,
-      status: 'Hadir' as AttendanceStatus,
-      keterangan: undefined
+      status: resolved.status,
+      keterangan: resolved.keterangan || undefined,
     };
   });
 

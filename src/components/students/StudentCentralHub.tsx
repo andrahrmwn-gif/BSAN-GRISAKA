@@ -3,6 +3,7 @@ import { Student, Gender, AttendanceStatus } from '../../types';
 import { KELAS_LIST } from '../../data/schoolConfig';
 import { exportToCSV, downloadStudentTemplate } from '../../utils/exportDocs';
 import { parseStudentDatabaseFile, ParseStudentFileResult } from '../../utils/studentImportParser';
+import { getRealtimeDateYMD } from '../../utils/dateUtils';
 import { 
   Users, 
   Search, 
@@ -136,10 +137,16 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
       return;
     }
 
+    const todayYMD = getRealtimeDateYMD();
     if (editingStudent) {
+      const statusChanged = formData.statusKehadiran !== editingStudent.statusKehadiran;
       const updated: Student = {
         ...editingStudent,
         ...formData,
+        statusKehadiranDate:
+          statusChanged || formData.statusKehadiran !== 'Hadir'
+            ? todayYMD
+            : editingStudent.statusKehadiranDate,
         jenjang: parseInt(formData.kelas.charAt(0)) || 7,
       };
       onUpdateStudent(updated);
@@ -148,6 +155,7 @@ export const StudentCentralHub: React.FC<StudentCentralHubProps> = ({
       const newStd: Student = {
         ...formData,
         id: `std-${Date.now()}`,
+        statusKehadiranDate: todayYMD,
         jenjang: parseInt(formData.kelas.charAt(0)) || 7,
         totalPoinPelanggaran: 0,
         totalPelanggaranRingan: 0,

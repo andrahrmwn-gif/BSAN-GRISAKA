@@ -139,6 +139,8 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   useEffect(() => {
     const handleAttendanceSynced = () => setAttendanceSyncTick((t) => t + 1);
     window.addEventListener('bsan_attendance_sheets_synced', handleAttendanceSynced);
+    window.addEventListener('bsan_attendance_saved', handleAttendanceSynced);
+    window.addEventListener('bsan_midnight_rollover', handleAttendanceSynced);
     const refreshActivities = () => {
       const list = getStoredActivities();
       setActivities(list);
@@ -161,12 +163,16 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         clearTimeout(timer);
         window.removeEventListener('bsan_activities_changed', refreshActivities);
         window.removeEventListener('bsan_attendance_sheets_synced', handleAttendanceSynced);
+        window.removeEventListener('bsan_attendance_saved', handleAttendanceSynced);
+        window.removeEventListener('bsan_midnight_rollover', handleAttendanceSynced);
       };
     }
 
     return () => {
       window.removeEventListener('bsan_activities_changed', refreshActivities);
       window.removeEventListener('bsan_attendance_sheets_synced', handleAttendanceSynced);
+      window.removeEventListener('bsan_attendance_saved', handleAttendanceSynced);
+      window.removeEventListener('bsan_midnight_rollover', handleAttendanceSynced);
     };
   }, []);
 
@@ -204,22 +210,60 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   const percentTidakHadirNum = totalStudents > 0 ? (tidakHadirCount / totalStudents) * 100 : 0;
   const percentTidakHadirStr = percentTidakHadirNum.toFixed(2).replace('.', ',');
 
-  // Violations Metrics
+  // Violations Metrics (Scoped strictly to selectedDate so next day resets cleanly to 0)
+  const dayViolations = useMemo(() => {
+    return violations.filter((v) => v.tanggal === selectedDate);
+  }, [violations, selectedDate]);
+
   const totalRingan = useMemo(() => {
-    return violations.filter((v) => v.tingkat === 'Ringan').length;
-  }, [violations]);
+    return dayViolations.filter((v) => v.tingkat === 'Ringan').length;
+  }, [dayViolations]);
 
   const totalSedang = useMemo(() => {
-    return violations.filter((v) => v.tingkat === 'Sedang').length;
-  }, [violations]);
+    return dayViolations.filter((v) => v.tingkat === 'Sedang').length;
+  }, [dayViolations]);
 
   const totalBerat = useMemo(() => {
-    return violations.filter((v) => v.tingkat === 'Berat').length;
-  }, [violations]);
+    return dayViolations.filter((v) => v.tingkat === 'Berat').length;
+  }, [dayViolations]);
 
-  // Absent students list for Middle Card 2 (Filtered for selectedDate)
+  // Absent students list for Middle Card 2 (Supports 'today' = selectedDate and 'month' = selected month)
   const absentStudentsList = useMemo(() => {
-    let list = dateAttendance.studentRecords
+    if (absentPeriodFilter === 'month') {
+      const monthPrefix = selectedDate.substring(0, 7);
+      const monthSheets = getStoredAttendanceSheets()
+        .filter((s) => s && s.date && s.date.startsWith(monthPrefix))
+        .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+      const seenIds = new Set<string>();
+      const monthlyList: Student[] = [];
+
+      monthSheets.forEach((sheet) => {
+        (sheet.entries || []).forEach((entry) => {
+          if (!entry || entry.status === 'Hadir') return;
+          if (absentStatusFilter !== 'all' && entry.status !== absentStatusFilter) return;
+
+          const matchedStudent = students.find(
+            (s) =>
+              s.id === entry.studentId ||
+              (s.nisn && entry.nisn && s.nisn === entry.nisn) ||
+              (s.nama && entry.nama && s.nama.trim().toLowerCase() === entry.nama.trim().toLowerCase() && s.kelas === sheet.kelas)
+          );
+          if (!matchedStudent || seenIds.has(matchedStudent.id)) return;
+          seenIds.add(matchedStudent.id);
+
+          monthlyList.push({
+            ...matchedStudent,
+            statusKehadiran: entry.status,
+            keteranganKehadiran: entry.keterangan ? `${entry.keterangan} (${sheet.date})` : sheet.date,
+          });
+        });
+      });
+
+      return sortByClassAndName(monthlyList);
+    }
+
+    const list = dateAttendance.studentRecords
       .filter((rec) => {
         if (rec.status === 'Hadir') return false;
         if (absentStatusFilter !== 'all' && rec.status !== absentStatusFilter) return false;
@@ -232,7 +276,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
       }));
 
     return sortByClassAndName(list);
-  }, [dateAttendance, absentStatusFilter]);
+  }, [dateAttendance, absentStatusFilter, absentPeriodFilter, selectedDate, students, attendanceSyncTick]);
 
   // Data for "Grafik Kehadiran Siswa Per Kelas" (24 Classes 7A - 9H) integrated with student counts
   const classAttendanceChartData = useMemo(() => {
@@ -321,7 +365,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         tidakHadirCount: dTidakHadir,
       };
     });
-  }, [dateAttendance, chartPeriodFilter, chartMetricType, selectedDate, students]);
+  }, [dateAttendance, chartPeriodFilter, chartMetricType, selectedDate, students, attendanceSyncTick]);
 
   // Donut chart data for Prosentasi Kehadiran for selectedDate
   const donutData = useMemo(() => {
@@ -718,7 +762,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           {/* Action CTA Button at Bottom */}
           <div className="mt-4 pt-3.5 border-t border-white/20 flex items-center justify-between">
             <span className="text-[11px] font-bold text-rose-200">
-              Total {totalRingan + totalSedang + totalBerat} Kasus Aktif
+              {isToday ? 'Hari Ini' : selectedDate}: {totalRingan + totalSedang + totalBerat} Kasus · Arsip: {violations.length}
             </span>
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-rose-900 font-black text-xs shadow-md transition-colors">
               {isGuest ? (
@@ -1442,9 +1486,9 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-slate-900 text-sm">
-                  Pelanggaran Siswa
+                  Pelanggaran Siswa ({isToday ? 'Hari Ini' : selectedDate})
                 </h3>
-                <p className="text-[11px] text-slate-500">Klasifikasi Buku Kontrol & Sanksi</p>
+                <p className="text-[11px] text-slate-500">Klasifikasi Harian · Reset otomatis tiap ganti hari</p>
               </div>
               <button
                 onClick={() => onNavigate('violations')}
@@ -1518,10 +1562,17 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </div>
 
           <div className="pt-3 border-t border-slate-100 mt-4 flex items-center justify-between text-xs text-slate-500">
-            <span>Total Pelanggaran Aktif:</span>
-            <span className="font-mono font-bold text-slate-900">
-              {totalRingan + totalSedang + totalBerat} Kasus
-            </span>
+            <span>Total {isToday ? 'Hari Ini' : selectedDate}:</span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono font-bold text-slate-900">
+                {totalRingan + totalSedang + totalBerat} Kasus
+              </span>
+              {violations.length > 0 && (
+                <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+                  Arsip: {violations.length}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

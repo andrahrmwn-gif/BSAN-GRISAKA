@@ -87,9 +87,13 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
     const handleRefresh = () => setAttendanceRefreshKey((k) => k + 1);
     window.addEventListener('storage', handleRefresh);
     window.addEventListener('bsan_attendance_saved', handleRefresh);
+    window.addEventListener('bsan_attendance_sheets_synced', handleRefresh);
+    window.addEventListener('bsan_midnight_rollover', handleRefresh);
     return () => {
       window.removeEventListener('storage', handleRefresh);
       window.removeEventListener('bsan_attendance_saved', handleRefresh);
+      window.removeEventListener('bsan_attendance_sheets_synced', handleRefresh);
+      window.removeEventListener('bsan_midnight_rollover', handleRefresh);
     };
   }, []);
 
@@ -173,9 +177,13 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
       }
     });
 
-    // Also check current student.statusKehadiran if not Hadir
-    if (student.statusKehadiran && student.statusKehadiran !== 'Hadir') {
-      const todayYMD = getRealtimeDateYMD();
+    // Also check current student.statusKehadiran ONLY if it explicitly belongs to today
+    const todayYMD = getRealtimeDateYMD();
+    if (
+      student.statusKehadiranDate === todayYMD &&
+      student.statusKehadiran &&
+      student.statusKehadiran !== 'Hadir'
+    ) {
       if (!datesSeen.has(todayYMD)) {
         list.push({
           id: `att-today-${student.id}`,
@@ -192,19 +200,19 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [student, attendanceRefreshKey]);
 
-  // Real-time resolved attendance status for this student from attendance sheets + student record
+  // Real-time resolved attendance status for TODAY (resets cleanly to Hadir on a new day while preserving timeline history)
   const currentAttendance = useMemo(() => {
     if (!student) return { status: 'Hadir', keterangan: 'Hadir Mengikuti KBM', dateLabel: 'Hari Ini' };
-    const todayStr = getRealtimeDateYMD();
+    const todayYMD = getRealtimeDateYMD();
     const sheets = getStoredAttendanceSheets();
 
     // 1. Check if there is an entry in today's attendance sheet for this class
-    const todaySheet = sheets.find((s) => s && s.kelas === student.kelas && s.date === todayStr);
+    const todaySheet = sheets.find((s) => s && s.kelas === student.kelas && s.date === todayYMD);
     if (todaySheet && Array.isArray(todaySheet.entries)) {
       const entry = todaySheet.entries.find(
         (e) => e && (
           e.studentId === student.id || 
-          (student.nisn && e.nisn === student.nisn) || 
+          (student.nisn && e.nisn && e.nisn === student.nisn) || 
           (e.nama && student.nama && e.nama.trim().toLowerCase() === student.nama.trim().toLowerCase())
         )
       );
@@ -217,32 +225,8 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
       }
     }
 
-    // 2. Check studentAbsences (all non-Hadir entries across recorded sheets)
-    if (studentAbsences.length > 0) {
-      const todayAbs = studentAbsences.find((a) => a.date === todayStr);
-      if (todayAbs) {
-        return {
-          status: todayAbs.status,
-          keterangan: todayAbs.keterangan,
-          dateLabel: 'Hari Ini',
-        };
-      }
-      const latestAbs = studentAbsences[0];
-      const classSheets = sheets
-        .filter((s) => s && s.kelas === student.kelas && Array.isArray(s.entries))
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-      if (classSheets.length > 0 && classSheets[0].date === latestAbs.date) {
-        return {
-          status: latestAbs.status,
-          keterangan: `${latestAbs.keterangan} (${latestAbs.date})`,
-          dateLabel: latestAbs.date === todayStr ? 'Hari Ini' : latestAbs.date,
-        };
-      }
-    }
-
-    // 3. Fallback to student.statusKehadiran if not Hadir
-    if (student.statusKehadiran && student.statusKehadiran !== 'Hadir') {
+    // 2. Fallback to student.statusKehadiran ONLY when stamped with today's date
+    if (student.statusKehadiranDate === todayYMD && student.statusKehadiran && student.statusKehadiran !== 'Hadir') {
       return {
         status: student.statusKehadiran,
         keterangan: student.keteranganKehadiran || `Status ${student.statusKehadiran}`,
@@ -252,10 +236,10 @@ export const StudentSlipDetailModal: React.FC<StudentSlipDetailModalProps> = ({
 
     return {
       status: 'Hadir',
-      keterangan: student.keteranganKehadiran || 'Hadir Mengikuti KBM',
+      keterangan: 'Hadir Mengikuti KBM',
       dateLabel: 'Hari Ini',
     };
-  }, [student, studentAbsences, attendanceRefreshKey]);
+  }, [student, attendanceRefreshKey]);
 
   // Combined Unified Timeline (Violations + Absences)
   const unifiedTimelineEvents = useMemo(() => {

@@ -21,6 +21,7 @@ export interface Student {
   noWaOrtu: string;
   alamat: string;
   statusKehadiran: AttendanceStatus;
+  statusKehadiranDate?: string; // YYYY-MM-DD of latest saved attendance status
   keteranganKehadiran?: string;
   totalPelanggaranRingan: number;
   totalPelanggaranSedang: number;

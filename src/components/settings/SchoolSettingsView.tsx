@@ -145,15 +145,17 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
     setFormData((prev) => ({ ...prev, logoUrl: '' }));
   };
 
-  const [activeSettingsTab, setActiveSettingsTab] = useState<'profile_db' | 'accounts' | 'audit_log' | 'password'>('profile_db');
-
   const currentUser = propCurrentUser || getCurrentUser();
   const isAdmin = isAdminUser(currentUser);
 
-  // Security guard: prevent non-admin users from staying on or accessing the 55-account management tab
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'profile_db' | 'accounts' | 'audit_log' | 'password'>(() =>
+    isAdmin ? 'profile_db' : 'audit_log'
+  );
+
+  // Security guard: prevent non-admin users from accessing admin-only tabs (profile_db & accounts)
   useEffect(() => {
-    if (!isAdmin && activeSettingsTab === 'accounts') {
-      setActiveSettingsTab('password');
+    if (!isAdmin && (activeSettingsTab === 'accounts' || activeSettingsTab === 'profile_db')) {
+      setActiveSettingsTab('audit_log');
     }
   }, [isAdmin, activeSettingsTab]);
 
@@ -291,12 +293,12 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (isGuestMode()) {
-      alert('Akses Ditolak: Anda saat ini berada dalam Mode Tamu (Guest - View Only). Hanya 20 akun petugas resmi yang berhak mengubah pengaturan.');
+    if (isGuestMode() || !isAdminUser(getCurrentUser())) {
+      alert('Akses Ditolak: Hanya akun Administrator (admin) yang berhak mengubah Profil Sekolah & Database Cloud.');
       logAudit({
         actionType: 'BLOCKED',
         module: 'Pengaturan',
-        description: 'Percobaan simpan konfigurasi profil sekolah ditolak karena berada dalam Mode Tamu',
+        description: 'Percobaan simpan konfigurasi profil sekolah ditolak (bukan Administrator)',
         status: 'BLOCKED'
       });
       return;
@@ -320,8 +322,9 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
     setTimeout(() => setSavedSuccess(false), 4000);
   };
 
-  // Google Login
+  // Google Login (Admin only)
   const handleGoogleSignIn = async () => {
+    if (!isAdminUser(getCurrentUser())) return;
     setIsSyncing(true);
     setSyncMessage(null);
     try {
@@ -357,8 +360,9 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
     }
   };
 
-  // Push Data to Google Sheets
+  // Push Data to Google Sheets (Admin only)
   const handlePushToSheets = async () => {
+    if (!isAdminUser(getCurrentUser())) return;
     setIsSyncing(true);
     setSyncMessage(null);
     try {
@@ -388,8 +392,9 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
     }
   };
 
-  // Pull Data from Google Sheets
+  // Pull Data from Google Sheets (Admin only)
   const handleConfirmPullFromSheets = async () => {
+    if (!isAdminUser(getCurrentUser())) return;
     setIsPullConfirmOpen(false);
     setIsSyncing(true);
     setSyncMessage(null);
@@ -432,11 +437,15 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#3B5BDB]"></span>
             <h2 className="text-base font-bold text-slate-900">
-              Pengaturan Sistem & Database Google Sheets / Drive
+              {isAdmin
+                ? 'Pengaturan Sistem & Database Google Sheets / Drive'
+                : 'Keamanan Akun & System Audit Log'}
             </h2>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Sesuaikan identitas sekolah, pejabat penandatangan (Kepala Sekolah & Tim Kesiswaan), logo resmi, dan integrasi Google Sheets sebagai database.
+            {isAdmin
+              ? 'Sesuaikan identitas sekolah, pejabat penandatangan (Kepala Sekolah & Tim Kesiswaan), logo resmi, manajemen akun, dan integrasi database cloud.'
+              : 'Pantau catatan aktivitas keamanan sistem (Audit Log) serta kelola username dan password akun Anda sendiri.'}
           </p>
         </div>
 
@@ -450,17 +459,19 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
 
       {/* Settings Navigation Tabs */}
       <div className="flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-xs">
-        <button
-          onClick={() => setActiveSettingsTab('profile_db')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            activeSettingsTab === 'profile_db'
-              ? 'bg-[#3B5BDB] text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Database className="w-4 h-4" />
-          <span>Profil Sekolah & Database Cloud</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setActiveSettingsTab('profile_db')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeSettingsTab === 'profile_db'
+                ? 'bg-[#3B5BDB] text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Database className="w-4 h-4" />
+            <span>Profil Sekolah & Database Cloud</span>
+          </button>
+        )}
 
         {isAdmin && (
           <button
@@ -501,8 +512,8 @@ export const SchoolSettingsView: React.FC<SchoolSettingsViewProps> = ({
         </button>
       </div>
 
-      {/* TAB 1: PROFIL SEKOLAH & GOOGLE SHEETS / DRIVE SYNC */}
-      {activeSettingsTab === 'profile_db' && (
+      {/* TAB 1: PROFIL SEKOLAH & GOOGLE SHEETS / DRIVE SYNC (KHUSUS ADMIN) */}
+      {isAdmin && activeSettingsTab === 'profile_db' && (
         <div className="space-y-6">
           {/* SECTION: INTEGRASI GOOGLE DRIVE & GOOGLE SHEETS SEBAGAI DATABASE */}
           <div className="bg-gradient-to-br from-white via-emerald-50/30 to-teal-50/40 p-6 rounded-3xl border-2 border-emerald-200 shadow-sm space-y-5">

@@ -1,7 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Student, ViolationRecord, SchoolProfile } from '../../types';
 import { SCHOOL_CONFIG as DEFAULT_SCHOOL_CONFIG, KELAS_LIST } from '../../data/schoolConfig';
 import { exportToCSV, exportToWordDocument } from '../../utils/exportDocs';
+import { useRealtimeDateTracker } from '../../utils/dateUtils';
+import {
+  getDateAttendanceSummary,
+  getStoredAttendanceSheets,
+  filterAttendanceSheets,
+  calculateStudentRecap,
+} from '../../services/attendanceStorage';
 import { 
   FileSpreadsheet, 
   Printer, 
@@ -24,31 +31,111 @@ interface ComprehensiveReportsProps {
 
 type PeriodType = 'harian' | 'mingguan' | 'bulanan' | 'semesteran';
 
+const parseLocalYMD = (dateStr: string): Date | null => {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return null;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
+};
+
 export const ComprehensiveReports: React.FC<ComprehensiveReportsProps> = ({
   students,
   violations,
   schoolConfig = DEFAULT_SCHOOL_CONFIG,
 }) => {
   const currentConfig = schoolConfig || DEFAULT_SCHOOL_CONFIG;
-  const [period, setPeriod] = useState<PeriodType>('bulanan');
+  const [period, setPeriod] = useState<PeriodType>('harian');
   const [selectedKelas, setSelectedKelas] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'analytics' | 'preview'>('analytics');
+  const { todayStr: todayYMD } = useRealtimeDateTracker();
+  const [syncTick, setSyncTick] = useState(0);
 
-  // Filtered Students and Violations based on selected class
-  const filteredStudents = selectedKelas === 'all'
-    ? students
-    : students.filter((s) => s.kelas === selectedKelas);
+  useEffect(() => {
+    const refresh = () => setSyncTick((t) => t + 1);
+    window.addEventListener('bsan_attendance_sheets_synced', refresh);
+    window.addEventListener('bsan_attendance_saved', refresh);
+    window.addEventListener('bsan_midnight_rollover', refresh);
+    return () => {
+      window.removeEventListener('bsan_attendance_sheets_synced', refresh);
+      window.removeEventListener('bsan_attendance_saved', refresh);
+      window.removeEventListener('bsan_midnight_rollover', refresh);
+    };
+  }, []);
 
-  const filteredViolations = selectedKelas === 'all'
-    ? violations
-    : violations.filter((v) => v.kelas === selectedKelas);
+  // Filtered Students and Violations based on selected class & period
+  const filteredStudents = useMemo(
+    () => (selectedKelas === 'all' ? students : students.filter((s) => s.kelas === selectedKelas)),
+    [students, selectedKelas]
+  );
 
-  // Stats calculation
+  const filteredViolations = useMemo(() => {
+    const todayDate = parseLocalYMD(todayYMD);
+    const targetYear = todayDate ? todayDate.getFullYear() : new Date().getFullYear();
+    const targetMonth = todayDate ? todayDate.getMonth() : new Date().getMonth();
+
+    return violations.filter((v) => {
+      if (selectedKelas !== 'all' && v.kelas !== selectedKelas) return false;
+      if (!v.tanggal) return false;
+
+      if (period === 'harian') {
+        return v.tanggal === todayYMD;
+      }
+
+      const vDate = parseLocalYMD(v.tanggal);
+      if (!vDate || !todayDate) return false;
+
+      if (period === 'mingguan') {
+        const diffDays = Math.round((todayDate.getTime() - vDate.getTime()) / (1000 * 60 * 60 * 24));
+        return diffDays >= 0 && diffDays < 7;
+      }
+
+      if (period === 'bulanan') {
+        return vDate.getFullYear() === targetYear && vDate.getMonth() === targetMonth;
+      }
+
+      // semesteran: July-Dec (Sem 1) vs Jan-June (Sem 2)
+      const isSem1 = targetMonth >= 6;
+      const vSem1 = vDate.getMonth() >= 6;
+      return vDate.getFullYear() === targetYear && isSem1 === vSem1;
+    });
+  }, [violations, selectedKelas, period, todayYMD]);
+
+  // Stats calculation (daily uses today's date summary so next day resets cleanly; longer periods aggregate recorded sheets)
   const totalStudents = filteredStudents.length;
-  const hadirStudents = filteredStudents.filter((s) => s.statusKehadiran === 'Hadir');
-  const attendanceRate = totalStudents > 0
-    ? ((hadirStudents.length / totalStudents) * 100).toFixed(1) + '%'
-    : '100.0%';
+  const { hadirCount, attendanceRate } = useMemo(() => {
+    if (period === 'harian') {
+      const summary = getDateAttendanceSummary(todayYMD, filteredStudents);
+      return {
+        hadirCount: summary.hadirCount,
+        attendanceRate: `${summary.percentHadir.toFixed(1)}%`,
+      };
+    }
+
+    const mappedPeriod = period === 'semesteran' ? 'semester' : period;
+    const sheets = filterAttendanceSheets(getStoredAttendanceSheets(), mappedPeriod, selectedKelas, todayYMD);
+    if (sheets.length === 0) {
+      const summary = getDateAttendanceSummary(todayYMD, filteredStudents);
+      return {
+        hadirCount: summary.hadirCount,
+        attendanceRate: `${summary.percentHadir.toFixed(1)}%`,
+      };
+    }
+
+    const rows = calculateStudentRecap(filteredStudents, sheets, selectedKelas);
+    const totalH = rows.reduce((acc, r) => acc + r.totalHadir, 0);
+    const totalDays = rows.reduce((acc, r) => acc + r.totalHari, 0);
+    const pct = totalDays > 0 ? (totalH / totalDays) * 100 : 100;
+    return {
+      hadirCount: filteredStudents.filter((s) => s.statusKehadiran === 'Hadir').length,
+      attendanceRate: `${pct.toFixed(1)}%`,
+    };
+  }, [period, todayYMD, filteredStudents, selectedKelas, syncTick]);
+
+  const hadirStudents = { length: hadirCount };
 
   const ringanCount = filteredViolations.filter((v) => v.tingkat === 'Ringan').length;
   const sedangCount = filteredViolations.filter((v) => v.tingkat === 'Sedang').length;
@@ -63,7 +150,7 @@ export const ComprehensiveReports: React.FC<ComprehensiveReportsProps> = ({
       case 'bulanan':
         return `Bulanan (Bulan ${new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(new Date())})`;
       case 'semesteran':
-        return 'Semester Ganjil TA 2026/2027';
+        return 'Semester TA 2026/2027';
     }
   };
 

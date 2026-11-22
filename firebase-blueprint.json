@@ -16,6 +16,7 @@
         "noWaOrtu": { "type": "string" },
         "alamat": { "type": "string" },
         "statusKehadiran": { "type": "string" },
+        "statusKehadiranDate": { "type": "string" },
         "keteranganKehadiran": { "type": "string" },
         "totalPelanggaranRingan": { "type": "number" },
         "totalPelanggaranSedang": { "type": "number" },
